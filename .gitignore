@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+
+# 本地数据库：运行 main.py 会从 football-data.co.uk 重新下载
+*.db
+
+# 日志与临时诊断
+*.log
+_diag/
+diag_*.py
