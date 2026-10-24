@@ -1,16 +1,6 @@
 __pycache__/
 *.pyc
+.pytest_cache/
 
-# 本地数据库：运行 main.py 会从 football-data.co.uk 重新下载
-*.db
-
-# 日志与临时诊断
-*.log
-_diag/
-diag_*.py
-
-# understat 原始数据缓存
-_cache/
-
-# 预测报告（每次运行生成）
-reports/
+# 其余文件（football.db 实盘记录、reports/ 预测报告、_diag/ 诊断、_cache/ understat 缓存、日志）
+# 均纳入版本库作备份。football.db 每次运行都会变化，需要备份时手动提交。
