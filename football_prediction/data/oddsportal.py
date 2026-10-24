@@ -11,6 +11,7 @@ data/oddsportal.py  v1.5.0
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import tempfile
@@ -218,12 +219,18 @@ def run_harvester(args: list[str], timeout: int) -> list[dict]:
     try:
         cmd = [harvester_path(), "upcoming", "-s", "football", *args,
                "--timezone", "UTC", "--headless", "-f", "json", "-o", out]
-        p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=timeout)
+        try:
+            p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=timeout)
+        except OSError as e:          # 可执行文件不存在 / 无权限
+            raise RuntimeError(f"无法启动 OddsHarvester（{cmd[0]}）：{e}") from e
         if p.returncode != 0:
             raise RuntimeError(f"OddsHarvester 退出码 {p.returncode}: {p.stderr[-500:]}")
         with open(out, encoding="utf-8") as f:
-            return json.load(f) if os.path.getsize(out) else []
+            try:
+                return json.load(f) if os.path.getsize(out) else []
+            except json.JSONDecodeError as e:
+                raise RuntimeError(f"OddsHarvester 输出不是合法 JSON：{e}") from e
     finally:
         os.remove(out)
 
@@ -381,6 +388,10 @@ def main(argv: list[str] | None = None) -> None:
     conn = init_db(ns.db)
     init_book_odds(conn)
     now = datetime.now(timezone.utc)
+    if not ns.no_scrape and shutil.which(harvester_path()) is None:
+        print(f"[oddsportal] 找不到 OddsHarvester（{harvester_path()}），跳过抓取；"
+              "请安装到 .venv-scrape 或设置环境变量 ODDSHARVESTER")
+        ns.no_scrape = True
     if not ns.no_scrape:
         print(f"[1] 刷新赛程：{load_fixtures(conn, leagues)} 场")
         print(f"[2] 抓多家赔率：写入 {collect(conn, leagues, now, ns.hours)} 行")

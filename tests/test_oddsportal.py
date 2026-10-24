@@ -165,6 +165,25 @@ def test_collect_survives_scrape_failure(conn):
     assert len(calls) == 2                       # 失败重试一次
 
 
+def test_run_harvester_missing_exe_raises_runtime_error(monkeypatch, tmp_path):
+    monkeypatch.setenv("ODDSHARVESTER", str(tmp_path / "no-such-oddsharvester"))
+    with pytest.raises(RuntimeError, match="无法启动"):
+        op.run_harvester(["-l", "x"], timeout=5)
+
+
+def test_run_harvester_bad_json_raises_runtime_error(monkeypatch):
+    class P:
+        returncode, stderr = 0, ""
+
+    def fake_run(cmd, **kw):
+        with open(cmd[cmd.index("-o") + 1], "w", encoding="utf-8") as f:
+            f.write("[{truncated")
+        return P()
+    monkeypatch.setattr(op.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="JSON"):
+        op.run_harvester(["-l", "x"], timeout=5)
+
+
 def test_collect_refetches_matches_missing_from_group(conn):
     """同组两场只回来一场时，缺的那场单独补抓（实盘遇到过整组只返回部分记录）。"""
     conn.execute("""INSERT INTO fixtures (match_id, league, season, match_date, kickoff_utc,
