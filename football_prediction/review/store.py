@@ -1,7 +1,8 @@
 """
-review/store.py  v1.0.0
+review/store.py  v1.1.0
 复盘层：保存预测记录、赛后评分、跨版本对比。
 预测记录永不覆盖，旧版本预测保留，确保公平比较。
+v1.1.0: has_prediction 去重（每场每模型版本只留开赛前首次预测）；live_report 实盘同场对比市场。
 修改此文件后请同步更新 version.py 中 "review" 的版本号。
 """
 import sqlite3
@@ -11,7 +12,7 @@ from math import log
 
 import pandas as pd
 
-LAYER_VERSION = "1.0.0"
+LAYER_VERSION = "1.1.0"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
@@ -45,6 +46,17 @@ def _make_pred_id(match_id: str, model_name: str,
     import hashlib
     key = f"{match_id}|{model_name}|{model_ver}|{generated_at}"
     return hashlib.sha1(key.encode()).hexdigest()[:20]
+
+
+def has_prediction(conn: sqlite3.Connection, match_id: str,
+                   model_name: str, model_ver: str) -> bool:
+    """该场比赛是否已有此模型版本的预测（实盘只保留首次预测，避免挑选结果）。"""
+    _init_review_db(conn)
+    return conn.execute(
+        """SELECT 1 FROM predictions
+           WHERE match_id=? AND model_name=? AND model_ver=? LIMIT 1""",
+        (match_id, model_name, model_ver),
+    ).fetchone() is not None
 
 
 def save_prediction(
@@ -149,3 +161,42 @@ def compare_versions(conn: sqlite3.Connection,
         conn,
         params=(model_name,),
     )
+
+
+def live_report(conn: sqlite3.Connection,
+                baseline: str = "market_avg") -> pd.DataFrame:
+    """
+    实盘成绩单：每个 模型/版本 的已评分场数、Log Loss、Brier，
+    以及在【同一批比赛】上市场基准的 Log Loss 和差值（负=模型优于市场）。
+    """
+    _init_review_db(conn)
+    df = pd.read_sql_query(
+        """SELECT p.match_id, p.model_name, p.model_ver, p.log_loss, p.brier
+           FROM predictions p JOIN matches m ON p.match_id = m.match_id
+           WHERE p.actual_outcome IS NOT NULL
+           ORDER BY p.generated_at""",
+        conn,
+    )
+    if df.empty:
+        return df
+    # 同场同模型版本若有多条，只取最早一条（与 has_prediction 规则一致）
+    df = df.groupby(["match_id", "model_name", "model_ver"], as_index=False).first()
+    base = df[df["model_name"] == baseline][["match_id", "log_loss"]] \
+        .drop_duplicates("match_id").rename(columns={"log_loss": "base_ll"})
+
+    rows = []
+    for (name, ver), g in df.groupby(["model_name", "model_ver"]):
+        m = g.merge(base, on="match_id", how="left")
+        both = m.dropna(subset=["base_ll"])
+        rows.append({
+            "model_name":  name,
+            "model_ver":   ver,
+            "matches":     len(g),
+            "log_loss":    g["log_loss"].mean(),
+            "brier":       g["brier"].mean(),
+            "paired_n":    len(both),
+            "base_ll":     both["base_ll"].mean() if len(both) else float("nan"),
+            "diff_vs_base": (both["log_loss"] - both["base_ll"]).mean()
+                            if len(both) else float("nan"),
+        })
+    return pd.DataFrame(rows).sort_values("log_loss")

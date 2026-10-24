@@ -1,6 +1,7 @@
 """
-validation/backtest.py  v1.0.0
+validation/backtest.py  v1.1.0
 验证层：按时间切分回测，计算 Log Loss、Brier Score 和概率校准。
+v1.1.0: 市场赔率基准 run_market_backtest；同场配对比较 paired_compare（差值 ± 标准误）。
 ⚠️ 每个预测时点只用该时点之前的数据训练，严格禁止随机 KFold。
 修改此文件后请同步更新 version.py 中 "validation" 的版本号。
 """
@@ -9,7 +10,7 @@ import numpy as np
 import pandas as pd
 from math import log
 
-LAYER_VERSION = "1.0.0"
+LAYER_VERSION = "1.1.0"
 
 
 def _log_loss_one(probs: dict, outcome: str) -> float:
@@ -252,3 +253,59 @@ def run_lgbm_backtest(
         acc = (result_df["actual"] == pred_outcome).mean()
         print(f"最大概率准确率:  {acc:.4f}  ← 单独看此指标容易误判")
     return result_df
+
+
+def run_market_backtest(
+    conn: sqlite3.Connection,
+    league: str,
+    test_seasons: list[str],
+    closing: bool = True,
+) -> pd.DataFrame:
+    """
+    市场基准：把博彩公司平均赔率（去抽水）当作一个"模型"评分。
+    输出列与 run_backtest 相同，可直接放进对比表和 paired_compare。
+    """
+    from football_prediction.data.loader import market_probs
+    mp = market_probs(conn, league, test_seasons, closing=closing)
+    season_filter = ",".join("?" * len(test_seasons))
+    res = pd.read_sql_query(
+        f"""SELECT match_id, match_date, home_team, away_team, home_goals, away_goals
+            FROM matches
+            WHERE league = ? AND season IN ({season_filter}) AND home_goals IS NOT NULL
+            ORDER BY match_date""",
+        conn, params=[league] + test_seasons,
+    ).merge(mp, on="match_id")
+
+    records = []
+    for _, row in res.iterrows():
+        actual = _outcome(int(row["home_goals"]), int(row["away_goals"]))
+        p = {"home_win": row["p_home_win"], "draw": row["p_draw"],
+             "away_win": row["p_away_win"]}
+        records.append({
+            "match_id":   row["match_id"],
+            "match_date": row["match_date"],
+            "home_team":  row["home_team"],
+            "away_team":  row["away_team"],
+            "actual":     actual,
+            "p_home_win": p["home_win"],
+            "p_draw":     p["draw"],
+            "p_away_win": p["away_win"],
+            "log_loss":   round(_log_loss_one(p, actual), 6),
+            "brier":      round(_brier_one(p, actual), 6),
+            "layer_ver":  LAYER_VERSION,
+        })
+    return pd.DataFrame(records)
+
+
+def paired_compare(a: pd.DataFrame, b: pd.DataFrame,
+                   metric: str = "log_loss") -> dict:
+    """
+    同场配对比较：只取两者都有预测的比赛，计算 mean(a - b) 及标准误。
+    负值 = a 更好。|diff| < 2*se 时视为无显著差异。
+    """
+    m = a[["match_id", metric]].merge(b[["match_id", metric]],
+                                      on="match_id", suffixes=("_a", "_b"))
+    d = m[f"{metric}_a"] - m[f"{metric}_b"]
+    n = len(d)
+    se = float(d.std(ddof=1) / np.sqrt(n)) if n > 1 else float("nan")
+    return {"n": n, "diff": float(d.mean()) if n else float("nan"), "se": se}

@@ -8,3 +8,6 @@ __pycache__/
 *.log
 _diag/
 diag_*.py
+
+# understat 原始数据缓存
+_cache/

@@ -1,7 +1,9 @@
 """
-football_prediction/main.py  v1.1.0
+football_prediction/main.py  v1.3.0
 主入口：串联各层，演示完整流程。
 v1.1.0: 多联赛跨联赛验证（E0/D1/SP1）；Platt scaling 概率校准；LightGBM v1.1.0 滚动OOS。
+v1.2.0: 测试赛季改为全新留出的 2526；加入市场赔率基准与同场配对比较；实盘预测移至 live.py。
+v1.3.0: 加入射正版 DC 月度（model_sot，w 在 2324+2425 选参）及其与 DC 月度、市场的配对比较。
 用法：python -m football_prediction.main
 """
 import sqlite3
@@ -11,43 +13,48 @@ from datetime import date, timedelta
 from football_prediction import version
 from football_prediction.data.loader           import init_db, load_season
 from football_prediction.model_dc.dixon_coles  import DixonColesModel
+from football_prediction.model_dc.sot_dc       import SotDixonColesModel
 from football_prediction.model_elo.elo         import EloModel
 from football_prediction.model_lgbm.lgbm_model import LGBMCorrectionModel
 from football_prediction.calibration.platt     import PlattCalibrator
 from football_prediction.output.derive         import derive_markets
-from football_prediction.validation.backtest   import run_backtest, run_lgbm_backtest
-from football_prediction.review.store          import (
-    save_prediction, score_predictions, compare_versions,
+from football_prediction.validation.backtest   import (
+    run_backtest, run_lgbm_backtest, run_market_backtest, paired_compare,
 )
 
 DB_PATH = "football.db"
+
+# 2526 是全新留出赛季：shrink 在 2324 选参、2425 确认，2526 从未参与任何调参
+SEASONS = ["2122", "2223", "2324", "2425", "2526", "2627"]
+TRAIN   = ["2122", "2223", "2324", "2425"]
+TEST    = ["2526"]
 
 # 联赛配置：每个联赛独立跑完整对比
 LEAGUES = {
     "E0": {
         "name":    "英超",
-        "seasons": ["2122", "2223", "2324", "2425"],
-        "train":   ["2122", "2223", "2324"],
-        "test":    ["2425"],
+        "seasons": SEASONS,
+        "train":   TRAIN,
+        "test":    TEST,
     },
     "D1": {
         "name":    "德甲",
-        "seasons": ["2122", "2223", "2324", "2425"],
-        "train":   ["2122", "2223", "2324"],
-        "test":    ["2425"],
+        "seasons": SEASONS,
+        "train":   TRAIN,
+        "test":    TEST,
     },
     "SP1": {
         "name":    "西甲",
-        "seasons": ["2122", "2223", "2324", "2425"],
-        "train":   ["2122", "2223", "2324"],
-        "test":    ["2425"],
+        "seasons": SEASONS,
+        "train":   TRAIN,
+        "test":    TEST,
     },
 }
 
 # 示例预测场次（各联赛各选一场）
 DEMO_MATCHES = {
     "E0":  ("Arsenal",       "Chelsea"),
-    "D1":  ("Bayern Munich", "Borussia Dortmund"),
+    "D1":  ("Bayern Munich", "Dortmund"),
     "SP1": ("Real Madrid",   "Barcelona"),
 }
 
@@ -85,9 +92,13 @@ def _run_league(conn, league_code, cfg):
                             refit_freq="monthly")
     dc_mo_r  = run_backtest(conn, league_code, train, test, DixonColesModel,
                             refit_freq="monthly")
+    sot_mo_r = run_backtest(conn, league_code, train, test, SotDixonColesModel,
+                            refit_freq="monthly")
     lgbm_r   = run_lgbm_backtest(
         conn, league_code, train, test, DixonColesModel, LGBMCorrectionModel,
     )
+    mkt_pre  = run_market_backtest(conn, league_code, test, closing=False)
+    mkt_cls  = run_market_backtest(conn, league_code, test, closing=True)
 
     rows = []
     for label, df in [
@@ -96,7 +107,10 @@ def _run_league(conn, league_code, cfg):
         ("DC 单次 (v1.3.0)",                 dc_r),
         ("DC 月度 无收缩 (v1.2.0)",          dc_mo12),
         ("DC 月度 shrink=0.5 (v1.3.0)",      dc_mo_r),
+        ("射正版 DC 月度 w=0.7 (v1.0.0)",    sot_mo_r),
         ("LightGBM 修正 (v1.1.0)",           lgbm_r),
+        ("市场 赛前平均赔率",                mkt_pre),
+        ("市场 收盘平均赔率",                mkt_cls),
     ]:
         if len(df):
             rows.append({
@@ -106,7 +120,18 @@ def _run_league(conn, league_code, cfg):
                 "Log Loss": round(df["log_loss"].mean(), 4),
                 "Brier":    round(df["brier"].mean(),    4),
             })
-    return rows
+
+    # 同场配对：主模型 DC 月度 v1.3.0 对各参照的 Log Loss 差（负=DC 更好）
+    pairs = []
+    for label, ref in [("DC xi=0 单次", dc_v0_r), ("市场 赛前", mkt_pre),
+                       ("市场 收盘", mkt_cls)]:
+        pairs.append({"联赛": f"{name}({league_code})", "主模型": "DC 月度", "对照": label,
+                      **paired_compare(dc_mo_r, ref)})
+    # 射正版 DC 月度对 DC 月度与市场赛前
+    for label, ref in [("DC 月度", dc_mo_r), ("市场 赛前", mkt_pre)]:
+        pairs.append({"联赛": f"{name}({league_code})", "主模型": "射正DC 月度", "对照": label,
+                      **paired_compare(sot_mo_r, ref)})
+    return rows, pairs
 
 
 def main():
@@ -134,9 +159,11 @@ def main():
 
     # 2. 多联赛回测对比
     print("\n>>> [2] 多联赛回测对比 ...")
-    all_rows = []
+    all_rows, all_pairs = [], []
     for league_code, cfg in LEAGUES.items():
-        all_rows.extend(_run_league(conn, league_code, cfg))
+        rows, pairs = _run_league(conn, league_code, cfg)
+        all_rows.extend(rows)
+        all_pairs.extend(pairs)
 
     # 汇总表
     print(f"\n{'='*72}")
@@ -148,6 +175,12 @@ def main():
         print(f"{r['联赛']:<14} {r['模型']:<28} {r['场数']:>5}"
               f" {r['Log Loss']:>10.4f} {r['Brier']:>8.4f}")
     print("=" * 72)
+
+    print("\n同场配对：主模型 − 对照（Log Loss，负=主模型更好；|差| < 2×SE 视为无显著差异）")
+    print(f"{'联赛':<14} {'主模型':<12} {'对照':<14} {'场数':>5} {'差值':>9} {'SE':>8}")
+    for p in all_pairs:
+        print(f"{p['联赛']:<14} {p['主模型']:<12} {p['对照']:<14} {p['n']:>5}"
+              f" {p['diff']:>+9.4f} {p['se']:>8.4f}")
 
     # 3. Platt 校准（用英超作为示例，校准赛季=2324）
     #    已在 2425 月度 OOS 上验证：三联赛 Log Loss 变化均在 ±0.005 内，无显著增益，
@@ -185,32 +218,8 @@ def main():
               f"D={lgbm_probs['draw']:.4f} A={lgbm_probs['away_win']:.4f} "
               f"(alpha={lgbm_probs['alpha']})")
 
-    # 5. 复盘层（保存英超示例预测）
-    print("\n>>> [5] 保存预测记录 ...")
-    e0_cutoff  = _get_demo_cutoff(conn, "E0")
-    dc_e0      = DixonColesModel()
-    dc_e0.fit(conn, "E0", cutoff_date=e0_cutoff)
-    lgbm_e0    = LGBMCorrectionModel()
-    lgbm_e0.fit(conn, "E0", dc_e0, LEAGUES["E0"]["train"])
-    demo_probs = lgbm_e0.predict_match(
-        conn, "E0", dc_e0, "Arsenal", "Chelsea", e0_cutoff
-    )
-    pred_id = save_prediction(
-        conn,
-        match_id="demo_match_003",
-        model_name="lgbm_correction",
-        model_ver=version.get("model_lgbm"),
-        feature_ver=version.get("features"),
-        p_home_win=demo_probs["home_win"],
-        p_draw=demo_probs["draw"],
-        p_away_win=demo_probs["away_win"],
-    )
-    print(f"  预测已保存 pred_id={pred_id}")
-    scored = score_predictions(conn)
-    print(f"  本次评分条数: {scored}")
-
-    print("\n--- LightGBM 版本对比 ---")
-    print(compare_versions(conn, "lgbm_correction"))
+    # 5. 实盘预测与复盘见 live.py（对真实未开赛场次保存预测，赛后自动评分）
+    print("\n>>> [5] 实盘预测请运行：python -m football_prediction.live")
 
     conn.close()
 
