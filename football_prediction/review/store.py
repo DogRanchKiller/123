@@ -1,9 +1,11 @@
 """
-review/store.py  v1.2.0
+review/store.py  v1.3.0
 复盘层：保存预测记录、赛后评分、跨版本对比。
 预测记录永不覆盖，旧版本预测保留，确保公平比较。
 v1.1.0: has_prediction 去重（每场每模型版本只留开赛前首次预测）；live_report 实盘同场对比市场。
 v1.2.0: live_report 加命中率与配对 SE；promotion_check 按 version.PROMOTE_MIN_N 规则检查主模型替换。
+v1.3.0: 赛后另评大小2.5（extra 有 over_2.5）与精确比分（extra 有 score_matrix）的 log loss；
+        成绩单增加这两列；首条记录改用 drop_duplicates 取整行（不再逐列取首个非空值）。
 修改此文件后请同步更新 version.py 中 "review" 的版本号。
 """
 import sqlite3
@@ -14,7 +16,7 @@ from math import log
 import numpy as np
 import pandas as pd
 
-LAYER_VERSION = "1.2.0"
+LAYER_VERSION = "1.3.0"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
@@ -32,15 +34,37 @@ CREATE TABLE IF NOT EXISTS predictions (
     actual_outcome TEXT,            -- "home_win" | "draw" | "away_win"
     log_loss       REAL,
     brier          REAL,
+    ou25_log_loss  REAL,            -- 大小2.5 log loss（有 over_2.5 时）
+    score_log_loss REAL,            -- 精确比分 log loss（有 score_matrix 时）
     scored_at      TEXT,
     layer_ver      TEXT NOT NULL
 );
 """
 
 
+SCORE_N = 9   # score_matrix 为 9×9（0~8 球）按行展平，行=主队进球
+
+
 def _init_review_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
+    have = {r[1] for r in conn.execute("PRAGMA table_info(predictions)")}
+    for col in ("ou25_log_loss", "score_log_loss"):   # 旧库迁移，幂等
+        if col not in have:
+            conn.execute(f"ALTER TABLE predictions ADD COLUMN {col} REAL")
     conn.commit()
+
+
+def market_log_losses(extra: dict, hg: int, ag: int) -> tuple[float | None, float | None]:
+    """大小2.5 与精确比分 log loss；extra 缺对应字段时为 None。"""
+    ou = sc = None
+    if extra.get("over_2.5") is not None:
+        p = extra["over_2.5"] if hg + ag > 2.5 else 1 - extra["over_2.5"]
+        ou = -log(min(max(p, 1e-7), 1.0))
+    m = extra.get("score_matrix")
+    if m and len(m) == SCORE_N * SCORE_N:
+        p = m[hg * SCORE_N + ag] if hg < SCORE_N and ag < SCORE_N else 0.0
+        sc = -log(max(p, 1e-7))
+    return ou, sc
 
 
 def _make_pred_id(match_id: str, model_name: str,
@@ -105,7 +129,7 @@ def score_predictions(conn: sqlite3.Connection) -> int:
     """
     _init_review_db(conn)
     unscored = pd.read_sql_query(
-        """SELECT p.pred_id, p.p_home_win, p.p_draw, p.p_away_win,
+        """SELECT p.pred_id, p.p_home_win, p.p_draw, p.p_away_win, p.extra_markets,
                   m.home_goals, m.away_goals
            FROM predictions p
            JOIN matches m ON p.match_id = m.match_id
@@ -131,12 +155,18 @@ def score_predictions(conn: sqlite3.Connection) -> int:
         ll = -log(max(p[outcome], 1e-7))
         br = sum((p[k] - (1.0 if k == outcome else 0.0)) ** 2
                  for k in ("home_win", "draw", "away_win"))
+        ex = row["extra_markets"]                  # 缺失时 pandas 读成 NaN/None
+        extra = json.loads(ex) if isinstance(ex, str) and ex else {}
+        ou, sc = market_log_losses(extra, hg, ag)
 
         conn.execute(
             """UPDATE predictions
-               SET actual_outcome=?, log_loss=?, brier=?, scored_at=?
+               SET actual_outcome=?, log_loss=?, brier=?, ou25_log_loss=?, score_log_loss=?,
+                   scored_at=?
                WHERE pred_id=?""",
-            (outcome, round(ll, 6), round(br, 6), scored_at, row["pred_id"]),
+            (outcome, round(ll, 6), round(br, 6),
+             None if ou is None else round(ou, 6), None if sc is None else round(sc, 6),
+             scored_at, row["pred_id"]),
         )
         count += 1
 
@@ -170,6 +200,7 @@ def _scored_first(conn: sqlite3.Connection) -> pd.DataFrame:
     _init_review_db(conn)
     df = pd.read_sql_query(
         """SELECT p.match_id, p.model_name, p.model_ver, p.log_loss, p.brier,
+                  p.ou25_log_loss, p.score_log_loss,
                   p.p_home_win, p.p_draw, p.p_away_win, p.actual_outcome
            FROM predictions p JOIN matches m ON p.match_id = m.match_id
            WHERE p.actual_outcome IS NOT NULL
@@ -178,7 +209,7 @@ def _scored_first(conn: sqlite3.Connection) -> pd.DataFrame:
     )
     if df.empty:
         return df
-    df = df.groupby(["match_id", "model_name", "model_ver"], as_index=False).first()
+    df = df.drop_duplicates(["match_id", "model_name", "model_ver"]).reset_index(drop=True)
     pick = np.array(["home_win", "draw", "away_win"])[
         df[["p_home_win", "p_draw", "p_away_win"]].to_numpy().argmax(axis=1)]
     df["hit"] = (pick == df["actual_outcome"]).astype(float)
@@ -217,6 +248,8 @@ def live_report(conn: sqlite3.Connection,
             "log_loss":     g["log_loss"].mean(),
             "brier":        g["brier"].mean(),
             "hit_rate":     g["hit"].mean(),
+            "ou25_ll":      g["ou25_log_loss"].mean(),    # 无数据时为 NaN
+            "score_ll":     g["score_log_loss"].mean(),
             "paired_n":     n,
             "diff_vs_base": diff,
             "se":           se,

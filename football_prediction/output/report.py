@@ -1,11 +1,13 @@
 """
-output/report.py  v1.1.0（输出层 1.1.0 的一部分）
-预测报告：对未开赛场次，只展示主预测模型（version.PRIMARY_MODEL）的首次预测，
-给出胜平负概率、倾向与双选、信心档（附历史命中率）、最可能比分、大 2.5 球概率，市场赔率作参考。
+output/report.py  v1.2.0（输出层的一部分）
+预测报告：对未开赛场次，按判断流程（output/analysis.py）用【最新】赔率现算，
+给出胜平负概率（市场为底）、倾向与双选、信心档（附历史命中率）、预期进球、最可能比分、
+大 2.5 / 双方进球 / 亚盘、自研模型对照、盘口变动、风险提示。
+报告是"当前看法"，随赔率更新；存档的预测记录（review 层）只保留首次，二者互不影响。
 报告写入 reports/预测_YYYY-MM-DD.csv（utf-8-sig，Excel 可直接打开）。
+v1.2.0: 改为市场为底的判断流程；信心档按市场概率重标定；新增亚盘、盘口变动、风险、自研对照。
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 """
-import json
 import os
 import sqlite3
 from datetime import datetime
@@ -13,102 +15,92 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-LAYER_VERSION = "1.1.0"
+from football_prediction.output.analysis import (   # noqa: F401  confidence_tier 供外部/测试使用
+    confidence_tier, double_label as _double_label, MARKET_TIERS as CONFIDENCE_TIERS,
+)
+from football_prediction.output.pipeline import ModelCache, analyse_match, fixture_odds
+
+LAYER_VERSION = "1.2.0"
 
 REPORT_DIR = "reports"
 _BJ = ZoneInfo("Asia/Shanghai")
-_LABEL = {"home_win": "主胜", "draw": "平", "away_win": "客胜"}
-
-# 信心档：按主模型最大概率分档。命中率来自 xG 版 DC 月度回测
-# （2324–2526，E0/D1/SP1 共 3198 场）：首选=概率最高的一项，前二=概率最高的两项之一。
-CONFIDENCE_TIERS = [
-    # (下限, 档名, 首选命中, 前二命中)
-    (0.60, "高", 0.73, 0.90),
-    (0.45, "中", 0.52, 0.76),
-    (0.00, "低", 0.41, 0.71),
-]
 
 
-def confidence_tier(p_max: float) -> tuple[str, float, float]:
-    """按最大概率返回 (档名, 历史首选命中率, 历史前二命中率)。"""
-    for lo, name, hit1, hit2 in CONFIDENCE_TIERS:
-        if p_max >= lo:
-            return name, hit1, hit2
-    raise ValueError(p_max)
-
-
-def _double_label(top2: list[str]) -> str:
-    s = set(top2)
-    if s == {"home_win", "away_win"}:
-        return "不平局"
-    return "或".join(_LABEL[k] for k in ("home_win", "draw", "away_win") if k in s)
-
-
-def build_report(conn: sqlite3.Connection, league_names: dict[str, str],
-                 model_name: str, model_ver: str, now: datetime) -> pd.DataFrame:
-    """未开赛场次的主模型预测报告，按开球时间排序。"""
-    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
-                        "AND name='predictions'").fetchone():
-        return pd.DataFrame()   # 新库尚未保存过任何预测
-    rows = conn.execute(
-        """SELECT f.match_id, f.league, f.match_date, f.kickoff_utc,
-                  f.home_team, f.away_team, f.avg_h, f.avg_d, f.avg_a,
-                  p.p_home_win, p.p_draw, p.p_away_win, p.extra_markets, p.generated_at
-           FROM fixtures f JOIN predictions p ON p.match_id = f.match_id
-           WHERE p.model_name = ? AND p.model_ver = ?
-           ORDER BY p.generated_at""",
-        (model_name, model_ver),
-    ).fetchall()
-
-    today = now.date().isoformat()
-    seen, out = set(), []
-    for (mid, lg, mdate, kickoff, home, away, oh, od, oa,
-         ph, pd_, pa, extra, _) in rows:
-        if mid in seen:      # 只用首次预测
+def upcoming_fixtures(conn: sqlite3.Connection, leagues, now: datetime) -> list[dict]:
+    """未开球的赛程行（dict），按开球时间排序；无开球时间的按日期判断。"""
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM fixtures ORDER BY COALESCE(kickoff_utc, match_date)")]
+    finally:
+        conn.row_factory = None
+    today, out = now.date().isoformat(), []
+    for r in rows:
+        if r["league"] not in leagues:
             continue
-        seen.add(mid)
-        if kickoff:
-            ko = datetime.fromisoformat(kickoff)
-            if ko <= now:
+        if r["kickoff_utc"]:
+            if datetime.fromisoformat(r["kickoff_utc"]) <= now:
                 continue
-            ko_txt = ko.astimezone(_BJ).strftime("%m-%d %H:%M")
-        else:
-            if mdate < today:
-                continue
-            ko_txt = mdate[5:]
+        elif r["match_date"] < today:
+            continue
+        out.append(r)
+    return out
 
-        probs = {"home_win": ph, "draw": pd_, "away_win": pa}
-        order = sorted(probs, key=probs.get, reverse=True)
-        tier, hit1, hit2 = confidence_tier(probs[order[0]])
-        ex = json.loads(extra) if extra else {}
-        scores = " ".join(f"{s['score']}({s['prob']:.0%})"
-                          for s in ex.get("top5_scores", [])[:3])
-        mkt = ""
-        if oh and od and oa:
-            inv = [1 / oh, 1 / od, 1 / oa]
-            mkt = "/".join(f"{x / sum(inv):.0%}" for x in inv)
 
-        out.append({
-            "联赛": league_names.get(lg, lg),
-            "开球(北京)": ko_txt,
-            "主队": home,
-            "客队": away,
-            "主胜": f"{ph:.0%}",
-            "平": f"{pd_:.0%}",
-            "客胜": f"{pa:.0%}",
-            "倾向": _LABEL[order[0]],
-            "双选": _double_label(order[:2]),
-            "信心": tier,
-            "历史命中(首选/双选)": f"{hit1:.0%}/{hit2:.0%}",
-            "最可能比分": scores,
-            "大2.5球": f"{ex['over_2.5']:.0%}" if "over_2.5" in ex else "",
-            "市场 主/平/客": mkt,
-            "模型": f"{model_name} {model_ver}",
-            "_kickoff": kickoff or mdate,
-        })
+def _pct(x) -> str:
+    return "" if x is None else f"{x:.0%}"
+
+
+def report_row(r: dict, a: dict, league_names: dict[str, str]) -> dict:
+    """一场的判断结果 -> 报告一行"""
+    if r.get("kickoff_utc"):
+        ko = datetime.fromisoformat(r["kickoff_utc"]).astimezone(_BJ).strftime("%m-%d %H:%M")
+    else:
+        ko = r["match_date"][5:]
+    mk, ah, md = a["markets"], a["ah"], a["models"]
+    ah_txt = ""
+    if ah:
+        ah_txt = f"主{ah['line']:+.2f} 赢盘{ah['fair']:.0%}"
+        if ah["outcome"]["push"] > 0.005:
+            ah_txt += f" 走{ah['outcome']['push']:.0%}"
+    ph, pdraw, pa = a["p1x2"]
+    return {
+        "联赛": league_names.get(r["league"], r["league"]),
+        "开球(北京)": ko,
+        "主队": r["home_team"],
+        "客队": r["away_team"],
+        "主胜": _pct(ph), "平": _pct(pdraw), "客胜": _pct(pa),
+        "概率来源": a["p_src"],
+        "倾向": a["lean"],
+        "双选": a["double"],
+        "信心": a["tier"],
+        "历史命中(首选/双选)": f"{a['hit1']:.0%}/{a['hit2']:.0%}",
+        "预期进球": f"{mk['exp_home_goals']:.1f}-{mk['exp_away_goals']:.1f}",
+        "最可能比分": " ".join(f"{s['score']}({s['prob']:.0%})" for s in mk["top5_scores"][:3]),
+        "大2.5球": _pct(mk["over_2.5"]),
+        "双方进球": _pct(mk["btts_yes"]),
+        "亚盘": ah_txt,
+        "自研 主/平/客": "  ".join(f"{k} " + "/".join(f"{x:.0%}" for x in md[k])
+                                for k in ("dc_xg", "blend") if k in md),
+        "盘口变动": a["move"],
+        "提示": "；".join(a["hints"] + a["risks"]),
+        "比分来源": a["source"],
+        "_kickoff": r.get("kickoff_utc") or r["match_date"],
+    }
+
+
+def build_report(conn: sqlite3.Connection, league_names: dict[str, str], now: datetime,
+                 cache: ModelCache | None = None) -> pd.DataFrame:
+    """未开赛场次的预测报告（按最新赔率现算），按开球时间排序。"""
+    cache = cache or ModelCache(conn, now.date().isoformat())
+    out = []
+    for r in upcoming_fixtures(conn, league_names, now):
+        a = analyse_match(conn, cache, r["league"], r["home_team"], r["away_team"],
+                          fixture_odds(r), r["match_id"])
+        out.append(report_row(r, a, league_names))
     if not out:
         return pd.DataFrame()
-    return pd.DataFrame(out).sort_values("_kickoff").drop(columns="_kickoff") \
+    return pd.DataFrame(out).sort_values("_kickoff", kind="stable").drop(columns="_kickoff") \
         .reset_index(drop=True)
 
 
@@ -121,9 +113,14 @@ def write_report(df: pd.DataFrame, now: datetime) -> str:
 
 
 def format_row(r: pd.Series) -> str:
-    """控制台一行展示。"""
-    return (f"  [{r['联赛']}] {r['开球(北京)']} {r['主队']} vs {r['客队']}  "
-            f"主{r['主胜']} 平{r['平']} 客{r['客胜']}  "
-            f"倾向 {r['倾向']}（双选 {r['双选']}）  信心 {r['信心']}"
-            f"[{r['历史命中(首选/双选)']}]  比分 {r['最可能比分']}  "
-            f"大2.5 {r['大2.5球']}  | 市场 {r['市场 主/平/客']}")
+    """控制台展示：第一行结论，第二行比分盘口，有提示时第三行。"""
+    s = (f"  [{r['联赛']}] {r['开球(北京)']} {r['主队']} vs {r['客队']}  "
+         f"主{r['主胜']} 平{r['平']} 客{r['客胜']}（{r['概率来源']}）  "
+         f"倾向 {r['倾向']}（双选 {r['双选']}）  信心 {r['信心']}[{r['历史命中(首选/双选)']}]\n"
+         f"      预期进球 {r['预期进球']}  比分 {r['最可能比分']}  大2.5 {r['大2.5球']}  "
+         f"双方进球 {r['双方进球']}  {r['亚盘']}  | 自研 {r['自研 主/平/客']}")
+    if r["盘口变动"] and r["盘口变动"] != "平稳":
+        s += f"\n      盘口变动：{r['盘口变动']}"
+    if r["提示"]:
+        s += f"\n      提示：{r['提示']}"
+    return s

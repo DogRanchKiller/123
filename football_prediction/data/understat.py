@@ -1,5 +1,5 @@
 """
-data/understat.py  v1.3.0（数据层 1.3.0 的一部分）
+data/understat.py  v1.5.0（数据层的一部分；本文件自 1.3.0 起未改，仅随数据层升版本号）
 从 understat.com 下载每场 xG，按"联赛 + 日期±1天 + 主客队"对齐到 matches 表，写入 match_xg 表。
 - 两个数据源队名写法不同（如 "Wolverhampton Wanderers" / "Wolves"），
   用"同联赛、日期±1天、比分相同"的场次投票自动建立队名映射，无需手工维护。
@@ -15,7 +15,7 @@ import requests
 
 from football_prediction.data.loader import season_of   # match_xg 表结构在 loader.DB_SCHEMA
 
-LAYER_VERSION = "1.3.0"
+LAYER_VERSION = "1.5.0"
 
 _US_URL   = "https://understat.com/getLeagueData/{name}/{year}"
 _US_NAMES = {"E0": "EPL", "D1": "Bundesliga", "SP1": "La_liga"}

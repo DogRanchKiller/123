@@ -1,11 +1,12 @@
 """预测报告与实盘循环：信心档边界、双选标签、只报未开赛、重跑不重复保存。"""
+import json
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from football_prediction import version
 from football_prediction.output.report import confidence_tier, _double_label, build_report
-from football_prediction.review.store import save_prediction
 
 
 @pytest.mark.parametrize("p,tier", [(0.80, "高"), (0.60, "高"), (0.5999, "中"),
@@ -28,40 +29,49 @@ def test_double_label(top2, label):
     assert _double_label(top2) == label
 
 
-def _fixture(conn, mid, kickoff, home="A", away="F"):
+ODDS = dict(avg_h=1.5, avg_d=4.0, avg_a=5.5, avg_over25=1.8, avg_under25=2.0,
+            ah_line=-1.0, avg_ahh=1.95, avg_aha=1.95)
+
+
+def _fixture(conn, mid, kickoff, home="A", away="F", **odds):
+    o = {**ODDS, **odds}
+    cols = list(o)
     conn.execute(
-        """INSERT INTO fixtures (match_id, league, season, match_date, kickoff_utc,
-               home_team, away_team, avg_h, avg_d, avg_a, fetched_at, layer_ver)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (mid, "E0", "2425", kickoff[:10], kickoff, home, away, 1.8, 3.6, 4.5, "now", "t"))
+        f"""INSERT INTO fixtures (match_id, league, season, match_date, kickoff_utc,
+               home_team, away_team, {','.join(cols)}, fetched_at, layer_ver)
+           VALUES ({','.join('?' * (9 + len(cols)))})""",
+        (mid, "E0", "2425", kickoff[:10], kickoff, home, away, *o.values(), "now", "t"))
     conn.commit()
 
 
-def test_build_report_first_prediction_and_future_only(conn):
-    now = datetime(2025, 1, 1, 12, tzinfo=timezone.utc)
+def test_build_report_market_based_and_future_only(league):
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
     _fixture(conn, "past", (now - timedelta(hours=1)).isoformat())
     _fixture(conn, "late", (now + timedelta(days=2)).isoformat(), "C", "D")
     _fixture(conn, "soon", (now + timedelta(hours=3)).isoformat())
-    extra = {"top5_scores": [{"score": "1-0", "prob": 0.12}, {"score": "2-0", "prob": 0.1},
-                             {"score": "1-1", "prob": 0.09}, {"score": "0-0", "prob": 0.08}],
-             "over_2.5": 0.55}
-    for mid in ("past", "late", "soon"):
-        save_prediction(conn, mid, "dc_xg", "1.0.0", "1", 0.62, 0.22, 0.16, extra)
-    save_prediction(conn, "soon", "dc_xg", "1.0.0", "1", 0.20, 0.20, 0.60)   # 后补，不得采用
-    save_prediction(conn, "soon", "dixon_coles", "1.3.0", "1", 0.30, 0.30, 0.40)
+    _fixture(conn, "noodds", (now + timedelta(days=3)).isoformat(), "B", "E",
+             avg_h=None, avg_d=None, avg_a=None, avg_over25=None, avg_under25=None, ah_line=None)
 
-    df = build_report(conn, {"E0": "英超"}, "dc_xg", "1.0.0", now)
-    assert list(df["主队"]) == ["A", "C"]                 # 已开球的剔除，按开球排序
+    df = build_report(conn, {"E0": "英超"}, now)
+    assert list(df["主队"]) == ["A", "C", "B"]            # 已开球的剔除，按开球排序
     r = df.iloc[0]
-    assert (r["主胜"], r["倾向"], r["信心"]) == ("62%", "主胜", "高")
-    assert r["最可能比分"] == "1-0(12%) 2-0(10%) 1-1(9%)"
-    assert r["大2.5球"] == "55%"
-    assert r["开球(北京)"] == "01-01 23:00"               # UTC+8
-    assert r["模型"] == "dc_xg 1.0.0"
+    # 胜平负 = 市场去水：1/1.6 : 1/4 : 1/5.5
+    inv = [1 / 1.5, 1 / 4.0, 1 / 5.5]
+    assert r["主胜"] == f"{inv[0] / sum(inv):.0%}"
+    assert (r["概率来源"], r["倾向"], r["信心"], r["比分来源"]) == ("市场", "主胜", "高", "市场隐含")
+    assert r["历史命中(首选/双选)"] == "73%/90%"
+    assert r["最可能比分"] and r["大2.5球"] and r["亚盘"].startswith("主-1.00")
+    assert "dc_xg" in r["自研 主/平/客"] and "blend" in r["自研 主/平/客"]
+    assert r["开球(北京)"] == (now + timedelta(hours=3)).astimezone(
+        ZoneInfo("Asia/Shanghai")).strftime("%m-%d %H:%M")
+    n = df.iloc[2]                                        # 无赔率：回退自研，并提示
+    assert n["概率来源"] == "blend" and n["比分来源"].startswith("dc_xg")
+    assert "缺胜平负赔率" in n["提示"]
 
 
 def test_build_report_empty(conn):
-    assert build_report(conn, {}, "dc_xg", "1.0.0", datetime.now(timezone.utc)).empty
+    assert build_report(conn, {}, datetime.now(timezone.utc)).empty
 
 
 def test_predict_upcoming_saves_once(league, monkeypatch):
@@ -72,12 +82,23 @@ def test_predict_upcoming_saves_once(league, monkeypatch):
     _fixture(conn, "f0", (now - timedelta(hours=5)).isoformat(), "B", "E")   # 已开球
 
     first = live._predict_upcoming(conn, now)
-    assert first == 5          # DC / 射正 / xG / Elo / 市场
+    assert first == 7          # DC / 射正 / xG / Elo / blend / 市场 / 市场隐含
     assert live._predict_upcoming(conn, now) == 0
     names = {r[0] for r in conn.execute("SELECT DISTINCT model_name FROM predictions")}
-    assert version.PRIMARY_MODEL[0] in names
+    assert version.PRIMARY_MODEL[0] in names and "blend_xg_elo" in names
     assert conn.execute("SELECT COUNT(*) FROM predictions WHERE match_id='f0'").fetchone()[0] == 0
+    ex = json.loads(conn.execute("SELECT extra_markets FROM predictions WHERE match_id='f1' "
+                                 "AND model_name='market_implied'").fetchone()[0])
+    assert len(ex["score_matrix"]) == 81 and abs(sum(ex["score_matrix"]) - 1) < 1e-3
 
-    df = build_report(conn, live.LEAGUES, version.PRIMARY_MODEL[0],
-                      version.get(version.PRIMARY_MODEL[1]), now)
+    df = build_report(conn, live.LEAGUES, now)
     assert len(df) == 1 and df.iloc[0]["最可能比分"] and df.iloc[0]["大2.5球"]
+
+
+def test_predict_upcoming_no_ou_skips_implied(league):
+    import football_prediction.live as live
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
+    _fixture(conn, "f1", (now + timedelta(hours=5)).isoformat(), avg_over25=None, avg_under25=None)
+    assert live._predict_upcoming(conn, now) == 6
+    assert not conn.execute("SELECT 1 FROM predictions WHERE model_name='market_implied'").fetchone()

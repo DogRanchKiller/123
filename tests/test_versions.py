@@ -9,15 +9,21 @@ from football_prediction import version
 MODULES = {
     "football_prediction.data.loader":           "data",
     "football_prediction.data.understat":        "data",
+    "football_prediction.data.oddsportal":       "data",
     "football_prediction.features.builder":      "features",
     "football_prediction.model_elo.elo":         "model_elo",
     "football_prediction.model_dc.dixon_coles":  "model_dc",
     "football_prediction.model_dc.sot_dc":       "model_sot",
     "football_prediction.model_dc.xg_dc":        "model_xg",
+    "football_prediction.model_market.implied":  "model_market",
+    "football_prediction.model_blend.blend":     "model_blend",
     "football_prediction.model_lgbm.lgbm_model": "model_lgbm",
     "football_prediction.calibration.platt":     "calibration",
     "football_prediction.output.derive":         "output",
     "football_prediction.output.report":         "output",
+    "football_prediction.output.analysis":       "output",
+    "football_prediction.output.pipeline":       "output",
+    "football_prediction.explain":               "output",
     "football_prediction.validation.backtest":   "validation",
     "football_prediction.review.store":          "review",
 }
@@ -47,5 +53,7 @@ def test_live_docstring_version():
 def test_primary_model_is_registered():
     name, key = version.PRIMARY_MODEL
     assert key in version.LAYER_VERSIONS
-    assert name in ("dixon_coles", "dc_sot", "dc_xg", "elo")
+    assert name in ("dixon_coles", "dc_sot", "dc_xg", "elo", "market_implied")
+    fb_name, fb_key = version.FALLBACK_MODEL
+    assert fb_key in version.LAYER_VERSIONS and fb_name == "dc_xg"
     assert version.PROMOTE_MIN_N >= 100
