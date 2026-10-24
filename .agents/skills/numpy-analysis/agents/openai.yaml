@@ -1,0 +1,3 @@
+interface:
+  display_name: "NumPy 分析"
+  short_description: "用 NumPy 算指标、矩阵和回测"
