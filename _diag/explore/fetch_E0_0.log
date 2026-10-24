@@ -1,0 +1,17 @@
+E0 total 1211 todo 606
+0
+retry 22281 ('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))
+retry 21926 ('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))
+retry 21932 ('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))
+retry 21949 ('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))
+retry 21962 ('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))
+retry 22065 ('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))
+retry 22078 ('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))
+100
+retry 22196 ('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))
+retry 26622 ('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None))
+200
+retry 26680 HTTPSConnectionPool(host='understat.com', port=443): Read timed out. (read timeout=30)
+retry 26680 HTTPSConnectionPool(host='understat.com', port=443): Read timed out. (read timeout=30)
+retry 26680 HTTPSConnectionPool(host='understat.com', port=443): Read timed out. (read timeout=30)
+retry 26680 HTTPSConnectionPool(host='understat.com', port=443): Read timed out. (read timeout=30)
