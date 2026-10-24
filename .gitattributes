@@ -1,0 +1,3 @@
+# 行尾统一：仓库里存 LF，检出按平台；批处理在任何机器上都检出为 CRLF（cmd 需要）
+* text=auto
+*.bat text eol=crlf

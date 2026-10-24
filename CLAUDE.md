@@ -8,5 +8,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Claude Code 补充
 
-- 本机是 Windows：`.claude/skills/` 的符号链接会检出成普通文本，技能不会自动加载。需要技能时按 AGENTS.md「检索」的表直接读 `.agents/skills/*/SKILL.md`。
-- bash heredoc 里写中文在本机会出错；改含中文的文件用编辑工具。
+- 技能在 `.claude/skills/`（`.agents/skills/` 的副本），Mac 和 Windows 都会自动加载。改技能只改 `.agents/skills/`，再运行 `python .agents/sync_skills.py`。
+- Windows 上 bash heredoc 里写中文在本机会出错；改含中文的文件用编辑工具。

@@ -28,16 +28,16 @@
 - 处理：下次改这两个文件之前先拆。候选：`loader.py` 的赛程与快照（`load_fixtures`、`save_snapshots`、`odds_movement`）拆到同包新文件；`oddsportal.py` 的 `book_odds` 表结构与 `book_consensus` 拆出，抓取与配对留在原文件。拆分不改行为、不升版本。
 - 位置：`football_prediction/data/loader.py`、`football_prediction/data/oddsportal.py`
 
+## 已解决
+
 ### Windows 上 `.claude/skills/` 符号链接检出为普通文本
 
-- 状态：未解决（已规避）
+- 状态：已解决
 - 日期：2026-10-24
 - 现象：Windows 检出后 `.claude/skills/numpy-analysis` 等是三十几字节的文本文件（内容是 `../../.agents/skills/...`），Claude Code 不会加载这些技能。
 - 原因：Git for Windows 默认 `core.symlinks=false`，模式 120000 的条目检出成普通文件。
-- 处理：暂按 `AGENTS.md`「检索」的表直接读 `.agents/skills/*/SKILL.md`。要真正启用，需打开 Windows 开发者模式后在本仓库设 `core.symlinks=true` 并重新检出这三个路径。
-- 位置：`.claude/skills/`
-
-## 已解决
+- 处理：不再用符号链接。`.claude/skills/` 改为 `.agents/skills/` 的真实副本，由 `python .agents/sync_skills.py` 生成，`tests/test_skills_sync.py` 检查两边一致（行尾按 LF 比较）。没有选"开发者模式 + `core.symlinks=true`"，因为它要求每台 Windows 机器单独设置。
+- 位置：`.claude/skills/`、`.agents/sync_skills.py`、`tests/test_skills_sync.py`
 
 ### 找不到 OddsHarvester 或其输出 JSON 损坏时整批抓取中断
 

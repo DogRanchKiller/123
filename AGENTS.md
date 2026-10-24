@@ -22,7 +22,10 @@
 | 分析、NumPy、矩阵、分布、Log Loss、Brier、回测数值 | [`.agents/skills/numpy-analysis/SKILL.md`](.agents/skills/numpy-analysis/SKILL.md) |
 | Transformers、Hugging Face、Trainer、tokenizer、预训练权重 | [`.agents/skills/transformers-framework/SKILL.md`](.agents/skills/transformers-framework/SKILL.md) |
 
-技能正文是步骤，规则以 `docs/ml-stack.md` 为准。Codex 读 `.agents/skills/`。Claude Code 经 `.claude/skills/` 的符号链接读同一份文件；Windows 上符号链接默认检出为普通文本，此时直接按上表打开 `.agents/skills/` 里的文件（见 `docs/issues.md`）。
+技能正文是步骤，规则以 `docs/ml-stack.md` 为准。Codex 读 `.agents/skills/`，Claude Code 读 `.claude/skills/`。`.agents/skills/` 是唯一源；`.claude/skills/` 是它的真实副本（不用符号链接，Windows 检出会坏），Mac 和 Windows 都能直接用。
+
+- 只在 `.agents/skills/` 里改技能，改完运行 `python .agents/sync_skills.py`，两边一起提交。
+- 不要直接改 `.claude/skills/`。`tests/test_skills_sync.py` 检查两边一致，不一致时测试失败。
 
 ## 进度与问题
 
@@ -112,4 +115,6 @@ python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下�
 ## 运行环境
 
 - Windows 任务计划程序有两个任务：`FootballPredictDaily_1807` 和 `FootballPredictDaily_2337`，每天执行 `run_daily.bat`（先跑 `live`，再跑 `oddsportal --hours 30`），日志写到 `logs/daily.log`。
-- `run_daily.bat` 必须保持纯 ASCII + CRLF：cmd 按 GBK 解析，含 UTF-8 中文会出错。
+- `run_daily.bat` 必须保持纯 ASCII + CRLF：cmd 按 GBK 解析，含 UTF-8 中文会出错。CRLF 由 `.gitattributes` 保证（`*.bat eol=crlf`），与各人的 `core.autocrlf` 无关。
+- 定时任务只在 Windows 这台机器上跑。Mac 上手动跑 `python -m football_prediction.live`；`data/oddsportal.py` 会按系统找 `.venv-scrape/bin` 或 `.venv-scrape\Scripts` 下的 OddsHarvester。
+- 行尾：仓库里一律存 LF（`.gitattributes` 的 `* text=auto`），检出按平台转换。

@@ -1,0 +1,3 @@
+interface:
+  display_name: "PyTorch 训练"
+  short_description: "按规范用 PyTorch 训练新模型"
