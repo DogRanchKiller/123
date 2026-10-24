@@ -1,0 +1,10 @@
+1920 temp=1.069 temp-mk=+0.0001 blend-mk=+0.0024
+2021 temp=1.056 temp-mk=+0.0000 blend-mk=+0.0000
+2122 temp=1.049 temp-mk=-0.0000 blend-mk=+0.0001
+2223 temp=1.045 temp-mk=-0.0003 blend-mk=-0.0002
+2324 temp=1.046 temp-mk=-0.0011 blend-mk=-0.0019
+2425 temp=1.061 temp-mk=-0.0006 blend-mk=-0.0020
+2526 temp=1.064 temp-mk=-0.0007 blend-mk=-0.0014
+temp only  pooled -0.0004±0.0002   last3 -0.0008±0.0003
+blend      pooled -0.0004±0.0004   last3 -0.0018±0.0005
+hit rate OOS: blend 53.66%  market 53.59%  picks differ 1.31%

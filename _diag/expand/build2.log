@@ -1,0 +1,67 @@
+E0 1415: matches +0, xG +0, unmatched 0
+E0 1516: matches +0, xG +0, unmatched 0
+E0 1617: matches +380, xG +380, unmatched 0
+E0 1718: matches +0, xG +0, unmatched 0
+E0 1819: matches +0, xG +0, unmatched 0
+E0 1920: matches +0, xG +0, unmatched 0
+E0 2021: matches +0, xG +0, unmatched 0
+E0 2122: matches +380, xG +380, unmatched 0
+E0 2223: matches +0, xG +0, unmatched 0
+E0 2324: matches +0, xG +0, unmatched 0
+E0 2425: matches +0, xG +0, unmatched 0
+E0 2526: matches +0, xG +0, unmatched 0
+D1 1415: matches +0, xG +0, unmatched 0
+D1 1516: matches +0, xG +0, unmatched 0
+D1 1617: matches +0, xG +0, unmatched 0
+D1 1718: matches +0, xG +0, unmatched 0
+D1 1819: matches +0, xG +0, unmatched 0
+D1 1920: matches +0, xG +0, unmatched 0
+D1 2021: matches +306, xG +306, unmatched 0
+D1 2122: matches +0, xG +0, unmatched 0
+D1 2223: matches +0, xG +0, unmatched 0
+D1 2324: matches +0, xG +0, unmatched 0
+D1 2425: matches +0, xG +0, unmatched 0
+D1 2526: matches +0, xG +0, unmatched 0
+SP1 1415: matches +0, xG +0, unmatched 0
+SP1 1516: matches +380, xG +380, unmatched 0
+SP1 1617: matches +0, xG +0, unmatched 0
+SP1 1718: matches +0, xG +0, unmatched 0
+SP1 1819: matches +0, xG +0, unmatched 0
+SP1 1920: matches +380, xG +380, unmatched 0
+SP1 2021: matches +0, xG +0, unmatched 0
+SP1 2122: matches +0, xG +0, unmatched 0
+SP1 2223: matches +0, xG +0, unmatched 0
+SP1 2324: matches +0, xG +0, unmatched 0
+SP1 2425: matches +0, xG +0, unmatched 0
+SP1 2526: matches +380, xG +380, unmatched 0
+I1 1415: matches +0, xG +0, unmatched 0
+I1 1516: matches +0, xG +0, unmatched 0
+I1 1617: matches +0, xG +0, unmatched 0
+I1 1718: matches +0, xG +0, unmatched 0
+I1 1819: matches +0, xG +0, unmatched 0
+I1 1920: matches +0, xG +0, unmatched 0
+I1 2021: matches +0, xG +0, unmatched 0
+I1 2122: matches +0, xG +0, unmatched 0
+I1 2223: matches +0, xG +0, unmatched 0
+I1 2324: matches +0, xG +0, unmatched 1
+I1 2425: matches +0, xG +0, unmatched 0
+I1 2526: matches +0, xG +0, unmatched 0
+F1 1415: matches +0, xG +0, unmatched 0
+F1 1516: matches +0, xG +0, unmatched 0
+F1 1617: matches +0, xG +0, unmatched 0
+F1 1718: matches +0, xG +0, unmatched 1
+F1 1819: matches +0, xG +0, unmatched 0
+F1 1920: matches +0, xG +0, unmatched 0
+F1 2021: matches +0, xG +0, unmatched 0
+F1 2122: matches +0, xG +0, unmatched 0
+F1 2223: matches +0, xG +0, unmatched 0
+F1 2324: matches +0, xG +0, unmatched 0
+F1 2425: matches +0, xG +0, unmatched 0
+F1 2526: matches +0, xG +0, unmatched 0
+
+league matches xg avg1x2 avgOU ah pinnacle_close
+D1 3672 3672 3672 3672 3672 3514
+E0 4560 4560 4560 4560 4559 4390
+F1 4237 4236 4237 4237 4237 4084
+I1 4560 4559 4559 4558 4558 4378
+SP1 4560 4560 4560 4560 4556 4367
