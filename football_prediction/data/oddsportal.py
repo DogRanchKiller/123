@@ -289,22 +289,38 @@ def collect(conn: sqlite3.Connection, leagues: list[str], now: datetime,
         groups.setdefault(ah_lines_for(fx["ah_line"]), []).append(link)
 
     n = 0
-    for lines, glinks in groups.items():
+
+    def scrape(lines: tuple, glinks: list[str]) -> set[str]:
+        """抓一组比赛并入库，返回已处理（含主客不一致跳过）的链接。"""
+        nonlocal n
         markets = ",".join(["1x2", "over_under_2_5", *(_ah_key(l) for l in lines)])
         args = ["-m", markets, "--odds-history", "-c", str(concurrency),
                 "--request-delay", str(delay)]
         for ln in glinks:
             args += ["--match-link", ln]
-        recs = _with_retry(runner, args, 240 * len(glinks) + 120, log, pause=pause)
-        for rec in recs:
+        done = set()
+        for rec in _with_retry(runner, args, 240 * len(glinks) + 120, log, pause=pause):
             fx = paired.get(rec.get("match_link"))
             if fx is None:
                 continue
+            done.add(rec["match_link"])
             if not record_orientation(rec, fx):
                 log(f"    主客与赛程不一致，跳过：{rec.get('home_team')} vs {rec.get('away_team')}")
                 continue
             n += save_book_odds(conn, fx["match_id"], parse_record(rec), fetched_at)
         conn.commit()
+        return done
+
+    missed = []
+    for lines, glinks in groups.items():
+        done = scrape(lines, glinks)
+        if len(glinks) > 1:       # 整组只回来一部分：缺的场次之后单独补抓
+            missed += [(lines, ln) for ln in glinks if ln not in done]
+    for lines, ln in missed:
+        fx = paired[ln]
+        log(f"    单独补抓：{fx['home_team']} vs {fx['away_team']}")
+        if not scrape(lines, [ln]):
+            log(f"    补抓失败：{fx['home_team']} vs {fx['away_team']}")
     return n
 
 

@@ -163,3 +163,26 @@ def test_collect_survives_scrape_failure(conn):
     now = datetime(2026, 10, 24, 13, 0, tzinfo=timezone.utc)
     assert op.collect(conn, ["E0"], now, runner=runner, log=lambda *_: None, pause=0) == 0
     assert len(calls) == 2                       # 失败重试一次
+
+
+def test_collect_refetches_matches_missing_from_group(conn):
+    """同组两场只回来一场时，缺的那场单独补抓（实盘遇到过整组只返回部分记录）。"""
+    conn.execute("""INSERT INTO fixtures (match_id, league, season, match_date, kickoff_utc,
+                    home_team, away_team, ah_line, fetched_at, layer_ver)
+                    VALUES ('m2','E0','2627','2026-10-25','2026-10-25T16:30:00+00:00',
+                    'Chelsea','Tottenham',-0.25,'t','1.5.0')""")
+    link2 = "https://www.oddsportal.com/football/h2h/chelsea-4fGZN2oK/tottenham-UDg08Ohm/#abc"
+    rec2 = {**REC, "match_link": link2, "home_team": "Chelsea", "away_team": "Tottenham"}
+    calls = []
+
+    def runner(args, timeout):
+        if "--links-only" in args:
+            return [{"match_link": ln, "league": "england-premier-league",
+                     "kickoff_utc": "2026-10-25 16:00:00 UTC"} for ln in (REC["match_link"], link2)]
+        calls.append(args)
+        return [REC] if args.count("--match-link") == 2 else [rec2]
+
+    now = datetime(2026, 10, 24, 13, 0, tzinfo=timezone.utc)
+    op.collect(conn, ["E0"], now, runner=runner, log=lambda *_: None, pause=0)
+    assert [a.count("--match-link") for a in calls] == [2, 1] and link2 in calls[1]
+    assert op.book_consensus(conn, "m1") and op.book_consensus(conn, "m2")

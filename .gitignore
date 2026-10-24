@@ -7,3 +7,6 @@ __pycache__/
 
 # 爬虫独立环境
 .venv-scrape/
+
+# 研究库（可由 _diag/expand/build_research_db.py 从 _cache 重建）
+research.db
