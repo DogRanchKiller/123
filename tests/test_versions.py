@@ -33,7 +33,7 @@ MODULES = {
 def test_layer_version_matches_registry(mod, layer):
     try:
         m = importlib.import_module(mod)
-    except ImportError as e:   # 可选依赖（如 lightgbm）未安装时跳过
+    except (ImportError, OSError) as e:   # 可选依赖（如 lightgbm）未安装，或 Mac 上缺 libomp 时跳过
         pytest.skip(f"{mod}: {e}")
     assert m.LAYER_VERSION == version.get(layer)
 

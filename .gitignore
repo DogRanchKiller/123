@@ -5,8 +5,13 @@ __pycache__/
 # 其余文件（football.db 实盘记录、reports/ 预测报告、_diag/ 诊断、_cache/ understat 缓存、日志）
 # 均纳入版本库作备份。football.db 每次运行都会变化，需要备份时手动提交。
 
-# 爬虫独立环境
+# 虚拟环境（各人本机自建）
+.venv/
 .venv-scrape/
+
+# 系统生成文件
+.DS_Store
+Thumbs.db
 
 # 研究库（可由 _diag/expand/build_research_db.py 从 _cache 重建）
 research.db

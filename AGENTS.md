@@ -112,6 +112,25 @@ python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下�
 4. 新增带 `LAYER_VERSION` 的模块时，把它登记进 `tests/test_versions.py` 的 `MODULES`。
 5. 按「进度与问题」更新 `docs/progress.md`。这次改动修了会影响运行的问题时，同时更新 `docs/issues.md`。
 
+## 两人协作：Mac 与 Windows
+
+环境（各自建，`.venv` 和 `.venv-scrape` 都不进版本库）：
+
+| | Windows | Mac |
+|---|---|---|
+| 主环境 | `python -m venv .venv` → `.venv\Scripts\python -m pip install -r requirements.txt` | `python3 -m venv .venv` → `.venv/bin/python -m pip install -r requirements.txt` |
+| 爬虫环境（可选） | `python -m venv .venv-scrape` → `.venv-scrape\Scripts\python -m pip install oddsharvester==0.20.0` → `.venv-scrape\Scripts\playwright install chromium` | 同左，路径换成 `.venv-scrape/bin/` |
+
+- Mac 上导入 lightgbm 报缺 `libomp` 时，`brew install libomp`；不装也能跑实盘和测试（相关测试 skip）。
+- 没有爬虫环境时，`data.oddsportal` 打印提示后只显示已有数据，`live` 不受影响。
+- 不需要改 `core.autocrlf` 或 `core.symlinks`：行尾由 `.gitattributes` 管，技能目录是普通文件。
+
+谁写什么：
+
+- `football.db`、`logs/`、`reports/` 只由跑定时任务的那台 Windows 机器提交。SQLite 是二进制，两边都提交时 git 无法合并，实盘存档也会分叉。
+- 另一台机器可以本地跑 `live` 看结果，但不提交 `football.db`；提交代码时只 `git add` 具体文件。`git pull` 若在 `football.db` 上冲突，取远端版本：`git checkout --theirs football.db` 后再 `git add football.db`。
+- fork 协作时，开新分支前先把 fork 的 main 同步到本仓库 main（GitHub 的 Sync fork，或 `git fetch upstream && git merge upstream/main`），否则 PR 会在 `CLAUDE.md`、`.claude/skills/` 上冲突。
+
 ## 运行环境
 
 - Windows 任务计划程序有两个任务：`FootballPredictDaily_1807` 和 `FootballPredictDaily_2337`，每天执行 `run_daily.bat`（先跑 `live`，再跑 `oddsportal --hours 30`），日志写到 `logs/daily.log`。
