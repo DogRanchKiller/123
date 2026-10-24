@@ -1,0 +1,105 @@
+"""评分、去重、实盘成绩单与主模型替换检查。"""
+from math import log
+
+import numpy as np
+import pytest
+
+from football_prediction.review.store import (
+    has_prediction, save_prediction, score_predictions, live_report, promotion_check,
+    _paired, _scored_first,
+)
+
+
+def _match(conn, mid, hg, ag):
+    conn.execute("INSERT INTO matches VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                 (mid, "E0", "2526", "2025-09-01", "H", "A", hg, ag, "t", "now", "t"))
+
+
+def test_has_prediction_and_first_only(conn):
+    assert not has_prediction(conn, "m1", "dc_xg", "1.0.0")
+    save_prediction(conn, "m1", "dc_xg", "1.0.0", "1.0.0", 0.5, 0.3, 0.2)
+    assert has_prediction(conn, "m1", "dc_xg", "1.0.0")
+    assert not has_prediction(conn, "m1", "dc_xg", "1.0.1")   # 新版本另存
+    assert not has_prediction(conn, "m1", "elo", "1.0.0")
+
+
+def test_score_predictions_values_and_idempotent(conn):
+    _match(conn, "m1", 2, 1)   # 主胜
+    _match(conn, "m2", 1, 1)   # 平
+    save_prediction(conn, "m1", "x", "1", "1", 0.5, 0.3, 0.2)
+    save_prediction(conn, "m2", "x", "1", "1", 0.5, 0.3, 0.2)
+    save_prediction(conn, "m3", "x", "1", "1", 0.5, 0.3, 0.2)   # 未完赛，不评分
+    assert score_predictions(conn) == 2
+    assert score_predictions(conn) == 0
+
+    got = dict(conn.execute(
+        "SELECT match_id, log_loss FROM predictions WHERE log_loss IS NOT NULL").fetchall())
+    assert got["m1"] == pytest.approx(-log(0.5), abs=1e-6)
+    assert got["m2"] == pytest.approx(-log(0.3), abs=1e-6)
+    br = conn.execute("SELECT brier FROM predictions WHERE match_id='m1'").fetchone()[0]
+    assert br == pytest.approx(0.5 ** 2 + 0.3 ** 2 + 0.2 ** 2, abs=1e-6)
+
+
+def test_scored_first_keeps_earliest(conn):
+    _match(conn, "m1", 0, 1)
+    save_prediction(conn, "m1", "x", "1", "1", 0.2, 0.2, 0.6)   # 首条：客胜命中
+    save_prediction(conn, "m1", "x", "1", "1", 0.6, 0.2, 0.2)   # 后补的不算
+    score_predictions(conn)
+    df = _scored_first(conn)
+    assert len(df) == 1
+    assert df.iloc[0]["p_away_win"] == pytest.approx(0.6)
+    assert df.iloc[0]["hit"] == 1.0
+
+
+def test_paired_diff_and_se():
+    import pandas as pd
+    a = pd.DataFrame({"match_id": ["1", "2", "3", "9"], "log_loss": [1.0, 1.2, 0.8, 5.0]})
+    b = pd.DataFrame({"match_id": ["1", "2", "3"], "log_loss": [1.1, 1.0, 1.0]})
+    n, diff, se = _paired(a, b)   # 只配同场：9 号不计
+    d = np.array([-0.1, 0.2, -0.2])
+    assert n == 3
+    assert diff == pytest.approx(d.mean())
+    assert se == pytest.approx(d.std(ddof=1) / np.sqrt(3))
+
+
+def _scored_set(conn, n, p_ch, p_pr):
+    """n 场主胜；挑战者 / 主模型 / 市场 各自给出主胜概率。"""
+    rng = np.random.default_rng(1)
+    for i in range(n):
+        mid = f"m{i}"
+        _match(conn, mid, 1, 0)
+        jitter = rng.uniform(-0.02, 0.02)
+        for name, ver, p in (("dc_sot", "1.0.0", p_ch + jitter), ("dc_xg", "1.0.0", p_pr),
+                             ("market_avg", "1.1.0", 0.5)):
+            save_prediction(conn, mid, name, ver, "1", p, (1 - p) / 2, (1 - p) / 2)
+    score_predictions(conn)
+
+
+def test_live_report_columns_and_hit_rate(conn):
+    _scored_set(conn, 20, 0.6, 0.5)
+    rep = live_report(conn).set_index("model_name")
+    assert {"matches", "log_loss", "brier", "hit_rate", "paired_n",
+            "diff_vs_base", "se"} <= set(rep.columns)
+    assert rep.loc["dc_sot", "hit_rate"] == 1.0
+    assert rep.loc["dc_sot", "paired_n"] == 20
+    assert rep.loc["dc_sot", "diff_vs_base"] < 0       # 主胜给得更高 → 优于市场
+    assert rep.loc["market_avg", "diff_vs_base"] == pytest.approx(0.0)
+
+
+def test_promotion_check_verdicts(conn):
+    _scored_set(conn, 30, 0.6, 0.5)
+    chk = promotion_check(conn, ("dc_xg", "1.0.0"), min_n=50).set_index("model_name")
+    assert "market_avg" not in chk.index and "dc_xg" not in chk.index
+    assert chk.loc["dc_sot", "verdict"].startswith("样本不足")
+
+    chk = promotion_check(conn, ("dc_xg", "1.0.0"), min_n=30).set_index("model_name")
+    assert chk.loc["dc_sot", "verdict"] == "可替换"
+
+    # 反过来：主模型更好，挑战者不替换
+    chk = promotion_check(conn, ("dc_sot", "1.0.0"), min_n=30).set_index("model_name")
+    assert chk.loc["dc_xg", "verdict"] == "不替换"
+
+
+def test_reports_empty_without_scores(conn):
+    assert live_report(conn).empty
+    assert promotion_check(conn, ("dc_xg", "1.0.0"), 1000).empty

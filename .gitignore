@@ -11,3 +11,6 @@ diag_*.py
 
 # understat 原始数据缓存
 _cache/
+
+# 预测报告（每次运行生成）
+reports/

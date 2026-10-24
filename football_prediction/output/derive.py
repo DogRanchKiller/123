@@ -1,11 +1,11 @@
 """
-output/derive.py  v1.0.0
+output/derive.py  v1.1.0（推导逻辑未变；输出层 1.1.0 新增 report.py）
 输出层：从 Dixon-Coles 比分矩阵推导大小球、让球等衍生市场概率。
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 """
 import numpy as np
 
-LAYER_VERSION = "1.0.0"
+LAYER_VERSION = "1.1.0"
 
 
 def derive_markets(score_matrix: np.ndarray) -> dict:

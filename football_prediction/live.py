@@ -1,5 +1,5 @@
 """
-football_prediction/live.py  v1.2.0
+football_prediction/live.py  v1.3.0
 实盘预测闭环：更新数据 → 赛后评分 → 对未开赛场次保存预测 → 实盘成绩单。
 每轮比赛前后各跑一次即可：
     python -m football_prediction.live
@@ -10,6 +10,7 @@ football_prediction/live.py  v1.2.0
 v1.0.1: market_avg 版本号固定为 MARKET_VER，不再跟随数据层版本，避免数据层升级后同场重复基准。
 v1.1.0: 新增射正版 DC（dc_sot，model_sot 版本），与 DC / Elo / 市场 同场并列保存。
 v1.2.0: 每次运行刷新当前赛季 understat xG；新增 xG 版 DC（dc_xg，model_xg 版本）。
+v1.3.0: 输出主模型预测报告（控制台 + reports/ CSV）；成绩单加命中率与 SE；主模型替换检查。
 """
 from datetime import datetime, timezone
 
@@ -21,8 +22,9 @@ from football_prediction.model_dc.sot_dc      import SotDixonColesModel
 from football_prediction.model_dc.xg_dc       import XgDixonColesModel
 from football_prediction.model_elo.elo        import EloModel
 from football_prediction.output.derive        import derive_markets
+from football_prediction.output.report        import build_report, write_report, format_row
 from football_prediction.review.store         import (
-    has_prediction, save_prediction, score_predictions, live_report,
+    has_prediction, save_prediction, score_predictions, live_report, promotion_check,
 )
 
 DB_PATH = "football.db"
@@ -119,25 +121,7 @@ def _predict_upcoming(conn, now: datetime) -> int:
                             inv[0] / s, inv[1] / s, inv[2] / s,
                             {"odds": [oh, od, oa], "kickoff_utc": kickoff})
             saved += 1
-
-        print_row(conn, mid, lg, mdate, home, away)
     return saved
-
-
-def print_row(conn, mid, lg, mdate, home, away) -> None:
-    """打印该场已保存的各模型预测（首次预测）"""
-    rows = conn.execute(
-        """SELECT model_name, p_home_win, p_draw, p_away_win FROM predictions
-           WHERE match_id=? ORDER BY generated_at""", (mid,)
-    ).fetchall()
-    seen, parts = set(), []
-    for name, h, d, a in rows:
-        if name in seen:
-            continue
-        seen.add(name)
-        tag = {"dixon_coles": "DC", "dc_sot": "射正DC", "dc_xg": "xG DC", "elo": "Elo", "market_avg": "市场"}.get(name, name)
-        parts.append(f"{tag} {h:.2f}/{d:.2f}/{a:.2f}")
-    print(f"  [{LEAGUES[lg]}] {mdate} {home} vs {away}:  " + "  ".join(parts))
 
 
 def main():
@@ -152,21 +136,38 @@ def main():
     print("\n>>> [2] 赛后评分 ...")
     print(f"  本次评分 {score_predictions(conn)} 条")
 
-    print("\n>>> [3] 未开赛场次预测（主/平/客）...")
+    print("\n>>> [3] 未开赛场次预测（所有模型均存档，首次预测为准）...")
     print(f"  新保存 {_predict_upcoming(conn, now)} 条预测")
 
-    print("\n>>> [4] 实盘成绩单（同场对比市场，差值负=优于市场）...")
+    p_name, p_key = version.PRIMARY_MODEL
+    p_ver = version.get(p_key)
+    print(f"\n>>> [4] 预测报告（主模型 {p_name} {p_ver}；信心档后为历史命中率 首选/双选）...")
+    rpt = build_report(conn, LEAGUES, p_name, p_ver, now)
+    if rpt.empty:
+        print("  暂无未开赛场次。")
+    else:
+        for _, r in rpt.iterrows():
+            print(format_row(r))
+        print(f"  报告已写入 {write_report(rpt, now)}")
+        print("  概率是模型估计，足球结果随机性大：即使'高'信心档，历史上也约有 1/4 不中。")
+
+    print("\n>>> [5] 实盘成绩单（同场对比市场，差值负=优于市场；|差值| < 2×SE 视为无显著差异）...")
     rep = live_report(conn)
     if rep.empty:
         print("  暂无已评分的实盘预测，比赛结束、数据源更新后再运行即可。")
     else:
-        print(f"  {'模型':<14}{'版本':<8}{'场数':>5}{'LogLoss':>9}{'Brier':>8}"
-              f"{'同场':>6}{'市场LL':>8}{'差值':>9}")
+        print(f"  {'模型':<16}{'版本':<8}{'场数':>5}{'LogLoss':>9}{'Brier':>8}{'命中率':>7}"
+              f"{'同场':>6}{'差值':>9}{'SE':>8}")
         for _, r in rep.iterrows():
-            print(f"  {r['model_name']:<14}{r['model_ver']:<8}{r['matches']:>5}"
-                  f"{r['log_loss']:>9.4f}{r['brier']:>8.4f}{r['paired_n']:>6}"
-                  f"{r['base_ll']:>8.4f}{r['diff_vs_base']:>+9.4f}")
-        print("  实盘样本少时差值波动很大，至少积累数百场再下结论。")
+            print(f"  {r['model_name']:<16}{r['model_ver']:<8}{r['matches']:>5}"
+                  f"{r['log_loss']:>9.4f}{r['brier']:>8.4f}{r['hit_rate']:>7.1%}"
+                  f"{r['paired_n']:>6}{r['diff_vs_base']:>+9.4f}{r['se']:>8.4f}")
+
+        print(f"\n>>> [6] 主模型替换检查（规则：同场 ≥ {version.PROMOTE_MIN_N} 场且 差值+2×SE < 0）...")
+        chk = promotion_check(conn, (p_name, p_ver), version.PROMOTE_MIN_N)
+        for _, r in chk.iterrows():
+            print(f"  {r['model_name']:<16}{r['model_ver']:<8} 对主模型 {r['diff']:+.4f}±{r['se']:.4f}"
+                  f"  → {r['verdict']}")
     conn.close()
 
 
