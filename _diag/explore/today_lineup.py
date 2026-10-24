@@ -1,5 +1,5 @@
 """今日首发 vs 近期主力：读 understat 缓存，列出两队本赛季出场分钟 / 每90(xG+xA)，
-标出今日先发、替补、不在大名单的人。用法：python today_lineup.py <espn_summary.json>"""
+标出今日先发、替补、不在大名单的人。用法：python today_lineup.py <espn_summary.json> [主队 客队]"""
 import json, os, sqlite3, sys, unicodedata
 import pandas as pd
 
@@ -18,7 +18,7 @@ for r in espn["rosters"]:
         today[norm(p["athlete"]["displayName"])] = "先发" if p.get("starter") else "替补"
 
 conn = sqlite3.connect("football.db")
-for team in ["Arsenal", "Everton"]:
+for team in (sys.argv[2:4] if len(sys.argv) >= 4 else ["Arsenal", "Everton"]):
     m = pd.read_sql_query(
         """SELECT m.match_date, m.home_team, m.away_team, x.us_match_id FROM matches m
            JOIN match_xg x USING(match_id) WHERE m.league='E0' AND m.season='2627'
