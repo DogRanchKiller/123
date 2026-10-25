@@ -1,5 +1,5 @@
 """
-data/loader.py  v1.5.0
+data/loader.py  v1.6.0
 数据层：下载 football-data.co.uk CSV，写入 SQLite，标准化球队 ID。
 v1.1.0: 保存赛前/收盘平均赔率（match_odds 表，作市场基准）；
         下载未开赛赛程 fixtures.csv（fixtures 表，供实盘预测）；CSV 按 utf-8-sig 解码。
@@ -10,19 +10,20 @@ v1.4.0: 赔率补全亚盘（盘口线 + 平均水位，赛前/收盘）与 Pinn
         旧库 ALTER TABLE 自动迁移；match_odds 改为只补空值（已有值永不覆盖）；
         backfill_odds 从本地缓存 CSV 补旧赛季新列。
 v1.5.0: 本文件未改；数据层新增 data/oddsportal.py（多家公司赔率 book_odds 表）。
+        之后拆分（行为不变）：赛程与快照 load_fixtures / save_snapshots / odds_movement 移到 data/fixtures.py。
+v1.6.0: 实盘库加入意甲 I1、法甲 F1 的 2122–2627（_diag/expand/add_live_leagues.py），
+        OddsPortal / FotMob 补意甲法甲联赛与队名；CSV 只有部分射门列时（老赛季）不再 KeyError，跳过该场统计。
 修改此文件后请同步更新 version.py 中 "data" 的版本号。
 """
 import sqlite3, hashlib, requests, io, time, glob, os
 import pandas as pd
 from datetime import date, datetime, timezone
-from zoneinfo import ZoneInfo
 
-LAYER_VERSION = "1.5.0"
+LAYER_VERSION = "1.6.0"
+BUSY_TIMEOUT = 120     # 秒；SQLite 遇锁时的等待上限（init_db）
 
 # football-data.co.uk 赛季 URL 模板（www 会 302 到裸域名，直接用裸域名少一次握手）
 _CSV_URL      = "https://football-data.co.uk/mmz4281/{season}/{league}.csv"
-_FIXTURES_URL = "https://football-data.co.uk/fixtures.csv"
-_UK_TZ = ZoneInfo("Europe/London")   # football-data 的开球时间为英国本地时间
 
 # 赔率列：CSV 列名 -> match_odds 列名（Avg = 多家公司平均，C = 收盘）
 _ODDS_COLS = {
@@ -36,13 +37,6 @@ _ODDS_COLS = {
     "AHCh": "ahc_line",        "AvgCAHH": "avgc_ahh", "AvgCAHA": "avgc_aha",
     "PSH": "ps_h",   "PSD": "ps_d",   "PSA": "ps_a",
     "PSCH": "psc_h", "PSCD": "psc_d", "PSCA": "psc_a",
-}
-
-# 赛程赔率列：CSV 列名 -> fixtures / odds_snapshots 列名（下载时刻的当前盘）
-_FIX_ODDS_COLS = {
-    "AvgH": "avg_h", "AvgD": "avg_d", "AvgA": "avg_a",
-    "Avg>2.5": "avg_over25", "Avg<2.5": "avg_under25",
-    "AHh": "ah_line", "AvgAHH": "avg_ahh", "AvgAHA": "avg_aha",
 }
 
 # v1.4.0 新增列（旧库迁移用）：表 -> [(列, 类型)]
@@ -196,8 +190,10 @@ def season_of(match_date: str) -> str:
 
 
 def init_db(db_path: str = "football.db") -> sqlite3.Connection:
-    """初始化数据库，返回连接。可多次调用，幂等。"""
-    conn = sqlite3.connect(db_path)
+    """初始化数据库，返回连接。可多次调用，幂等。
+    timeout=120：临场任务与每日任务同时写库时等对方提交，而不是立刻报 database is locked
+    （各层都是逐批提交，单次持锁很短）。对挂上的 fotmob.db 同样生效。"""
+    conn = sqlite3.connect(db_path, timeout=BUSY_TIMEOUT)
     conn.executescript(DB_SCHEMA)
     _migrate(conn)
     conn.commit()
@@ -270,7 +266,8 @@ def load_season(
         if any(v is not None for v in odds.values()):
             odds_rows.append({"match_id": match_id, **odds})
         stats = {_STATS_COLS[c]: _float_or_none(row[c]) for c in stats_src}
-        if stats and all(v is not None for v in stats.values()):
+        # 老 CSV 可能只有射门没有射正（如 D1 0304–0506）：四列不齐不写
+        if len(stats) == len(_STATS_COLS) and all(v is not None for v in stats.values()):
             stats_rows.append((match_id, *(int(stats[c]) for c in _STATS_COLS.values())))
 
     cur = conn.cursor()
@@ -295,90 +292,6 @@ def load_season(
     conn.commit()
     return inserted
 
-
-def load_fixtures(conn: sqlite3.Connection, leagues: list[str]) -> int:
-    """
-    下载 football-data 的未开赛赛程（含当前赔率），整表刷新 fixtures。
-    fixtures 只是赛程缓存，可覆盖；预测记录在 review 层，永不覆盖。
-    match_id 与赛后 matches 同算法，赛后可直接关联评分。
-    返回写入的场数。
-    """
-    fetched_at = datetime.now(timezone.utc).isoformat()
-    df = _download_csv(_FIXTURES_URL)
-    df = df[df["Div"].isin(leagues)].dropna(subset=["HomeTeam", "AwayTeam", "Date"])
-
-    rows = []
-    for _, row in df.iterrows():
-        match_date = _parse_date(row["Date"])
-        if match_date is None:
-            continue
-        home = _normalize(str(row["HomeTeam"]))
-        away = _normalize(str(row["AwayTeam"]))
-        league = str(row["Div"])
-        season = season_of(match_date)
-        odds = tuple(_float_or_none(row.get(c)) for c in _FIX_ODDS_COLS)
-
-        kickoff_utc = None
-        raw_time = str(row.get("Time", "")).strip()
-        try:
-            local = datetime.strptime(f"{match_date} {raw_time}", "%Y-%m-%d %H:%M")
-            kickoff_utc = local.replace(tzinfo=_UK_TZ).astimezone(timezone.utc).isoformat()
-        except ValueError:
-            pass
-
-        rows.append((
-            _make_match_id(league, season, match_date, home, away),
-            league, season, match_date, kickoff_utc, home, away,
-            *odds, fetched_at, LAYER_VERSION,
-        ))
-
-    odds_cols = list(_FIX_ODDS_COLS.values())
-    conn.execute("DELETE FROM fixtures")
-    conn.executemany(
-        f"""INSERT OR REPLACE INTO fixtures
-            (match_id, league, season, match_date, kickoff_utc, home_team, away_team,
-             {','.join(odds_cols)}, fetched_at, layer_ver)
-            VALUES ({','.join('?' * (9 + len(odds_cols)))})""",
-        rows,
-    )
-    save_snapshots(conn, [(r[0], *r[7:7 + len(odds_cols)]) for r in rows], fetched_at)
-    conn.commit()
-    return len(rows)
-
-
-def save_snapshots(conn: sqlite3.Connection, rows: list[tuple], fetched_at: str) -> int:
-    """
-    追加赔率快照：rows 每项为 (match_id, *_FIX_ODDS_COLS 对应值)。
-    与该场上一条快照完全相同、或赔率全空时不写，返回写入条数。
-    """
-    cols = list(_FIX_ODDS_COLS.values())
-    n = 0
-    for mid, *vals in rows:
-        if all(v is None for v in vals):
-            continue
-        last = conn.execute(
-            f"SELECT {','.join(cols)} FROM odds_snapshots WHERE match_id = ? "
-            "ORDER BY fetched_at DESC LIMIT 1", (mid,)).fetchone()
-        if last is not None and tuple(last) == tuple(vals):
-            continue
-        conn.execute(
-            f"""INSERT OR IGNORE INTO odds_snapshots (match_id, fetched_at, {','.join(cols)}, layer_ver)
-                VALUES ({','.join('?' * (3 + len(cols)))})""",
-            (mid, fetched_at, *vals, LAYER_VERSION))
-        n += 1
-    return n
-
-
-def odds_movement(conn: sqlite3.Connection, match_id: str) -> tuple[dict, dict] | None:
-    """返回该场 (首条快照, 最新快照)；不足两条时返回 None。"""
-    cols = ["fetched_at"] + list(_FIX_ODDS_COLS.values())
-    q = (f"SELECT {','.join(cols)} FROM odds_snapshots WHERE match_id = ? "
-         "ORDER BY fetched_at {} LIMIT 1")
-    first = conn.execute(q.format("ASC"), (match_id,)).fetchone()
-    last = conn.execute(q.format("DESC"), (match_id,)).fetchone()
-    if first is None or first[0] == last[0]:
-        return None
-    return dict(zip(cols, first)), dict(zip(cols, last))
 
 
 def backfill_odds(conn: sqlite3.Connection, cache_dir: str = "_cache/fd_raw") -> int:

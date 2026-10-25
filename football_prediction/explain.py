@@ -1,10 +1,12 @@
 """
-football_prediction/explain.py  v1.2.0（输出层的一部分）
+football_prediction/explain.py  v1.4.0（输出层的一部分）
 单场判断说明：按判断流程逐步列出依据。
     python -m football_prediction.explain 英超 Arsenal Chelsea
     python -m football_prediction.explain E0 Arsenal Chelsea --odds 1.9 3.6 4.2 --ou 1.85 2.0 --ah -0.5 1.95 1.95
-赔率优先取赛程表（fixtures）中的最新快照；不在赛程表里的比赛可用 --odds/--ou/--ah 手动输入（欧赔）。
+赔率与报告相同（pipeline.latest_odds）：24 小时内有 ≥3 家的多家中位数时用它，否则用赛程表（fixtures）快照；
+不在赛程表里的比赛可用 --odds/--ou/--ah 手动输入（欧赔）。
 只读数据库，不保存任何预测。
+v1.4.0: 赔率来源改用 latest_odds（多家中位数优先），[1] 写明来源与抓取时间。
 """
 import argparse
 import difflib
@@ -13,11 +15,11 @@ import sys
 from datetime import datetime, timezone
 
 from football_prediction.data.loader import init_db
-from football_prediction.output.pipeline import ModelCache, analyse_match, fixture_odds
+from football_prediction.output.pipeline import ModelCache, analyse_match, latest_odds
 
-LAYER_VERSION = "1.2.0"
+LAYER_VERSION = "1.4.0"
 DB_PATH = "football.db"
-LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲"}
+LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲", "I1": "意甲", "F1": "法甲"}
 
 
 def _league(s: str) -> str:
@@ -50,12 +52,16 @@ def explain(conn, league, home, away, manual: dict | None = None,
                       "ORDER BY match_date LIMIT 1", (league, home, away)).fetchone()
     conn.row_factory = None
     fx = dict(fx) if fx else None
-    odds = dict(manual) if manual else (fixture_odds(fx) if fx else None)
+    if manual:
+        odds, src = dict(manual), "手动输入"
+    elif fx:
+        odds, src = latest_odds(conn, fx, now)
+    else:
+        odds, src = None, "无（不在赛程表，未输入）"
     a = analyse_match(conn, ModelCache(conn, now.date().isoformat()), league, home, away,
                       odds, fx["match_id"] if fx and not manual else None)
 
     L = [f"{LEAGUES[league]}  {home} vs {away}" + (f"  开球(UTC) {fx['kickoff_utc']}" if fx else "")]
-    src = "手动输入" if manual else ("赛程表最新快照" if fx else "无（不在赛程表，未输入）")
     L.append(f"\n[1] 赔率来源：{src}")
     if odds:
         o = odds
@@ -89,6 +95,8 @@ def explain(conn, league, home, away, manual: dict | None = None,
     L.append("\n[6] 风险：" + ("；".join(a["risks"]) if a["risks"] else "无"))
     L.append(f"\n[7] 结论：倾向 {a['lean']}，双选 {a['double']}，信心 {a['tier']}"
              f"（历史同档首选命中 {a['hit1']:.0%}，双选命中 {a['hit2']:.0%}）")
+    if a.get("est1") is not None:
+        L.append(f"    本场命中估计（Shin 去水概率）：首选 {a['est1']:.0%}，双选 {a['est2']:.0%}")
     L.append("    概率是估计，足球结果随机性大；即使高信心档，历史上也约 1/4 不中。")
     return "\n".join(L)
 

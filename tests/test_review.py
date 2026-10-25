@@ -6,7 +6,7 @@ import pytest
 
 from football_prediction.review.store import (
     has_prediction, save_prediction, score_predictions, live_report, promotion_check,
-    _paired, _scored_first,
+    horizon_report, _paired, _scored_first,
 )
 
 
@@ -103,3 +103,24 @@ def test_promotion_check_verdicts(conn):
 def test_reports_empty_without_scores(conn):
     assert live_report(conn).empty
     assert promotion_check(conn, ("dc_xg", "1.0.0"), 1000).empty
+    assert horizon_report(conn).empty
+
+
+def test_horizon_report_pairs_t1_with_pre_match(conn):
+    _scored_set(conn, 10, 0.6, 0.5)
+    for i in range(6):                          # 临场档只覆盖其中 6 场，主胜概率更高
+        save_prediction(conn, f"m{i}", "market_avg_t1", "1.1.0", "1", 0.7, 0.15, 0.15)
+        save_prediction(conn, f"m{i}", "lineup_t1", "1.0.0", "1", 0.55, 0.25, 0.2)
+        save_prediction(conn, f"m{i}", "lineup_base_t1", "1.0.0", "1", 0.5, 0.25, 0.25)
+    save_prediction(conn, "m0", "orphan_t1", "1", "1", 0.5, 0.25, 0.25)   # 没有赛前档，不列出
+    score_predictions(conn)
+
+    hz = horizon_report(conn).set_index("model_name")
+    assert set(hz.index) == {"market_avg_t1", "lineup_t1"}
+    assert hz.loc["market_avg_t1", "base"] == "market_avg"
+    assert hz.loc["lineup_t1", "base"] == "lineup_base_t1"
+    assert hz.loc["market_avg_t1", "paired_n"] == 6
+    assert hz.loc["market_avg_t1", "diff"] == pytest.approx(log(0.5) - log(0.7), abs=1e-6)
+    # 临场档不参加主模型替换
+    chk = promotion_check(conn, ("dc_xg", "1.0.0"), min_n=1)
+    assert not chk["model_name"].str.endswith("_t1").any()

@@ -4,12 +4,15 @@ model_market/implied.py  v1.0.0
 再套 Dixon-Coles 比分矩阵（rho 取联赛模型拟合值），得到与市场一致的比分、大小球、让球分布。
   拟合：最小化 Σ(模型推导概率 − 市场去水概率)²，对 log λ 两参数用 Nelder-Mead。
   缺大小球或亚盘时只用可得的盘口；缺胜平负时返回 None（由调用方回退到 dc_xg）。
-修改此文件后请同步更新 version.py 中 "model_market" 的版本号。
+  去水方法由 method 参数选（model_market/devig.py），默认按比例，与 1.0.0 存档完全一致；
+  method="shin" 的结果以 market_shin / model_market_shin 版本另行存档。
+修改此文件后请同步更新 version.py 中 "model_market"（及 "model_market_shin"）的版本号。
 """
 import numpy as np
 from scipy.optimize import minimize
 from scipy.stats import poisson
 
+from football_prediction.model_market.devig import devig
 from football_prediction.output.derive import ah_fair_prob, ah_outcome, margin_pmf
 
 LAYER_VERSION = "1.0.0"
@@ -33,22 +36,19 @@ def _valid(*odds) -> bool:
     return all(o is not None and o == o and o > 1 for o in odds)
 
 
-def fair_probs(odds: dict) -> dict:
+def fair_probs(odds: dict, method: str = "proportional") -> dict:
     """
     odds 键（均可缺）：h,d,a（胜平负）；over,under（大小2.5）；ah_line, ah_h, ah_a（亚盘线与主/客水位，欧赔）。
     返回去水概率：{"1x2": [ph,pd,pa], "over25": p, "ah": (line, p主赢盘)}
     """
     out = {}
     if _valid(odds.get("h"), odds.get("d"), odds.get("a")):
-        q = np.array([1 / odds["h"], 1 / odds["d"], 1 / odds["a"]])
-        out["1x2"] = q / q.sum()
+        out["1x2"] = devig([odds["h"], odds["d"], odds["a"]], method)
     if _valid(odds.get("over"), odds.get("under")):
-        q = np.array([1 / odds["over"], 1 / odds["under"]])
-        out["over25"] = float(q[0] / q.sum())
+        out["over25"] = float(devig([odds["over"], odds["under"]], method)[0])
     line = odds.get("ah_line")
     if line is not None and line == line and _valid(odds.get("ah_h"), odds.get("ah_a")):
-        q = np.array([1 / odds["ah_h"], 1 / odds["ah_a"]])
-        out["ah"] = (float(line), float(q[0] / q.sum()))
+        out["ah"] = (float(line), float(devig([odds["ah_h"], odds["ah_a"]], method)[0]))
     return out
 
 
@@ -67,9 +67,10 @@ def _implied(m: np.ndarray, fp: dict) -> list[tuple[float, float]]:
     return pairs
 
 
-def fit_lambdas(odds: dict, rho: float = DEFAULT_RHO) -> dict | None:
+def fit_lambdas(odds: dict, rho: float = DEFAULT_RHO,
+                method: str = "proportional") -> dict | None:
     """反推 λ；返回 {lam_h, lam_a, rmse, used}，缺胜平负返回 None。"""
-    fp = fair_probs(odds)
+    fp = fair_probs(odds, method)
     if "1x2" not in fp:
         return None
     ph, _, pa = fp["1x2"]
@@ -88,9 +89,10 @@ def fit_lambdas(odds: dict, rho: float = DEFAULT_RHO) -> dict | None:
             "used": [k for k in ("1x2", "over25", "ah") if k in fp]}
 
 
-def implied_matrix(odds: dict, rho: float = DEFAULT_RHO) -> tuple[np.ndarray, dict] | None:
+def implied_matrix(odds: dict, rho: float = DEFAULT_RHO,
+                   method: str = "proportional") -> tuple[np.ndarray, dict] | None:
     """市场反推比分矩阵与拟合信息；缺胜平负返回 None。"""
-    f = fit_lambdas(odds, rho)
+    f = fit_lambdas(odds, rho, method)
     if f is None:
         return None
     return dc_matrix(f["lam_h"], f["lam_a"], rho), f

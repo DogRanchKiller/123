@@ -1,11 +1,12 @@
 """
-review/store.py  v1.3.0
+review/store.py  v1.4.0
 复盘层：保存预测记录、赛后评分、跨版本对比。
 预测记录永不覆盖，旧版本预测保留，确保公平比较。
 v1.1.0: has_prediction 去重（每场每模型版本只留开赛前首次预测）；live_report 实盘同场对比市场。
 v1.2.0: live_report 加命中率与配对 SE；promotion_check 按 version.PROMOTE_MIN_N 规则检查主模型替换。
 v1.3.0: 赛后另评大小2.5（extra 有 over_2.5）与精确比分（extra 有 score_matrix）的 log loss；
         成绩单增加这两列；首条记录改用 drop_duplicates 取整行（不再逐列取首个非空值）。
+v1.4.0: 临场档（模型名以 _t1 结尾）不参加 promotion_check；新增 horizon_report，临场档与赛前档同场配对。
 修改此文件后请同步更新 version.py 中 "review" 的版本号。
 """
 import sqlite3
@@ -16,7 +17,9 @@ from math import log
 import numpy as np
 import pandas as pd
 
-LAYER_VERSION = "1.3.0"
+LAYER_VERSION = "1.4.0"
+HORIZON_SUFFIX = "_t1"                          # 临场档模型名后缀（live --near 存档）
+HORIZON_BASE = {"lineup_t1": "lineup_base_t1"}  # 临场档的默认对照是去掉后缀的赛前档，例外在此登记
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
@@ -270,8 +273,8 @@ def promotion_check(conn: sqlite3.Connection, primary: tuple[str, str],
     prim = df[(df["model_name"] == primary[0]) & (df["model_ver"] == primary[1])]
     rows = []
     for (name, ver), g in df.groupby(["model_name", "model_ver"]):
-        if (name, ver) == tuple(primary) or name == "market_avg":
-            continue
+        if (name, ver) == tuple(primary) or name == "market_avg" or name.endswith(HORIZON_SUFFIX):
+            continue   # 临场档只覆盖部分场次、信息时点不同，不与赛前主模型争替换（见 horizon_report）
         n, diff, se = _paired(g, prim)
         if n < min_n:
             verdict = f"样本不足（{n}/{min_n}）"
@@ -281,4 +284,25 @@ def promotion_check(conn: sqlite3.Connection, primary: tuple[str, str],
             verdict = "不替换"
         rows.append({"model_name": name, "model_ver": ver, "paired_n": n,
                      "diff": diff, "se": se, "verdict": verdict})
+    return pd.DataFrame(rows)
+
+
+def horizon_report(conn: sqlite3.Connection) -> pd.DataFrame:
+    """
+    临场档对赛前档：每个 X_t1（各版本）与赛前档 X 在同一批已评分比赛上配对（差值负=临场更好）。
+    赛前档有多个版本时每场取最早一条；没有配对场次的不列出。
+    """
+    df = _scored_first(conn)
+    if df.empty:
+        return df
+    rows = []
+    for (name, ver), g in df.groupby(["model_name", "model_ver"]):
+        if not name.endswith(HORIZON_SUFFIX):
+            continue
+        base_name = HORIZON_BASE.get(name, name[: -len(HORIZON_SUFFIX)])
+        base = df[df["model_name"] == base_name].drop_duplicates("match_id")
+        n, diff, se = _paired(g, base)
+        if n:
+            rows.append({"model_name": name, "model_ver": ver, "base": base_name,
+                         "paired_n": n, "diff": diff, "se": se})
     return pd.DataFrame(rows)

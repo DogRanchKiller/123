@@ -15,3 +15,6 @@ Thumbs.db
 
 # 研究库（可由 _diag/expand/build_research_db.py 从 _cache 重建）
 research.db
+
+# FotMob 阵容 / 球员库（可由 python -m football_prediction.data.fotmob --history ... 与 --reload-pre 从 _cache/fotmob 重建）
+fotmob.db

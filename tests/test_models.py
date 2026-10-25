@@ -56,3 +56,41 @@ def test_signal_actually_used(league):
 def test_model_ver_in_output(league):
     p = _fit(XgDixonColesModel, league).predict_1x2("A", "B")
     assert p["model_ver"] == XgDixonColesModel.MODEL_VER
+
+
+def _poisson_odds(lh, la, maxg=16):
+    """Fair (no-vig) 1X2 and O/U 2.5 odds under independent Poisson."""
+    from scipy.stats import poisson
+    k = np.arange(maxg)
+    j = np.outer(poisson.pmf(k, lh), poisson.pmf(k, la))
+    ph, pd_, pa = np.tril(j, -1).sum(), np.trace(j), np.triu(j, 1).sum()
+    under = j[(k[:, None] + k[None, :]) <= 2].sum()
+    return 1 / ph, 1 / pd_, 1 / pa, 1 / (1 - under), 1 / under
+
+
+def test_lambdas_from_odds_recovers_poisson():
+    from football_prediction.model_dc.market_dc import lambdas_from_odds
+    true = [(1.6, 1.1), (0.8, 2.2), (2.9, 0.6)]
+    odds = np.array([_poisson_odds(*t) for t in true])
+    lh, la = lambdas_from_odds(*odds.T)
+    np.testing.assert_allclose(np.stack([lh, la], 1), true, atol=1e-3)
+    lh, la = lambdas_from_odds(*odds[:, :3].T)               # 1X2 only
+    np.testing.assert_allclose(np.stack([lh, la], 1), true, atol=1e-3)
+    lh, _ = lambdas_from_odds([None, 2.0], [3.4, 3.4], [4.0, 4.0])
+    assert np.isnan(lh[0]) and not np.isnan(lh[1])
+
+
+def test_market_dc_goals_only_without_odds_and_uses_odds(league):
+    from football_prediction.model_dc.market_dc import MarketDixonColesModel
+    conn, cutoff = league
+    goals = _fit(SotDixonColesModel, league, goal_weight=1.0).predict_1x2("A", "F")
+    no_odds = _fit(MarketDixonColesModel, league).predict_1x2("A", "F")
+    assert no_odds["home_win"] == pytest.approx(goals["home_win"], abs=1e-6)
+
+    for mid, lh, la in conn.execute("SELECT match_id, home_xg, away_xg FROM match_xg").fetchall():
+        conn.execute("INSERT INTO match_odds (match_id, avg_h, avg_d, avg_a, avg_over25, avg_under25,"
+                     " fetched_at, layer_ver) VALUES (?,?,?,?,?,?,?,?)",
+                     (mid, *_poisson_odds(lh, la), "now", "t"))
+    with_odds = _fit(MarketDixonColesModel, league).predict_1x2("A", "F")
+    assert abs(with_odds["home_win"] - goals["home_win"]) > 1e-4
+    assert with_odds["model_ver"] == MarketDixonColesModel.MODEL_VER

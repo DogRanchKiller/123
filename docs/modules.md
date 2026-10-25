@@ -98,7 +98,7 @@ web/src/components/             两个页面都用的展示件
 - 同族模型的完整变体。`xg_dc.py` 短，是因为它只换数据源和权重，父类行为仍在 `sot_dc.py`。不要为了凑行数把父类抄进子文件。
 - 测试文件不受 80 行下限约束。
 
-现有文件保持原样。`validation/backtest.py` 约 310 行，仍在上限内。`data/loader.py`、`data/oddsportal.py` 已到 418 行，下次改它们之前先拆（见 `docs/issues.md`）。不要为了贴合本规范专门去拆或去合并其他文件。下一次改动如果会让文件超过 400 行，先拆再加功能。
+现有文件保持原样。`validation/backtest.py` 约 310 行，仍在上限内。`data/loader.py`、`data/oddsportal.py` 已拆到 400 行以下（赛程快照在 `data/fixtures.py`，OddsPortal 解析在 `data/oddsportal_parse.py`）。不要为了贴合本规范专门去拆或去合并其他文件。下一次改动如果会让文件超过 400 行，先拆再加功能。
 
 禁止碎片化：
 

@@ -1,6 +1,6 @@
 # 足球预测系统
 
-仓库根目录的可运行项目是 `football_prediction`（实盘联赛：英超 E0 / 德甲 D1 / 西甲 SP1）。在仓库根目录工作，数据库与报告路径都相对 cwd。
+仓库根目录的可运行项目是 `football_prediction`（实盘联赛：英超 E0 / 德甲 D1 / 西甲 SP1 / 意甲 I1 / 法甲 F1，实盘库都从 2122 赛季起）。在仓库根目录工作，数据库与报告路径都相对 cwd。
 
 目标是预测比赛赛果（胜平负 / 比分 / 大小球），不是找价值投注。主模型是市场赔率反推（`market_implied`），自研模型（Dixon-Coles 系、Elo）只作对照和无赔率时的兜底：5 联赛 × 9 赛季、16k 场样本外回测里，自研模型每个联赛、每个赛季都不如赛前市场，融合只改善约 0.002 log loss，命中率不变。要提高准确率，靠的是赔率里还没有的信息（临场赔率、阵容），而不是改进球模型。
 
@@ -50,6 +50,8 @@ python -m pytest tests/test_oddsportal.py::test_collect_survives_scrape_failure 
 python -m football_prediction.live   # 实盘一轮：更新数据 → 评分 → 存档预测 → 报告 → 成绩单 → 替换检查
 python -m football_prediction.explain 英超 Arsenal Chelsea   # 单场判断说明，只读库；可加 --odds/--ou/--ah 手动输入赔率
 python -m football_prediction.data.oddsportal --hours 30   # 抓多家公司赔率写入 book_odds，约 15–25 分钟；--no-scrape 只打印对比表
+python -m football_prediction.live --near   # 临场档：开球前 1.5 小时内先抓 FotMob 阵容再抓多家赔率，存 *_t1 并打印最终看法（run_near.bat）
+python -m football_prediction.data.fotmob   # 抓即将开赛的阵容 / 伤停；--history E0 2425 补历史球员数据，--reload-pre 从缓存重建
 python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下载赛季 CSV，很慢
 ```
 
@@ -64,16 +66,19 @@ python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下�
 | 路径 | 职责 |
 |---|---|
 | `version.py` | 各层版本、`PRIMARY_MODEL` / `FALLBACK_MODEL`、`PROMOTE_MIN_N` |
-| `data/loader.py` | football-data.co.uk 赛季 CSV → `matches / match_odds / match_stats`；`fixtures.csv` → `fixtures`，每次刷新追加 `odds_snapshots` |
+| `data/loader.py` | football-data.co.uk 赛季 CSV → `matches / match_odds / match_stats`；全部表结构（`DB_SCHEMA`） |
 | `data/understat.py` | understat xG → `match_xg`；已结束赛季缓存在 `_cache/understat/` |
-| `data/oddsportal.py` | 调 OddsHarvester（独立 venv `.venv-scrape`，可用环境变量 `ODDSHARVESTER` 覆盖）抓未开赛比赛的多家赔率 → `book_odds`；`book_consensus()` 返回与 fixtures 同键名的多家中位数 |
+| `data/fixtures.py` | `fixtures.csv` → `fixtures`，每次刷新追加 `odds_snapshots`；`odds_movement` |
+| `data/oddsportal.py` | 调 OddsHarvester（独立 venv `.venv-scrape`，可用环境变量 `ODDSHARVESTER` 覆盖）抓未开赛比赛的多家赔率 → `book_odds`；`book_consensus()` 返回与 fixtures 同键名的多家中位数。队名配对与输出解析在 `oddsportal_parse.py` |
+| `data/fotmob.py` | FotMob 比赛页 HTML（不碰 `/api/`）→ 单独的 `fotmob.db`（gitignore，`attach()` 挂为 schema `fm`）：`lineups`（预测 / 正式首发、替补、伤停）、`player_match`（分钟、xG、xA、npxG）、`fotmob_shots`；understat 缺的 `match_xg` 用它补。页面解析在 `fotmob_parse.py`，页面缓存在 `_cache/fotmob/` |
 | `features/builder.py` | 特征；只用截止日之前的比赛 |
-| `model_market/implied.py` | 由 1X2 + 大小 2.5 + 亚盘去水概率反推 λ，再套 DC 比分矩阵；当前主模型 |
-| `model_dc/` | Dixon-Coles、射正版 `sot_dc`、xG 版 `xg_dc`（无赔率时的兜底） |
+| `model_market/implied.py` | 由 1X2 + 大小 2.5 + 亚盘去水概率反推 λ，再套 DC 比分矩阵；当前主模型。`devig.py` 是 Shin 去水（并行存档 `market_shin`） |
+| `model_dc/` | Dixon-Coles、射正版 `sot_dc`、xG 版 `xg_dc`（无赔率时的兜底）、市场版 `market_dc`（进球与历史赔率 λ 混合估强度，并行存档 `dc_market`） |
+| `model_lineup/` | 阵容模型：`ratings.py` 球员进攻评分、常规首发、阵容特征；`adjust.py` 把特征乘到市场 λ 上，按赔率是否早于首次正式首发选 `COEF_PRE` / `COEF_POST`（研究确认前都为 0，一场只叠一次）。只用于临场档 `lineup_t1` |
 | `model_elo/` `model_blend/` `model_lgbm/` | Elo；dc_xg + Elo 的 1X2 融合；LightGBM 残差修正 |
 | `calibration/platt.py` | Platt；2425 验证无增益，不进实盘主流程 |
 | `output/analysis.py` | 判断流程，纯函数、不读库，报告与 explain 共用：市场去水 → 市场隐含比分 → 自研分歧提示（8pp）→ 盘口变动（5pp 或亚盘线变化）→ 风险 → 倾向 / 双选 / 信心档 |
-| `output/pipeline.py` | `ModelCache` 按联赛懒加载并拟合模型，`analyse_match` 把库里的数据接到 `analysis` |
+| `output/pipeline.py` | `ModelCache` 按联赛懒加载并拟合模型，`analyse_match` 把库里的数据接到 `analysis`；`latest_odds` 给报告和 explain 选赔率（24 小时内 ≥3 家的多家中位数优先，否则赛程表快照；存档仍用赛程表） |
 | `output/derive.py` `output/report.py` | 比分矩阵 → 各盘口（含亚盘五种结算）；报告写到 `reports/预测_YYYY-MM-DD.csv` |
 | `review/store.py` | `predictions` 表的存档、赛后评分、实盘成绩单（同场对比 `market_avg`）、`promotion_check` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
@@ -88,12 +93,14 @@ python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下�
 ## 数据规则
 
 - 入库只补不改：`matches` 用 `INSERT OR IGNORE`；`match_odds` 已有值永不覆盖，只补空列；`match_xg` 只 `INSERT OR IGNORE`；`book_odds` 以 `(match_id, fetched_at, bookmaker, market, line)` 为键，每次抓取是一个新批次。
-- 不要把历史赛季加进 `football.db`：Elo 会遍历全部历史，加入老赛季会让实盘模型在版本号不变的情况下改变结果。扩样本研究用 `research.db`（5 联赛 1415–2526），由 `_diag/expand/build_research_db.py` 从 `_cache/fd_research` 重建；老 CSV 的 `BbAv*` 列在该脚本里映射为 `Avg*`。
+- 不要把历史赛季加进 `football.db`：Elo 会遍历全部历史，加入老赛季会让实盘模型在版本号不变的情况下改变结果。扩样本研究用 `research.db`（5 联赛 9394–2526；赔率从 0001 起，射正约从 0506 起，xG 从 1415 起），由 `_diag/expand/build_research_db.py` 从 `_cache/fd_research` 重建；老 CSV 的 `BbAv*` 列映射为 `Avg*`，0001–0405 没有平均列，用各家公司的均值代替。2000 年前的赛季代码（`9394`…`9900`）按字符串排在 `2526` 之后，研究脚本按 `match_date` 排序，不要按赛季字符串比大小。
 - 数据下载失败时沿用本地库，不要把空结果写成"已更新"。xG 必须在该赛季 `matches` 写入之后再拉。
-- 新联赛队名先走 `data/loader.py` 的 `TEAM_ALIASES`。understat 队名靠同日 ±1 天且同比分投票，不要手写第二套映射。OddsPortal 新队名对不上时在 `oddsportal.NAME_ALIASES` 里补别名。
+- 新联赛队名先走 `data/loader.py` 的 `TEAM_ALIASES`。understat 队名靠同日 ±1 天且同比分投票，不要手写第二套映射。OddsPortal 新队名对不上时在 `oddsportal_parse.NAME_ALIASES` 里补别名。
 - football-data 的 `fixtures.csv` 大约每周更新，不是临场更新；临场赔率靠 OddsPortal 爬虫。
 - OddsPortal：本机出口 IP 在美国，只能看到 5 家美国公司。robots.txt 禁止抓赛季归档和 ajax 接口，因此只抓即将开赛的比赛，不能用来补历史。列表页开球时间不准，配对靠"日期 ±1 天 + 队名"；链接 slug 里两队按字母顺序排列，真实主队以记录里的 `home_team` 为准。
 - 500.com 有 WAF，球探（titan007）的 robots.txt 禁止抓赔率页，都没有采用。不要绕过反爬机制。
+- FotMob：只抓比赛页 HTML（页面里的 `__NEXT_DATA__`），不要请求 `/api/`（robots.txt 禁止）。请求间隔不低于 `fotmob.DELAY`（3.5 秒）；历史页缓存后不重抓。比赛页用赛程里带 `#id` 的链接取，并核对页面 matchId；不要只用 `/matches/<slug>`（去掉 id 后返回两队最近一场，不是要的那场）。FBref、WhoScored、Sofascore 有 Cloudflare / 反爬，不采用。
+- `fotmob.db` 不并进 `football.db`：它可由 `_cache/fotmob/` 重建，体积大，且只有临场档和研究用。
 ## 预测规则
 
 - 拟合一律 `match_date < cutoff`。实盘 cutoff 是当天（UTC），只预测尚未开球的场次。
@@ -133,7 +140,8 @@ python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下�
 
 ## 运行环境
 
-- Windows 任务计划程序有两个任务：`FootballPredictDaily_1807` 和 `FootballPredictDaily_2337`，每天执行 `run_daily.bat`（先跑 `live`，再跑 `oddsportal --hours 30`），日志写到 `logs/daily.log`。
-- `run_daily.bat` 必须保持纯 ASCII + CRLF：cmd 按 GBK 解析，含 UTF-8 中文会出错。CRLF 由 `.gitattributes` 保证（`*.bat eol=crlf`），与各人的 `core.autocrlf` 无关。
+- Windows 任务计划程序有两个任务：`FootballPredictDaily_1807` 和 `FootballPredictDaily_2337`，每天执行 `run_daily.bat`（先跑 `live`，再跑 `oddsportal --hours 30`，最后 `data.fotmob` 抓即将开赛的阵容 / 伤停），日志写到 `logs/daily.log`。
+- `run_near.bat` 跑 `live --near`，日志 `logs/near.log`。计划任务 `FootballPredictNear` 每天 18:13 起每 30 分钟执行一次到 05:43（单次上限 40 分钟，上一轮未完则跳过）；开赛时段电脑需开机、不睡眠。与每日任务同时写库时 `init_db` 会等锁 120 秒（`loader.BUSY_TIMEOUT`，见 `docs/issues.md`）。
+- `run_daily.bat`、`run_near.bat` 必须保持纯 ASCII + CRLF：cmd 按 GBK 解析，含 UTF-8 中文会出错。CRLF 由 `.gitattributes` 保证（`*.bat eol=crlf`），与各人的 `core.autocrlf` 无关。
 - 定时任务只在 Windows 这台机器上跑。Mac 上手动跑 `python -m football_prediction.live`；`data/oddsportal.py` 会按系统找 `.venv-scrape/bin` 或 `.venv-scrape\Scripts` 下的 OddsHarvester。
 - 行尾：仓库里一律存 LF（`.gitattributes` 的 `* text=auto`），检出按平台转换。

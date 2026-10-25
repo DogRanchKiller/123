@@ -6,7 +6,7 @@ import sqlite3
 import numpy as np
 import pytest
 
-from football_prediction.data import loader
+from football_prediction.data import fixtures, loader
 from football_prediction.model_blend.blend import blend_1x2, W_ELO
 from football_prediction.model_elo.elo import EloModel, ordlogit, fit_ordlogit
 from football_prediction.model_market.implied import dc_matrix, fair_probs, fit_lambdas, implied_matrix
@@ -136,16 +136,27 @@ def test_upsert_odds_fills_nulls_only(conn):
     assert conn.execute("SELECT avg_h, ah_line FROM match_odds").fetchone() == (2.0, -0.5)
 
 
+def test_load_season_partial_stats_columns():
+    """老 CSV 只有射门（HS/AS）没有射正（HST/AST）：照常写赛果，不写统计。"""
+    import pandas as pd
+    c = loader.init_db(":memory:")
+    df = pd.DataFrame({"Date": ["14/08/04"], "HomeTeam": ["A"], "AwayTeam": ["B"],
+                       "FTHG": [2], "FTAG": [1], "HS": [10], "AS": [8], "AvgH": [2.0]})
+    assert loader.load_season("D1", "0405", c, df=df) == 1
+    assert c.execute("SELECT COUNT(*) FROM match_stats").fetchone()[0] == 0
+    assert c.execute("SELECT avg_h FROM match_odds").fetchone()[0] == 2.0
+
+
 def test_snapshots_append_on_change_and_movement(conn):
-    cols = list(loader._FIX_ODDS_COLS.values())
+    cols = list(fixtures._FIX_ODDS_COLS.values())
     a = dict(zip(cols, (2.0, 3.4, 3.8, 1.9, 1.9, -0.25, 1.9, 1.95)))
-    assert loader.save_snapshots(conn, [("m", *a.values())], "2025-01-01T00") == 1
-    assert loader.save_snapshots(conn, [("m", *a.values())], "2025-01-01T06") == 0   # 未变不写
-    assert loader.odds_movement(conn, "m") is None
+    assert fixtures.save_snapshots(conn, [("m", *a.values())], "2025-01-01T00") == 1
+    assert fixtures.save_snapshots(conn, [("m", *a.values())], "2025-01-01T06") == 0   # 未变不写
+    assert fixtures.odds_movement(conn, "m") is None
     b = {**a, "avg_h": 1.7, "avg_a": 4.8, "ah_line": -0.5}
-    assert loader.save_snapshots(conn, [("m", *b.values())], "2025-01-02T00") == 1
-    assert loader.save_snapshots(conn, [("x", *[None] * len(cols))], "2025-01-02T00") == 0
-    first, last = loader.odds_movement(conn, "m")
+    assert fixtures.save_snapshots(conn, [("m", *b.values())], "2025-01-02T00") == 1
+    assert fixtures.save_snapshots(conn, [("x", *[None] * len(cols))], "2025-01-02T00") == 0
+    first, last = fixtures.odds_movement(conn, "m")
     assert first["avg_h"] == 2.0 and last["ah_line"] == -0.5
     txt = movement(first, last)
     assert "偏向主队" in txt and "亚盘" in txt and "不反向" in txt

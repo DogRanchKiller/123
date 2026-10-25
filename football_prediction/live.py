@@ -1,5 +1,5 @@
 """
-football_prediction/live.py  v1.4.0
+football_prediction/live.py  v1.7.0
 实盘预测闭环：更新数据（含赔率快照）→ 赛后评分 → 对未开赛场次存档预测 → 预测报告 → 实盘成绩单。
 每轮比赛前后各跑一次即可（开赛前多跑几次可记录盘口变动）：
     python -m football_prediction.live
@@ -15,27 +15,52 @@ v1.2.0: 每次运行刷新当前赛季 understat xG；新增 xG 版 DC（dc_xg�
 v1.3.0: 输出主模型预测报告（控制台 + reports/ CSV）；成绩单加命中率与 SE；主模型替换检查。
 v1.4.0: 按判断流程出报告（市场为底 + 自研对照 + 盘口变动 + 风险）；新增存档 market_implied
         （有胜平负与大小球盘时）与 blend_xg_elo；DC 系与市场隐含存比分矩阵，成绩单加大小2.5/比分 log loss。
+v1.5.0: 并行存档 market_shin（Shin 去水的市场隐含，model_market_shin 版本）与 dc_market（用历史赔率 λ
+        估强度的 DC，model_dc_market 版本）；understat 缺的 xG 用 FotMob 补；
+        新增 --near 临场档：开球前 T1_HOURS 小时内抓多家赔率与阵容，存 market_avg_t1 / market_implied_t1 /
+        market_shin_t1（多家中位数赔率），成绩单另列各临场档与赛前档的同场对比；
+        已公布正式首发时另存 lineup_t1（阵容调整后的市场隐含）与 lineup_base_t1（同时刻未调整，配对基准）。
+v1.6.0: 实盘联赛加意甲 I1、法甲 F1（2122 起的赛季，与另外三联赛相同；Elo / DC 按联赛分别拟合，
+        原三联赛的预测不受影响）。
+v1.7.0: 临场档先抓阵容再抓赔率；lineup_t1 按赔率与首次看到正式首发的先后选阵容系数（model_lineup 1.1.0
+        合并规则），extra 记 odds_vs_lineup；每场打印临场最终看法（阵容调整 > T1 市场隐含），不另存档。
 """
-from datetime import datetime, timezone
+import argparse
+import shutil
+from datetime import date, datetime, timedelta, timezone
 
 from football_prediction import version
-from football_prediction.data.loader          import init_db, load_season, load_fixtures, season_of
+from football_prediction.data                 import fotmob, oddsportal
+from football_prediction.data.loader          import init_db, load_season, season_of
+from football_prediction.data.fixtures        import load_fixtures
+from football_prediction.data.oddsportal      import book_consensus
 from football_prediction.data.understat       import load_xg
 from football_prediction.model_blend.blend    import MODEL_NAME as BLEND_NAME
-from football_prediction.model_market.implied import MODEL_NAME as IMPLIED_NAME, implied_matrix
+from football_prediction.model_dc.market_dc   import MODEL_NAME as DC_MARKET_NAME
+from football_prediction.model_lineup.adjust  import (
+    MODEL_NAME as LINEUP_NAME, adjust_lambdas, coef_for, odds_timing,
+)
+from football_prediction.model_lineup.ratings import LineupModel, current_lineup, first_standard_at
+from football_prediction.model_market.devig   import SHIN_NAME
+from football_prediction.model_market.implied import (
+    MODEL_NAME as IMPLIED_NAME, dc_matrix, implied_matrix,
+)
 from football_prediction.output.analysis      import devig, odds_dict
 from football_prediction.output.derive        import derive_markets
-from football_prediction.output.pipeline      import ModelCache, fixture_odds
+from football_prediction.output.pipeline      import FIXTURE_ODDS, ModelCache, fixture_odds
 from football_prediction.output.report        import (
     build_report, upcoming_fixtures, write_report, format_row,
 )
 from football_prediction.review.store         import (
-    has_prediction, save_prediction, score_predictions, live_report, promotion_check,
+    has_prediction, save_prediction, score_predictions, live_report, promotion_check, horizon_report,
 )
 
 DB_PATH = "football.db"
-LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲"}
+LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲", "I1": "意甲", "F1": "法甲"}
 MARKET_VER = "1.1.0"   # 市场基准算法版本（1/赔率 按比例去抽水），算法变化时才改
+T1_HOURS = 1.5         # 临场档：开球前 1.5 小时内
+T1_FRESH_MIN = 90      # 临场档只用 90 分钟内抓到的多家赔率
+T1_MIN_BOOKS = 3       # 且至少 3 家公司
 
 
 def _update_data(conn, today: str) -> None:
@@ -53,6 +78,10 @@ def _update_data(conn, today: str) -> None:
             print(f"  [{name}] {season} 新增 xG {n} 场" + (f"（{miss} 场未对齐）" if miss else ""))
         except Exception as e:
             print(f"  [{name}] {season} xG 下载失败（{type(e).__name__}），xG 版对缺失场次用进球兜底")
+    # understat 完赛数天仍缺的场次，用已抓的 FotMob 全队 xG 补（不联网）
+    n = fotmob.backfill_xg(conn, date.fromisoformat(today))
+    if n:
+        print(f"  FotMob xG 补入 {n} 场（understat 缺）")
     try:
         n = load_fixtures(conn, list(LEAGUES))
         print(f"  未开赛赛程 {n} 场（赔率快照已追加）")
@@ -75,7 +104,7 @@ def _predict_upcoming(conn, now: datetime, cache: ModelCache | None = None) -> i
     feat_ver = version.get("features")
     vers = {"dixon_coles": version.get("model_dc"), "dc_sot": version.get("model_sot"),
             "dc_xg": version.get("model_xg"), "elo": version.get("model_elo"),
-            BLEND_NAME: version.get("model_blend"), IMPLIED_NAME: version.get("model_market")}
+            BLEND_NAME: version.get("model_blend"), DC_MARKET_NAME: version.get("model_dc_market")}
     saved = 0
 
     def save(mid, name, ver, p, extra):
@@ -92,7 +121,8 @@ def _predict_upcoming(conn, now: datetime, cache: ModelCache | None = None) -> i
             if not lm.known(t):
                 print(f"  ⚠ {t} 不在 {lg} 历史数据中，DC 用联赛均值兜底")
 
-        for name, model in (("dixon_coles", lm.dc), ("dc_sot", lm.sot), ("dc_xg", lm.xg)):
+        for name, model in (("dixon_coles", lm.dc), ("dc_sot", lm.sot), ("dc_xg", lm.xg),
+                            (DC_MARKET_NAME, lm.market)):
             if has_prediction(conn, mid, name, vers[name]):
                 continue
             m = model.score_matrix(home, away)
@@ -104,29 +134,173 @@ def _predict_upcoming(conn, now: datetime, cache: ModelCache | None = None) -> i
         save(mid, "elo", vers["elo"], inp["models"]["elo"], {"kickoff_utc": kickoff})
         save(mid, BLEND_NAME, vers[BLEND_NAME], inp["models"]["blend"], {"kickoff_utc": kickoff})
 
-        odds = fixture_odds(r)
-        mkt = devig(odds["avg_h"], odds["avg_d"], odds["avg_a"])
-        if mkt:
-            save(mid, "market_avg", MARKET_VER, mkt,
-                 {"odds": [odds["avg_h"], odds["avg_d"], odds["avg_a"]], "kickoff_utc": kickoff})
-        # 市场隐含：需胜平负 + 大小球盘（只有胜平负时反推的大小球不如 dc_xg，不存档）
-        if mkt and devig(odds["avg_over25"], odds["avg_under25"]) \
-                and not has_prediction(conn, mid, IMPLIED_NAME, vers[IMPLIED_NAME]):
-            m, fit = implied_matrix(odds_dict(odds), inp["rho"])
-            mk = derive_markets(m)
-            extra = _markets_extra(m, kickoff)
-            extra.update(fit={k: fit[k] for k in ("lam_h", "lam_a", "rmse", "used")},
-                         rho=inp["rho"], odds=odds)
-            save(mid, IMPLIED_NAME, vers[IMPLIED_NAME],
-                 (mk["home_win"], mk["draw"], mk["away_win"]), extra)
+        saved += _save_market(conn, mid, fixture_odds(r), inp["rho"], kickoff, feat_ver)
     return saved
 
 
-def main():
+def _save_market(conn, mid: str, odds: dict, rho: float, kickoff, feat_ver: str,
+                 suffix: str = "", info: dict | None = None) -> int:
+    """市场基准 market_avg + 市场隐含（按比例去水 / Shin 去水）。suffix="_t1" 为临场存档。"""
+    saved = 0
+
+    def save(name, ver, p, extra):
+        nonlocal saved
+        if not has_prediction(conn, mid, name, ver):
+            save_prediction(conn, mid, name, ver, feat_ver, p[0], p[1], p[2], {**extra, **(info or {})})
+            saved += 1
+
+    mkt = devig(odds["avg_h"], odds["avg_d"], odds["avg_a"])
+    if not mkt:
+        return 0
+    save("market_avg" + suffix, MARKET_VER, mkt,
+         {"odds": [odds["avg_h"], odds["avg_d"], odds["avg_a"]], "kickoff_utc": kickoff})
+    # 市场隐含：需胜平负 + 大小球盘（只有胜平负时反推的大小球不如 dc_xg，不存档）
+    if not devig(odds["avg_over25"], odds["avg_under25"]):
+        return saved
+    for name, key, method in ((IMPLIED_NAME, "model_market", "proportional"),
+                              (SHIN_NAME, "model_market_shin", "shin")):
+        ver = version.get(key)
+        if has_prediction(conn, mid, name + suffix, ver):
+            continue
+        m, fit = implied_matrix(odds_dict(odds), rho, method=method)
+        mk = derive_markets(m)
+        extra = _markets_extra(m, kickoff)
+        extra.update(fit={k: fit[k] for k in ("lam_h", "lam_a", "rmse", "used")}, rho=rho,
+                     odds={k: odds.get(k) for k in FIXTURE_ODDS})
+        save(name + suffix, ver, (mk["home_win"], mk["draw"], mk["away_win"]), extra)
+    return saved
+
+
+def _lineup_view(conn, r: dict, odds: dict, rho: float, models: dict, cutoff: str) -> dict | None:
+    """已公布正式首发（standard）时的阵容调整：市场隐含 λ 乘按赔率与首发先后选的那套系数
+    （model_lineup.adjust 的合并规则，一场只叠一次）。没有正式首发或缺大小球盘时 None。"""
+    try:
+        cur = current_lineup(conn, r["match_id"])
+        lineup_at = first_standard_at(conn, r["match_id"])
+    except Exception:                       # 未挂 FotMob 库（没有 lineups 表）
+        return None
+    if not cur or cur[0] != "standard" or not devig(odds["avg_over25"], odds["avg_under25"]):
+        return None
+    lg = r["league"]
+    if lg not in models:
+        models[lg] = LineupModel()
+        models[lg].fit(conn, lg, cutoff)
+    f_h = models[lg].team_features(r["home_team"], cur[1]["home"])
+    f_a = models[lg].team_features(r["away_team"], cur[1]["away"])
+    got = implied_matrix(odds_dict(odds), rho)
+    if f_h is None or f_a is None or got is None:
+        return None
+    base, fit = got
+    timing = odds_timing(odds.get("fetched_at"), lineup_at)
+    lh, la = adjust_lambdas(fit["lam_h"], fit["lam_a"], f_h, f_a, coef_for(timing))
+    return {"base": base, "adj": dc_matrix(lh, la, rho), "lam_base": (fit["lam_h"], fit["lam_a"]),
+            "lam_adj": (lh, la), "f_h": f_h, "f_a": f_a, "timing": timing, "lineup_at": lineup_at}
+
+
+def _save_lineup(conn, r: dict, view: dict | None, rho: float, info: dict) -> int:
+    """lineup_base_t1 = 市场隐含，lineup_t1 = 其 λ 乘阵容调整。两者同版本（model_lineup）、同赔率，
+    horizon_report 同场配对即阵容信息的增量；extra 记下赔率相对首发的先后（odds_vs_lineup）。"""
+    ver = version.get("model_lineup")
+    if view is None or has_prediction(conn, r["match_id"], LINEUP_NAME + "_t1", ver):
+        return 0
+    saved = 0
+    for name, m, lam in (("lineup_base_t1", view["base"], view["lam_base"]),
+                         (LINEUP_NAME + "_t1", view["adj"], view["lam_adj"])):
+        if has_prediction(conn, r["match_id"], name, ver):
+            continue
+        mk = derive_markets(m)
+        extra = _markets_extra(m, r["kickoff_utc"])
+        extra.update(info, lam=[round(lam[0], 4), round(lam[1], 4)], rho=rho,
+                     lineup={"home": view["f_h"], "away": view["f_a"]},
+                     odds_vs_lineup=view["timing"], lineup_first_seen=view["lineup_at"])
+        save_prediction(conn, r["match_id"], name, ver, version.get("features"),
+                        mk["home_win"], mk["draw"], mk["away_win"], extra)
+        saved += 1
+    return saved
+
+
+def _final_view(r: dict, odds: dict, rho: float, view: dict | None) -> str:
+    """临场最终看法（只打印，不存档）：有正式首发用阵容调整后的矩阵，否则用 T1 赔率的市场隐含。"""
+    if view is not None:
+        m, src = view["adj"], f"T1 赔率 + 阵容（赔率{'晚' if view['timing'] == 'post' else '早'}于首发）"
+    else:
+        got = implied_matrix(odds_dict(odds), rho) if devig(odds["avg_over25"], odds["avg_under25"]) else None
+        if got is None:
+            return ""
+        m, src = got[0], "T1 赔率"
+    mk = derive_markets(m)
+    return (f"  [{LEAGUES.get(r['league'], r['league'])}] {r['home_team']} vs {r['away_team']}  "
+            f"主/平/客 {mk['home_win']:.0%}/{mk['draw']:.0%}/{mk['away_win']:.0%}  "
+            f"大2.5 {mk['over_2.5']:.0%}  （{src}，{odds['n_books']} 家）")
+
+
+def _predict_near(conn, now: datetime, cache: ModelCache) -> int:
+    """开球前 T1_HOURS 小时内、且有 T1_FRESH_MIN 分钟内抓到的多家赔率的场次：存 *_t1 临场档。"""
+    saved, lineup_models = 0, {}
+    for r in upcoming_fixtures(conn, LEAGUES, now):
+        if not r["kickoff_utc"]:
+            continue
+        hours = (datetime.fromisoformat(r["kickoff_utc"]) - now).total_seconds() / 3600
+        if hours > T1_HOURS:
+            continue
+        cons = book_consensus(conn, r["match_id"])
+        if not cons or cons["n_books"] < T1_MIN_BOOKS or \
+                now - datetime.fromisoformat(cons["fetched_at"]) > timedelta(minutes=T1_FRESH_MIN):
+            continue
+        rho = cache.get(r["league"]).inputs(r["home_team"], r["away_team"])["rho"]
+        info = {"horizon": "t1", "odds_source": "oddsportal_median", "n_books": cons["n_books"],
+                "odds_fetched_at": cons["fetched_at"], "hours_to_ko": round(hours, 2)}
+        saved += _save_market(conn, r["match_id"], cons, rho, r["kickoff_utc"],
+                              version.get("features"), "_t1", info)
+        view = _lineup_view(conn, r, cons, rho, lineup_models, cache.cutoff)
+        saved += _save_lineup(conn, r, view, rho, info)
+        line = _final_view(r, cons, rho, view)
+        if line:
+            print(line)
+    return saved
+
+
+def _run_near(conn, now: datetime, collect_odds=None, collect_lineups=None) -> int:
+    """临场一轮：抓开球前 T1_HOURS 小时内的多家赔率与阵容 → 存 *_t1 临场档。返回新存档条数。"""
+    lo, hi = now.isoformat(), (now + timedelta(hours=T1_HOURS)).isoformat()
+    n_fx = conn.execute("SELECT COUNT(*) FROM fixtures WHERE kickoff_utc > ? AND kickoff_utc <= ?",
+                        (lo, hi)).fetchone()[0]
+    print(f"  {T1_HOURS} 小时内开球 {n_fx} 场")
+    if not n_fx:
+        return 0
+    # 先抓阵容再抓赔率：同一轮里赔率晚于首发，按合并规则算「赔率已含阵容」（COEF_POST）
+    try:
+        got = (collect_lineups or fotmob.collect_upcoming)(conn, now, T1_HOURS)
+        print("  阵容：" + ("，".join(f"{m} {t}" for m, t in got) if got else "暂无"))
+    except Exception as e:
+        print(f"  阵容抓取失败（{type(e).__name__}: {e}）")
+    if collect_odds is None and shutil.which(oddsportal.harvester_path()):
+        collect_odds = oddsportal.collect
+    if collect_odds:
+        try:
+            print(f"  多家赔率 {collect_odds(conn, list(LEAGUES), now, hours=T1_HOURS)} 行")
+        except Exception as e:
+            print(f"  多家赔率抓取失败（{type(e).__name__}: {e}），沿用已有数据")
+    else:
+        print("  未找到 OddsHarvester（.venv-scrape），只用已有多家赔率")
+    return _predict_near(conn, now, ModelCache(conn, now.date().isoformat()))
+
+
+def main(argv: list[str] | None = None):
+    ap = argparse.ArgumentParser(description="实盘预测闭环")
+    ap.add_argument("--near", action="store_true",
+                    help=f"只跑临场档：开球前 {T1_HOURS} 小时内的多家赔率 + 阵容 → *_t1 存档")
+    ns = ap.parse_args(argv)
     now = datetime.now(timezone.utc)
     today = now.date().isoformat()
     print(f"系统版本: {version.SYSTEM_VERSION}  当前时间(UTC): {now:%Y-%m-%d %H:%M}")
     conn = init_db(DB_PATH)
+    fotmob.attach(conn)
+    if ns.near:
+        print("\n>>> 临场档（T1）...")
+        print(f"  新保存 {_run_near(conn, now)} 条临场预测")
+        conn.close()
+        return
 
     print("\n>>> [1] 更新数据 ...")
     _update_data(conn, today)
@@ -171,6 +345,13 @@ def main():
         for _, r in chk.iterrows():
             print(f"  {r['model_name']:<16}{r['model_ver']:<8} 对主模型 {r['diff']:+.4f}±{r['se']:.4f}"
                   f"  → {r['verdict']}")
+
+        hz = horizon_report(conn)
+        if not hz.empty:
+            print("\n>>> [7] 临场档（开球前约 1 小时）对赛前档，同场 log loss 差（负=临场更好）...")
+            for _, r in hz.iterrows():
+                print(f"  {r['model_name']:<20}{r['model_ver']:<8} 对 {r['base']:<16}"
+                      f"{r['paired_n']:>5} 场 {r['diff']:+.4f}±{r['se']:.4f}")
     conn.close()
 
 

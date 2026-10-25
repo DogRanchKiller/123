@@ -1,23 +1,27 @@
 # version.py — 各层版本号注册表
 # 修改某一层时只更新对应条目，review 层用版本号区分不同批次预测
 
-SYSTEM_VERSION = "1.4.0"
+SYSTEM_VERSION = "1.7.0"
 
 LAYER_VERSIONS = {
-    "data":          "1.5.0",   # + 多家公司赔率 book_odds（OddsPortal 爬虫）（v1.4.0: 亚盘/Pinnacle/赛程大小球、快照表；v1.3.0: xG；v1.2.0: 射正；v1.1.0: 赔率、赛程）
+    "data":          "1.6.0",   # + 意甲 I1 / 法甲 F1 实盘（2122–2627）与 OddsPortal / FotMob 队名（v1.5.0: 多家公司赔率 book_odds；v1.4.0: 亚盘/Pinnacle/赛程大小球、快照表；v1.3.0: xG；v1.2.0: 射正；v1.1.0: 赔率、赛程）
+    "data_fotmob":   "1.0.0",   # FotMob 阵容 / 伤停 / 球员 xG / 射门（HTML 页，不用 /api/）；understat 缺时补 match_xg
     "features":      "1.0.0",
     "model_elo":     "1.1.0",   # 净胜球加权更新 + 有序 logit（v1.0.0 融合无增益）
     "model_dc":      "1.3.0",   # + 单队参数收缩 shrink=0.5（修复升级队参数发散）
     "model_sot":     "1.0.0",   # 射正版 DC：进球与射正混合估计攻防（w=0.7，回测优于 DC）
     "model_xg":      "1.0.0",   # xG 版 DC：进球与 xG 混合估计攻防（w=0.3，回测优于 DC）
+    "model_dc_market": "1.0.0", # 市场版 DC：进球与历史赔率 λ 混合（w=0.3；2526 留出对 dc_xg −0.0059±0.0022）
     "model_market":  "1.0.0",   # 市场隐含比分：由 1X2+大小2.5+亚盘 反推 λ，回测全面优于 dc_xg
-    "model_blend":   "1.0.0",   # dc_xg 0.77 + Elo 0.23 的 1X2 融合（确认期 −0.0046±0.0013）
+    "model_market_shin": "1.0.0",   # 同上，去水改 Shin（1X2 n=21588：−0.0004±0.0001）；并行存档 market_shin
+    "model_lineup":  "1.1.0",   # 合并规则：系数分 COEF_PRE / COEF_POST，按赔率与首发先后选用（仍为 0）（1.0.0：阵容调整乘到市场 λ 上，只用于 lineup_t1）
+    "model_blend":   "1.0.0",  # dc_xg 0.77 + Elo 0.23 的 1X2 融合（确认期 −0.0046±0.0013）
     "model_lgbm":    "1.1.0",   # 滚动 OOS，训练样本翻倍；修复重名方法 bug
     "calibration":   "1.0.0",   # Platt scaling；2425 验证无增益（±0.005），不进主流程
-    "output":        "1.2.0",   # 按判断流程重做报告 + explain 单场说明；亚盘五种结算；信心档按市场重标定
+    "output":        "1.4.0",   # 报告 / explain 优先用多家中位数赔率（≥3 家、24h 内），列赔率来源（1.3.0：Shin 信心档 + 本场估计；1.2.0：判断流程 + explain）
     "validation":    "1.1.0",   # + 市场基准 run_market_backtest、同场配对 paired_compare
-    "review":        "1.3.0",   # + 大小2.5 / 精确比分 log loss（存比分矩阵的模型）
-    "live":          "1.4.0",   # 判断流程：快照 → 市场隐含 → 自研对照 → 变动/风险 → 结论；新增 market_implied / blend 存档
+    "review":        "1.4.0",   # 临场档 _t1 不参与替换检查；horizon_report 临场对赛前
+    "live":          "1.7.0",   # 临场档先抓阵容再抓赔率，按先后选阵容系数，打印临场最终看法（v1.6.0: + 意甲 I1 / 法甲 F1；v1.5.0: market_shin / dc_market 存档、FotMob 补 xG、--near 临场档 *_t1）
 }
 
 

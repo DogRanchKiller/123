@@ -1,0 +1,919 @@
+{
+ "finished": {
+  "general": {
+   "matchId": "5795488",
+   "matchTimeUTCDate": "2026-10-24T14:00:00.000Z",
+   "started": true,
+   "finished": true,
+   "leagueId": 47,
+   "homeTeam": {
+    "name": "Coventry City",
+    "id": 8669
+   },
+   "awayTeam": {
+    "name": "Fulham",
+    "id": 9879
+   }
+  },
+  "content": {
+   "lineup": {
+    "lineupType": "standard",
+    "homeTeam": {
+     "id": 8669,
+     "name": "Coventry City",
+     "formation": "4-2-3-1",
+     "starters": [
+      {
+       "id": 1187236,
+       "name": "Carl Rushworth",
+       "positionId": 11,
+       "usualPlayingPositionId": 0,
+       "shirtNumber": "19",
+       "performance": {
+        "rating": 6.4,
+        "fantasyScore": "2",
+        "seasonAssists": 1,
+        "seasonRating": 6.06,
+        "totalDistanceCovered": 5592,
+        "topSpeed": 20.299999237060547
+       }
+      },
+      {
+       "id": 1074750,
+       "name": "Milan van Ewijk",
+       "positionId": 32,
+       "usualPlayingPositionId": 1,
+       "shirtNumber": "27",
+       "performance": {
+        "rating": 7.1,
+        "fantasyScore": "2",
+        "seasonRating": 6.42,
+        "totalDistanceCovered": 10396,
+        "topSpeed": 31.600000381469727
+       }
+      },
+      {
+       "id": 1161885,
+       "name": "Bobby Thomas",
+       "positionId": 34,
+       "usualPlayingPositionId": 1,
+       "shirtNumber": "4",
+       "performance": {
+        "rating": 6.9,
+        "substitutionEvents": [
+         {
+          "time": 60,
+          "type": "subOut",
+          "reason": "injury"
+         }
+        ],
+        "fantasyScore": "1",
+        "seasonRating": 6.99,
+        "totalDistanceCovered": 6624,
+        "topSpeed": 29.600000381469727
+       }
+      },
+      {
+       "id": 1615927,
+       "name": "Caleb Yirenkyi",
+       "positionId": 64,
+       "usualPlayingPositionId": 2,
+       "shirtNumber": "8",
+       "performance": {
+        "rating": 6.5,
+        "substitutionEvents": [
+         {
+          "time": 67,
+          "type": "subOut",
+          "reason": "tactical"
+         }
+        ],
+        "fantasyScore": "3",
+        "seasonRating": 6.4,
+        "totalDistanceCovered": 8817,
+        "topSpeed": 29.700000762939453
+       }
+      }
+     ],
+     "subs": [
+      {
+       "id": 1613300,
+       "name": "Stephen Mfuni",
+       "usualPlayingPositionId": 1,
+       "shirtNumber": "12",
+       "performance": {
+        "rating": 6.3,
+        "substitutionEvents": [
+         {
+          "time": 60,
+          "type": "subIn",
+          "reason": "injury"
+         }
+        ],
+        "fantasyScore": "1",
+        "seasonGoals": 1,
+        "seasonRating": 7.43,
+        "totalDistanceCovered": 3742,
+        "topSpeed": 29.899999618530273
+       }
+      },
+      {
+       "id": 856685,
+       "name": "Frank Onyeka",
+       "usualPlayingPositionId": 2,
+       "shirtNumber": "16",
+       "performance": {
+        "rating": 6.4,
+        "substitutionEvents": [
+         {
+          "time": 67,
+          "type": "subIn",
+          "reason": "tactical"
+         }
+        ],
+        "fantasyScore": "1",
+        "seasonRating": 6.46,
+        "totalDistanceCovered": 3624,
+        "topSpeed": 26.899999618530273
+       }
+      },
+      {
+       "id": 798654,
+       "name": "Ephron Mason-Clark",
+       "usualPlayingPositionId": 3,
+       "shirtNumber": "10",
+       "performance": {
+        "rating": 5.8,
+        "substitutionEvents": [
+         {
+          "time": 67,
+          "type": "subIn",
+          "reason": "tactical"
+         }
+        ],
+        "fantasyScore": "1",
+        "seasonRating": 6.27,
+        "totalDistanceCovered": 3151,
+        "topSpeed": 27.200000762939453
+       }
+      },
+      {
+       "id": 643717,
+       "name": "Taiwo Awoniyi",
+       "usualPlayingPositionId": 3,
+       "shirtNumber": "14",
+       "performance": {
+        "rating": 6,
+        "substitutionEvents": [
+         {
+          "time": 67,
+          "type": "subIn",
+          "reason": "tactical"
+         }
+        ],
+        "fantasyScore": "1",
+        "seasonRating": 6.08,
+        "totalDistanceCovered": 3007,
+        "topSpeed": 26.700000762939453
+       }
+      }
+     ],
+     "unavailable": [
+      {
+       "id": 1257648,
+       "name": "Aurèle Amenda",
+       "positionId": 1000,
+       "performance": {
+        "seasonRating": 6.16
+       },
+       "unavailability": {
+        "injuryId": 101,
+        "type": "injury",
+        "expectedReturn": "Early November 2026"
+       }
+      },
+      {
+       "id": 866688,
+       "name": "Luke Woolfenden",
+       "positionId": 1000,
+       "unavailability": {
+        "injuryId": 14,
+        "type": "injury",
+        "expectedReturn": "Early November 2026"
+       }
+      },
+      {
+       "id": 962000,
+       "name": "Josh Eccles",
+       "positionId": 1000,
+       "unavailability": {
+        "injuryId": 130,
+        "type": "injury",
+        "expectedReturn": "Early November 2026"
+       }
+      }
+     ]
+    },
+    "awayTeam": {
+     "id": 9879,
+     "name": "Fulham",
+     "formation": "4-2-3-1",
+     "starters": [
+      {
+       "id": 215168,
+       "name": "Bernd Leno",
+       "positionId": 11,
+       "usualPlayingPositionId": 0,
+       "shirtNumber": "1",
+       "performance": {
+        "rating": 8.1,
+        "fantasyScore": "6+2",
+        "seasonRating": 6.55,
+        "totalDistanceCovered": 5232,
+        "topSpeed": 20.5
+       }
+      },
+      {
+       "id": 465750,
+       "name": "Timothy Castagne",
+       "positionId": 32,
+       "usualPlayingPositionId": 1,
+       "shirtNumber": "21",
+       "performance": {
+        "rating": 7.6,
+        "fantasyScore": "6+1",
+        "seasonAssists": 1,
+        "seasonRating": 6.88,
+        "totalDistanceCovered": 11721,
+        "topSpeed": 31.600000381469727
+       }
+      },
+      {
+       "id": 1073980,
+       "name": "David Affengruber",
+       "positionId": 34,
+       "usualPlayingPositionId": 1,
+       "shirtNumber": "22",
+       "performance": {
+        "rating": 7.2,
+        "fantasyScore": "6",
+        "seasonRating": 6.98,
+        "totalDistanceCovered": 10172,
+        "topSpeed": 31.899999618530273
+       }
+      },
+      {
+       "id": 1339269,
+       "name": "Hugo Larsson",
+       "positionId": 66,
+       "usualPlayingPositionId": 2,
+       "shirtNumber": "15",
+       "performance": {
+        "rating": 6.3,
+        "substitutionEvents": [
+         {
+          "time": 63,
+          "type": "subOut",
+          "reason": "tactical"
+         }
+        ],
+        "fantasyScore": "3",
+        "seasonRating": 6.16,
+        "totalDistanceCovered": 8873,
+        "topSpeed": 27.600000381469727
+       }
+      }
+     ],
+     "subs": [
+      {
+       "id": 540963,
+       "name": "Sander Berge",
+       "usualPlayingPositionId": 2,
+       "shirtNumber": "16",
+       "performance": {
+        "rating": 7,
+        "substitutionEvents": [
+         {
+          "time": 63,
+          "type": "subIn",
+          "reason": "tactical"
+         }
+        ],
+        "fantasyScore": "1",
+        "seasonAssists": 1,
+        "seasonRating": 6.69,
+        "totalDistanceCovered": 4019,
+        "topSpeed": 24.5
+       }
+      },
+      {
+       "id": 1403691,
+       "name": "César Palacios",
+       "usualPlayingPositionId": 3,
+       "shirtNumber": "8",
+       "performance": {
+        "rating": 6.5,
+        "substitutionEvents": [
+         {
+          "time": 74,
+          "type": "subIn",
+          "reason": "tactical"
+         }
+        ],
+        "fantasyScore": "1",
+        "seasonGoals": 1,
+        "seasonRating": 6.9,
+        "totalDistanceCovered": 2860,
+        "topSpeed": 25
+       }
+      },
+      {
+       "id": 1128945,
+       "name": "Rodrigo Muniz",
+       "usualPlayingPositionId": 3,
+       "shirtNumber": "9",
+       "performance": {
+        "rating": 6.3,
+        "substitutionEvents": [
+         {
+          "time": 74,
+          "type": "subIn",
+          "reason": "tactical"
+         }
+        ],
+        "fantasyScore": "1",
+        "seasonRating": 6.03,
+        "totalDistanceCovered": 2335,
+        "topSpeed": 28
+       }
+      },
+      {
+       "id": 469804,
+       "name": "Kenny Tete",
+       "usualPlayingPositionId": 1,
+       "shirtNumber": "2",
+       "performance": {
+        "substitutionEvents": [
+         {
+          "time": 81,
+          "type": "subIn",
+          "reason": "tactical"
+         }
+        ],
+        "fantasyScore": "1",
+        "seasonRating": 6.31,
+        "totalDistanceCovered": 1629,
+        "topSpeed": 21.200000762939453
+       }
+      }
+     ],
+     "unavailable": [
+      {
+       "id": 773991,
+       "name": "Ryan Sessegnon",
+       "positionId": 1100,
+       "performance": {
+        "seasonGoals": 1,
+        "seasonRating": 6.36
+       },
+       "unavailability": {
+        "type": "suspension",
+        "expectedReturn": "Late October 2026",
+        "expectedReturnDate": "2026-10-24T16:00:00Z"
+       }
+      }
+     ]
+    }
+   },
+   "playerStats": {
+    "465750": {
+     "name": "Timothy Castagne",
+     "id": 465750,
+     "teamId": 9879,
+     "isGoalkeeper": false,
+     "stats": [
+      {
+       "key": "top_stats",
+       "stats": {
+        "Minutes played": {
+         "key": "minutes_played",
+         "stat": {
+          "value": 90,
+          "type": "integer"
+         }
+        },
+        "Expected goals (xG)": {
+         "key": "expected_goals",
+         "stat": {
+          "value": 0.04,
+          "type": "double"
+         }
+        },
+        "Expected assists (xA)": {
+         "key": "expected_assists",
+         "stat": {
+          "value": 0.02,
+          "type": "double"
+         }
+        }
+       }
+      },
+      {
+       "key": "attack",
+       "stats": {
+        "xG Non-penalty": {
+         "key": "expected_goals_non_penalty",
+         "stat": {
+          "value": 0.04,
+          "type": "double"
+         }
+        }
+       }
+      }
+     ]
+    },
+    "478357": {
+     "name": "Matt Grimes",
+     "id": 478357,
+     "teamId": 8669,
+     "isGoalkeeper": false,
+     "stats": [
+      {
+       "key": "top_stats",
+       "stats": {
+        "Minutes played": {
+         "key": "minutes_played",
+         "stat": {
+          "value": 90,
+          "type": "integer"
+         }
+        },
+        "Expected goals (xG)": {
+         "key": "expected_goals",
+         "stat": {
+          "value": 0.03,
+          "type": "double"
+         }
+        },
+        "Expected assists (xA)": {
+         "key": "expected_assists",
+         "stat": {
+          "value": 0.08,
+          "type": "double"
+         }
+        }
+       }
+      },
+      {
+       "key": "attack",
+       "stats": {
+        "xG Non-penalty": {
+         "key": "expected_goals_non_penalty",
+         "stat": {
+          "value": 0.03,
+          "type": "double"
+         }
+        }
+       }
+      }
+     ]
+    },
+    "604785": {
+     "name": "Alex Iwobi",
+     "id": 604785,
+     "teamId": 9879,
+     "isGoalkeeper": false,
+     "stats": [
+      {
+       "key": "top_stats",
+       "stats": {
+        "Minutes played": {
+         "key": "minutes_played",
+         "stat": {
+          "value": 74,
+          "type": "integer"
+         }
+        },
+        "Expected goals (xG)": {
+         "key": "expected_goals",
+         "stat": {
+          "value": 0.13,
+          "type": "double"
+         }
+        },
+        "Expected assists (xA)": {
+         "key": "expected_assists",
+         "stat": {
+          "value": 0.26,
+          "type": "double"
+         }
+        }
+       }
+      },
+      {
+       "key": "attack",
+       "stats": {
+        "xG Non-penalty": {
+         "key": "expected_goals_non_penalty",
+         "stat": {
+          "value": 0.13,
+          "type": "double"
+         }
+        }
+       }
+      }
+     ]
+    },
+    "182962": {
+     "name": "Tom Cairney",
+     "id": 182962,
+     "teamId": 9879,
+     "isGoalkeeper": false,
+     "stats": [
+      {
+       "key": "top_stats",
+       "stats": {
+        "Minutes played": {
+         "key": "minutes_played",
+         "stat": {
+          "value": 9,
+          "type": "integer"
+         }
+        }
+       }
+      },
+      {
+       "key": "attack",
+       "stats": {}
+      }
+     ]
+    }
+   },
+   "shotmap": {
+    "shots": [
+     {
+      "id": 2986643453,
+      "teamId": 8669,
+      "playerId": 776184,
+      "min": 2,
+      "expectedGoals": 0.02303364686667919,
+      "isOwnGoal": false,
+      "situation": "RegularPlay",
+      "eventType": "AttemptSaved"
+     },
+     {
+      "id": 2986645007,
+      "teamId": 8669,
+      "playerId": 1161885,
+      "min": 3,
+      "expectedGoals": 0.020420989021658897,
+      "isOwnGoal": false,
+      "situation": "FromCorner",
+      "eventType": "Miss"
+     },
+     {
+      "id": 2986645857,
+      "teamId": 8669,
+      "playerId": 711357,
+      "min": 3,
+      "expectedGoals": 0.03342052549123764,
+      "isOwnGoal": false,
+      "situation": "FromCorner",
+      "eventType": "Miss"
+     },
+     {
+      "id": 2986675243,
+      "teamId": 9879,
+      "playerId": 1413847,
+      "min": 13,
+      "expectedGoals": 0.052923139184713364,
+      "isOwnGoal": false,
+      "situation": "RegularPlay",
+      "eventType": "AttemptSaved"
+     },
+     {
+      "id": 2986677805,
+      "teamId": 8669,
+      "playerId": 1025603,
+      "min": 13,
+      "expectedGoals": 0.048310909420251846,
+      "isOwnGoal": false,
+      "situation": "RegularPlay",
+      "eventType": "Miss"
+     }
+    ]
+   },
+   "stats": {
+    "Periods": {
+     "All": {
+      "stats": [
+       {
+        "stats": [
+         {
+          "title": "Expected goals (xG)",
+          "key": "expected_goals",
+          "stats": [
+           "0.50",
+           "0.55"
+          ],
+          "rawStats": [
+           {
+            "value": 0.5
+           },
+           {
+            "value": 0.55
+           }
+          ],
+          "format": "double",
+          "type": "text",
+          "highlighted": "away"
+         }
+        ]
+       },
+       {
+        "stats": []
+       }
+      ]
+     }
+    }
+   }
+  }
+ },
+ "upcoming": {
+  "general": {
+   "matchId": "5795489",
+   "matchTimeUTCDate": "2026-10-25T14:00:00.000Z",
+   "started": false,
+   "finished": false,
+   "leagueId": 47,
+   "homeTeam": {
+    "name": "Crystal Palace",
+    "id": 9826
+   },
+   "awayTeam": {
+    "name": "Newcastle United",
+    "id": 10261
+   }
+  },
+  "content": {
+   "lineup": {
+    "lineupType": "predicted",
+    "homeTeam": {
+     "id": 9826,
+     "name": "Crystal Palace",
+     "formation": "3-4-2-1",
+     "starters": [
+      {
+       "id": 448897,
+       "name": "Walter Benítez",
+       "positionId": 11,
+       "usualPlayingPositionId": 0,
+       "shirtNumber": "44",
+       "performance": {
+        "seasonRating": 7.08
+       }
+      },
+      {
+       "id": 950829,
+       "name": "Chris Richards",
+       "positionId": 33,
+       "usualPlayingPositionId": 1,
+       "shirtNumber": "26",
+       "performance": {
+        "seasonRating": 6.48
+       }
+      },
+      {
+       "id": 696646,
+       "name": "Axel Disasi",
+       "positionId": 35,
+       "usualPlayingPositionId": 1,
+       "shirtNumber": "5",
+       "performance": {
+        "seasonRating": 6.27
+       }
+      }
+     ],
+     "unavailable": [
+      {
+       "id": 719330,
+       "name": "Dean Henderson",
+       "performance": {
+        "seasonRating": 6.39
+       },
+       "unavailability": {
+        "injuryId": 21,
+        "type": "injury",
+        "expectedReturn": "Doubtful"
+       }
+      },
+      {
+       "id": 1187506,
+       "name": "Chadi Riad",
+       "positionId": 1000,
+       "performance": {
+        "seasonRating": 6.37
+       },
+       "unavailability": {
+        "injuryId": 14,
+        "type": "injury",
+        "expectedReturn": "Late June 2027"
+       }
+      },
+      {
+       "id": 664444,
+       "name": "Takehiro Tomiyasu",
+       "positionId": 1000,
+       "performance": {
+        "seasonRating": 6.28
+       },
+       "unavailability": {
+        "injuryId": 101,
+        "type": "injury",
+        "expectedReturn": "Late November 2026"
+       }
+      }
+     ]
+    },
+    "awayTeam": {
+     "id": 10261,
+     "name": "Newcastle United",
+     "formation": "4-2-3-1",
+     "starters": [
+      {
+       "id": 1186978,
+       "name": "Lukás Hornícek",
+       "positionId": 11,
+       "usualPlayingPositionId": 0,
+       "shirtNumber": "21",
+       "performance": {
+        "seasonRating": 6.94
+       }
+      },
+      {
+       "id": 1296763,
+       "name": "Lewis Miley",
+       "positionId": 32,
+       "usualPlayingPositionId": 2,
+       "shirtNumber": "67",
+       "performance": {
+        "seasonRating": 6.8
+       }
+      },
+      {
+       "id": 1137407,
+       "name": "Malick Thiaw",
+       "positionId": 34,
+       "usualPlayingPositionId": 1,
+       "shirtNumber": "12",
+       "performance": {
+        "seasonRating": 6.42
+       }
+      }
+     ],
+     "unavailable": [
+      {
+       "id": 1050166,
+       "name": "Anthony Elanga",
+       "performance": {
+        "seasonGoals": 2,
+        "seasonRating": 7.51
+       },
+       "unavailability": {
+        "injuryId": 130,
+        "type": "injury",
+        "expectedReturn": "Doubtful"
+       }
+      },
+      {
+       "id": 1438570,
+       "name": "Ewen Jaouen",
+       "positionId": 1000,
+       "unavailability": {
+        "injuryId": 42,
+        "type": "injury",
+        "expectedReturn": "Early December 2026"
+       }
+      },
+      {
+       "id": 1107910,
+       "name": "Valentino Livramento",
+       "positionId": 1000,
+       "performance": {
+        "seasonRating": 6.61
+       },
+       "unavailability": {
+        "injuryId": 130,
+        "type": "injury",
+        "expectedReturn": "Early November 2026"
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ "league": {
+  "props": {
+   "pageProps": {
+    "fixtures": {
+     "allMatches": [
+      {
+       "round": "1",
+       "roundName": 1,
+       "pageUrl": "/matches/coventry-city-vs-arsenal/2tttz6#5795363",
+       "id": "5795363",
+       "home": {
+        "name": "Arsenal",
+        "shortName": "Arsenal",
+        "id": "9825"
+       },
+       "away": {
+        "name": "Coventry City",
+        "shortName": "Coventry",
+        "id": "8669"
+       },
+       "status": {
+        "utcTime": "2026-08-21T19:00:00Z",
+        "timezone": "UTC",
+        "finished": true,
+        "started": true,
+        "cancelled": false,
+        "awarded": false,
+        "scoreStr": "3 - 0",
+        "reason": {
+         "short": "FT",
+         "shortKey": "fulltime_short",
+         "long": "Full-Time",
+         "longKey": "finished"
+        }
+       }
+      },
+      {
+       "round": "1",
+       "roundName": 1,
+       "pageUrl": "/matches/hull-city-vs-manchester-united/2yngir#5795364",
+       "id": "5795364",
+       "home": {
+        "name": "Hull City",
+        "shortName": "Hull",
+        "id": "8667"
+       },
+       "away": {
+        "name": "Manchester United",
+        "shortName": "Man United",
+        "id": "10260"
+       },
+       "status": {
+        "utcTime": "2026-08-22T11:30:00Z",
+        "timezone": "UTC",
+        "finished": true,
+        "started": true,
+        "cancelled": false,
+        "awarded": false,
+        "scoreStr": "2 - 0",
+        "reason": {
+         "short": "FT",
+         "shortKey": "fulltime_short",
+         "long": "Full-Time",
+         "longKey": "finished"
+        }
+       }
+      },
+      {
+       "round": "1",
+       "roundName": 1,
+       "pageUrl": "/matches/everton-vs-crystal-palace/2tttz7#5795365",
+       "id": "5795365",
+       "home": {
+        "name": "Everton",
+        "shortName": "Everton",
+        "id": "8668"
+       },
+       "away": {
+        "name": "Crystal Palace",
+        "shortName": "Crystal Palace",
+        "id": "9826"
+       },
+       "status": {
+        "utcTime": "2026-08-22T14:00:00Z",
+        "timezone": "UTC",
+        "finished": true,
+        "started": true,
+        "cancelled": false,
+        "awarded": false,
+        "scoreStr": "2 - 0",
+        "reason": {
+         "short": "FT",
+         "shortKey": "fulltime_short",
+         "long": "Full-Time",
+         "longKey": "finished"
+        }
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

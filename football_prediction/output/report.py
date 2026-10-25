@@ -1,11 +1,13 @@
 """
-output/report.py  v1.2.0（输出层的一部分）
+output/report.py  v1.4.0（输出层的一部分）
 预测报告：对未开赛场次，按判断流程（output/analysis.py）用【最新】赔率现算，
 给出胜平负概率（市场为底）、倾向与双选、信心档（附历史命中率）、预期进球、最可能比分、
 大 2.5 / 双方进球 / 亚盘、自研模型对照、盘口变动、风险提示。
 报告是"当前看法"，随赔率更新；存档的预测记录（review 层）只保留首次，二者互不影响。
 报告写入 reports/预测_YYYY-MM-DD.csv（utf-8-sig，Excel 可直接打开）。
 v1.2.0: 改为市场为底的判断流程；信心档按市场概率重标定；新增亚盘、盘口变动、风险、自研对照。
+v1.3.0: 信心档按 Shin 概率、5 联赛重标定；新增列「本场估计(首选/双选)」（无赔率时为空）。
+v1.4.0: 赔率改由 pipeline.latest_odds 选（多家中位数优先），新增列「赔率来源」。
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 """
 import os
@@ -18,9 +20,9 @@ import pandas as pd
 from football_prediction.output.analysis import (   # noqa: F401  confidence_tier 供外部/测试使用
     confidence_tier, double_label as _double_label, MARKET_TIERS as CONFIDENCE_TIERS,
 )
-from football_prediction.output.pipeline import ModelCache, analyse_match, fixture_odds
+from football_prediction.output.pipeline import ModelCache, analyse_match, latest_odds
 
-LAYER_VERSION = "1.2.0"
+LAYER_VERSION = "1.4.0"
 
 REPORT_DIR = "reports"
 _BJ = ZoneInfo("Asia/Shanghai")
@@ -75,6 +77,7 @@ def report_row(r: dict, a: dict, league_names: dict[str, str]) -> dict:
         "双选": a["double"],
         "信心": a["tier"],
         "历史命中(首选/双选)": f"{a['hit1']:.0%}/{a['hit2']:.0%}",
+        "本场估计(首选/双选)": f"{a['est1']:.0%}/{a['est2']:.0%}" if a.get("est1") is not None else "",
         "预期进球": f"{mk['exp_home_goals']:.1f}-{mk['exp_away_goals']:.1f}",
         "最可能比分": " ".join(f"{s['score']}({s['prob']:.0%})" for s in mk["top5_scores"][:3]),
         "大2.5球": _pct(mk["over_2.5"]),
@@ -95,9 +98,10 @@ def build_report(conn: sqlite3.Connection, league_names: dict[str, str], now: da
     cache = cache or ModelCache(conn, now.date().isoformat())
     out = []
     for r in upcoming_fixtures(conn, league_names, now):
+        odds, src = latest_odds(conn, r, now)
         a = analyse_match(conn, cache, r["league"], r["home_team"], r["away_team"],
-                          fixture_odds(r), r["match_id"])
-        out.append(report_row(r, a, league_names))
+                          odds, r["match_id"])
+        out.append({**report_row(r, a, league_names), "赔率来源": src})
     if not out:
         return pd.DataFrame()
     return pd.DataFrame(out).sort_values("_kickoff", kind="stable").drop(columns="_kickoff") \
@@ -116,11 +120,14 @@ def format_row(r: pd.Series) -> str:
     """控制台展示：第一行结论，第二行比分盘口，有提示时第三行。"""
     s = (f"  [{r['联赛']}] {r['开球(北京)']} {r['主队']} vs {r['客队']}  "
          f"主{r['主胜']} 平{r['平']} 客{r['客胜']}（{r['概率来源']}）  "
-         f"倾向 {r['倾向']}（双选 {r['双选']}）  信心 {r['信心']}[{r['历史命中(首选/双选)']}]\n"
+         f"倾向 {r['倾向']}（双选 {r['双选']}）  信心 {r['信心']}[{r['历史命中(首选/双选)']}]"
+         + (f" 本场[{r['本场估计(首选/双选)']}]" if r.get("本场估计(首选/双选)") else "") + "\n"
          f"      预期进球 {r['预期进球']}  比分 {r['最可能比分']}  大2.5 {r['大2.5球']}  "
          f"双方进球 {r['双方进球']}  {r['亚盘']}  | 自研 {r['自研 主/平/客']}")
     if r["盘口变动"] and r["盘口变动"] != "平稳":
         s += f"\n      盘口变动：{r['盘口变动']}"
+    if r.get("赔率来源", "").startswith("多家"):
+        s += f"\n      赔率：{r['赔率来源']}"
     if r["提示"]:
         s += f"\n      提示：{r['提示']}"
     return s
