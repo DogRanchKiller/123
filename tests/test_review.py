@@ -4,9 +4,10 @@ from math import log
 import numpy as np
 import pytest
 
+from football_prediction.data import fotmob
 from football_prediction.review.store import (
     has_prediction, save_prediction, score_predictions, live_report, promotion_check,
-    horizon_report, _paired, _scored_first,
+    horizon_report, pending_fotmob, reconcile_results, _paired, _scored_first,
 )
 
 
@@ -38,6 +39,33 @@ def test_score_predictions_values_and_idempotent(conn):
     assert got["m2"] == pytest.approx(-log(0.3), abs=1e-6)
     br = conn.execute("SELECT brier FROM predictions WHERE match_id='m1'").fetchone()[0]
     assert br == pytest.approx(0.5 ** 2 + 0.3 ** 2 + 0.2 ** 2, abs=1e-6)
+
+
+def test_fotmob_fallback_and_reconcile(conn):
+    fotmob.init_fotmob(conn)
+    for mid in ("m1", "m2", "m3", "m4"):
+        save_prediction(conn, mid, "x", "1", "1", 0.5, 0.3, 0.2)
+    for mid, hg, ag in (("m1", 2, 1), ("m2", 1, 1), ("m4", 1, 0)):
+        conn.execute("INSERT INTO fotmob_results VALUES (?,?,?,?,?,?)", (mid, "f" + mid, hg, ag, "t", "t"))
+    _match(conn, "m4", 0, 0)                                   # football-data 已有：优先于 FotMob
+    src = lambda: dict(conn.execute("SELECT match_id, result_src FROM predictions"))
+    assert score_predictions(conn) == 3                        # m3 两边都没有，不评
+    assert src() == {"m1": "fotmob", "m2": "fotmob", "m3": None, "m4": "fd"}
+    assert pending_fotmob(conn) == 2
+    assert set(_scored_first(conn)["match_id"]) == {"m1", "m2", "m4"}   # FotMob 先评的也进成绩单
+    assert reconcile_results(conn) == (0, [])                  # football-data 还没到
+
+    _match(conn, "m1", 2, 1)
+    _match(conn, "m2", 1, 2)                                   # 与 FotMob 不一致
+    n, bad = reconcile_results(conn)
+    assert n == 2 and bad == [{"match_id": "m2", "fotmob": (1, 1), "fd": (1, 2)}]
+    ll = dict(conn.execute("SELECT match_id, log_loss FROM predictions"))
+    out = dict(conn.execute("SELECT match_id, actual_outcome FROM predictions"))
+    assert ll["m1"] == pytest.approx(-log(0.5), abs=1e-6)
+    assert ll["m2"] == pytest.approx(-log(0.2), abs=1e-6) and out["m2"] == "away_win"
+    assert out["m4"] == "draw"
+    assert pending_fotmob(conn) == 0 and src()["m1"] == src()["m2"] == "fd"
+    assert reconcile_results(conn) == (0, []) and score_predictions(conn) == 0
 
 
 def test_scored_first_keeps_earliest(conn):

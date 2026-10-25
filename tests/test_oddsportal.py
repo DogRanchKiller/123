@@ -80,6 +80,26 @@ def test_link_teams_and_names():
     assert op.name_sim("Real Madrid", "Ath Madrid") < op.MATCH_MIN + 0.2
 
 
+@pytest.mark.parametrize("op_name,ours", [
+    ("wolves", "Wolverhampton"), ("sheffield utd", "Sheffield United"), ("g a eagles", "Go Ahead Eagles"),
+    ("psv", "PSV Eindhoven"), ("sporting cp", "Sp Lisbon"), ("royale union sg", "St. Gilloise"),
+    ("st liege", "Standard"), ("basaksehir", "Buyuksehyr"), ("dundee utd", "Dundee United")])
+def test_new_league_aliases(op_name, ours):
+    assert op.name_sim(op_name, ours) == 1.0
+
+
+def test_dundee_pairs_with_right_club():
+    fx = [{"match_id": "m1", "league": "SC0", "match_date": "2026-11-01",
+           "home_team": "Dundee", "away_team": "Kilmarnock"},
+          {"match_id": "m2", "league": "SC0", "match_date": "2026-11-01",
+           "home_team": "Celtic", "away_team": "Dundee United"}]
+    links = [{"match_link": f"https://www.oddsportal.com/football/h2h/{a}-AAAAAAAA/{b}-BBBBBBBB/#x{i}",
+              "league": "scotland-premiership", "kickoff_utc": "2026-11-01 15:00:00 UTC"}
+             for i, (a, b) in enumerate([("celtic", "dundee-utd"), ("dundee-fc", "kilmarnock")])]
+    got = {ln: fx["match_id"] for ln, fx in op.match_links(links, fx).items()}
+    assert got == {links[0]["match_link"]: "m2", links[1]["match_link"]: "m1"}
+
+
 def test_match_links_one_to_one_and_date_window():
     fx = [{"match_id": "m1", "league": "E0", "match_date": "2026-10-25",
            "home_team": "Liverpool", "away_team": "Brighton"},

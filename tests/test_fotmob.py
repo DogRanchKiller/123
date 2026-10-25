@@ -7,7 +7,9 @@ import pytest
 
 from football_prediction.data import fotmob
 from football_prediction.data.fotmob_parse import (
-    compact_match, league_matches, next_data, pair_matches, season_param, team_map)
+    _score, compact_match, league_matches, next_data, pair_matches, season_param, team_map)
+from football_prediction.data.loader import _make_match_id
+from football_prediction.review.store import save_prediction
 
 FX = json.load(open(os.path.join(os.path.dirname(__file__), "fotmob_fixture.json"), encoding="utf-8"))
 
@@ -25,6 +27,42 @@ def test_league_matches():
     m = ms[0]
     assert m["fotmob_id"] == "5795363" and m["home"] == "Arsenal"
     assert "#" not in m["page_url"] and m["finished"] and not m["cancelled"]
+
+
+def test_league_matches_score():
+    m = league_matches(FX["league"])[0]
+    assert m["score"] == (3, 0) and not m["awarded"]
+    assert _score("") is None and _score(None) is None and _score("2 - 1") == (2, 1)
+
+
+def _fm(fid, home, away, ko, score, awarded=False):
+    return {"fotmob_id": fid, "home": home, "away": away, "kickoff_utc": ko, "started": True,
+            "finished": score is not None, "cancelled": False, "awarded": awarded, "score": score}
+
+
+def test_collect_results(conn):
+    fotmob.init_fotmob(conn)
+    for i, (h, a) in enumerate([("Arsenal", "Chelsea"), ("Everton", "Fulham")]):   # 上赛季队名
+        conn.execute("INSERT INTO matches VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                     (f"old{i}", "E0", "2526", "2026-03-01", h, a, 1, 0, "t", "now", "t"))
+    known = _make_match_id("E0", "2627", "2026-10-25", "Arsenal", "Chelsea")
+    save_prediction(conn, known, "x", "1", "1", 0.5, 0.3, 0.2)
+    recs = [_fm("1", "Arsenal", "Chelsea", "2026-10-24T23:30:00Z", (2, 1)),     # 本库日期晚一天
+            _fm("2", "Everton", "Fulham", "2026-10-24T14:00:00Z", (1, 1)),
+            _fm("3", "Arsenal", "Fulham", "2026-10-18T14:00:00Z", (3, 0), awarded=True),
+            _fm("4", "Chelsea", "Everton", "2026-10-30T14:00:00Z", None),       # 未完赛
+            _fm("5", "Zzz Rovers", "Arsenal", "2026-10-19T14:00:00Z", (0, 4))]  # 队名对不上
+    assert fotmob.collect_results(conn, ["E0"], "2627", fetch=lambda lg, s: recs) == 2
+    got = {r[0]: r[1:] for r in conn.execute("SELECT match_id, fotmob_id, home_goals, away_goals FROM fotmob_results")}
+    assert got == {known: ("1", 2, 1),
+                   _make_match_id("E0", "2627", "2026-10-24", "Everton", "Fulham"): ("2", 1, 1)}
+    assert fotmob.collect_results(conn, ["E0"], "2627", fetch=lambda lg, s: recs) == 0   # 只补不改
+
+    def boom(lg, s):
+        raise RuntimeError("down")
+    logs = []
+    assert fotmob.collect_results(conn, ["E0", "XX"], "2627", log=logs.append, fetch=boom) == 0
+    assert len(logs) == 1
 
 
 def test_compact_finished():
@@ -66,6 +104,23 @@ def test_team_map_and_pairing():
     p = pair_matches(fm, ours)
     assert p["1"]["match_id"] == "a" and p["2"]["match_id"] == "b"
     assert "3" not in p                                                       # 日期差 7 天，不配
+
+
+def test_new_league_team_map():
+    fm = ["Queens Park Rangers", "Fortuna Sittard", "Sporting CP", "Heart of Midlothian", "OH Leuven",
+          "Başakşehir", "Dundee FC", "Dundee United", "Union St.Gilloise", "Standard Liège"]
+    ours = ["QPR", "For Sittard", "Sp Lisbon", "Hearts", "Oud-Heverlee Leuven",
+            "Buyuksehyr", "Dundee", "Dundee United", "St. Gilloise", "Standard"]
+    assert team_map(fm, ours) == dict(zip(fm, ours))
+
+
+def test_league_lists_agree():
+    """实盘、explain、FotMob、OddsPortal 的联赛清单一致：新联赛漏登记一处就会抓不到数据。"""
+    from football_prediction import explain, live
+    from football_prediction.data.fotmob_parse import LEAGUE_IDS
+    from football_prediction.data.oddsportal_parse import LEAGUE_SLUGS
+    assert set(live.LEAGUES) == set(explain.LEAGUES) == set(LEAGUE_IDS) == set(LEAGUE_SLUGS)
+    assert live.LEAGUES == explain.LEAGUES
 
 
 def test_save_match_and_backfill(league):

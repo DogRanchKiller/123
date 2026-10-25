@@ -1,8 +1,9 @@
 """
-data/oddsportal_parse.py  v1.6.0
+data/oddsportal_parse.py  v1.7.0
 OddsPortal 纯解析（不联网、不读库）：队名规范化与配对、比赛链接 ↔ fixtures 配对、
 OddsHarvester 输出的盘口键与逐家赔率解析。从 data/oddsportal.py 拆出（行为不变）。
 v1.6.0: NAME_ALIASES 补意甲 / 法甲（PSG）。FotMob 队名也先过这张表。
+v1.7.0: LEAGUE_SLUGS 加英冠 E1 / 荷甲 N1 / 葡超 P1 / 苏超 SC0 / 比甲 B1 / 土超 T1，NAME_ALIASES 补这六个联赛的队名。
 修改此文件后请同步更新 version.py 中 "data" 的版本号。
 """
 import re
@@ -10,11 +11,14 @@ import unicodedata
 from datetime import date, datetime
 from difflib import SequenceMatcher
 
-LAYER_VERSION = "1.6.0"
+LAYER_VERSION = "1.7.0"
 
 LEAGUE_SLUGS = {   # football-data 联赛代码 -> OddsPortal 联赛 slug
     "E0": "england-premier-league", "D1": "germany-bundesliga", "SP1": "spain-laliga",
     "I1": "italy-serie-a", "F1": "france-ligue-1",
+    # v1.7.0：英冠 / 荷甲 / 葡超 / 苏超 / 比甲 / 土超（2026-10-25 用 OddsHarvester 0.20.0 核对过 slug）
+    "E1": "england-championship", "N1": "eredivisie", "P1": "liga-portugal",
+    "SC0": "scotland-premiership", "B1": "jupiler-pro-league", "T1": "turkey-super-lig",
 }
 MATCH_MIN = 0.6          # 队名配对的最低相似度
 
@@ -28,6 +32,10 @@ NAME_ALIASES = {   # 2026-10-24 用三联赛 2526/2627 全部球队核对过
     "realsociedad": "sociedad", "celtavigo": "celta",
     # v1.6.0：意甲 / 法甲（2026-10-25 用 2627 全部球队核对；其余队名靠包含关系配上）
     "psg": "parissg", "parissaintgermain": "parissg",
+    # v1.7.0：新增六个联赛（2026-10-25 用 2627 即将开赛的链接核对）
+    "sheffieldutd": "sheffieldunited", "gaeagles": "goaheadeagles", "psv": "psveindhoven",
+    "sportingcp": "splisbon", "royaleunionsg": "stgilloise", "stliege": "standard",
+    "basaksehir": "buyuksehyr", "wolves": "wolverhampton", "dundeeutd": "dundeeunited",
 }
 
 

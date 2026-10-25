@@ -1,11 +1,11 @@
 # version.py — 各层版本号注册表
 # 修改某一层时只更新对应条目，review 层用版本号区分不同批次预测
 
-SYSTEM_VERSION = "1.7.0"
+SYSTEM_VERSION = "1.9.0"
 
 LAYER_VERSIONS = {
-    "data":          "1.6.0",   # + 意甲 I1 / 法甲 F1 实盘（2122–2627）与 OddsPortal / FotMob 队名（v1.5.0: 多家公司赔率 book_odds；v1.4.0: 亚盘/Pinnacle/赛程大小球、快照表；v1.3.0: xG；v1.2.0: 射正；v1.1.0: 赔率、赛程）
-    "data_fotmob":   "1.0.0",   # FotMob 阵容 / 伤停 / 球员 xG / 射门（HTML 页，不用 /api/）；understat 缺时补 match_xg
+    "data":          "1.7.0",   # + E1/N1/P1/SC0/B1/T1 实盘（2122–2627）与 OddsPortal 队名、understat US_LEAGUES（v1.6.0: 意甲 I1 / 法甲 F1 实盘（2122–2627）与 OddsPortal / FotMob 队名（v1.5.0: 多家公司赔率 book_odds；v1.4.0: 亚盘/Pinnacle/赛程大小球、快照表；v1.3.0: xG；v1.2.0: 射正；v1.1.0: 赔率、赛程））
+    "data_fotmob":   "1.2.0",   # + 六个新联赛的 FotMob 联赛 id 与队名（1.1.0：联赛页完赛比分 fotmob_results（只用于先评分）（1.0.0：FotMob 阵容 / 伤停 / 球员 xG / 射门（HTML 页，不用 /api/）；understat 缺时补 match_xg））
     "features":      "1.0.0",
     "model_elo":     "1.1.0",   # 净胜球加权更新 + 有序 logit（v1.0.0 融合无增益）
     "model_dc":      "1.3.0",   # + 单队参数收缩 shrink=0.5（修复升级队参数发散）
@@ -20,8 +20,8 @@ LAYER_VERSIONS = {
     "calibration":   "1.0.0",   # Platt scaling；2425 验证无增益（±0.005），不进主流程
     "output":        "1.4.0",   # 报告 / explain 优先用多家中位数赔率（≥3 家、24h 内），列赔率来源（1.3.0：Shin 信心档 + 本场估计；1.2.0：判断流程 + explain）
     "validation":    "1.1.0",   # + 市场基准 run_market_backtest、同场配对 paired_compare
-    "review":        "1.4.0",   # 临场档 _t1 不参与替换检查；horizon_report 临场对赛前
-    "live":          "1.7.0",   # 临场档先抓阵容再抓赔率，按先后选阵容系数，打印临场最终看法（v1.6.0: + 意甲 I1 / 法甲 F1；v1.5.0: market_shin / dc_market 存档、FotMob 补 xG、--near 临场档 *_t1）
+    "review":        "1.5.0",   # football-data 未到时用 FotMob 比分先评分（result_src），到达后核对重评（1.4.0：临场档 _t1 不参与替换检查；horizon_report 临场对赛前）
+    "live":          "1.9.0",   # + 英冠 / 荷甲 / 葡超 / 苏超 / 比甲 / 土超，understat 没有的联赛跳过 load_xg（v1.8.0: 抓 FotMob 完赛比分并先评分、核对 football-data（v1.7.0: 临场档先抓阵容再抓赔率，按先后选阵容系数，打印临场最终看法；v1.6.0: + 意甲 I1 / 法甲 F1；v1.5.0: market_shin / dc_market 存档、FotMob 补 xG、--near 临场档 *_t1））
 }
 
 

@@ -19,6 +19,24 @@
 
 ## 未解决
 
+### 新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版
+
+- 状态：未解决
+- 日期：2026-10-25
+- 现象：英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1 的 2122–2526 在 `match_xg` 里是 0 场。
+- 原因：understat 只有英超、德甲、西甲、意甲、法甲（`understat.US_LEAGUES`）。FotMob 只补抓了 2627（每日 `data.fotmob` 抓当前赛季），`backfill_xg` 只补已抓的场次。xg_dc 缺 xG 时用进球代替。
+- 处理：主模型是 `market_implied`，这些联赛 football-data 的赔率齐全（只有 T1 2223 缺 29 场），报告不受影响；受影响的是无赔率时的兜底和并行存档的 dc_xg。可选两条路：`python -m football_prediction.data.fotmob --leagues E1,N1,P1,SC0,B1,T1 --history 2425,2526` 补历史（每季约 2000 页，两季按 3.5 秒间隔约 4 小时）；或读 football-data 2627 起新增的 `HxG` / `AxG` 列（11 个联赛 2627 都有，2526 及以前没有）。
+- 位置：`football_prediction/data/understat.py`、`football_prediction/data/fotmob.py`、`football_prediction/model_dc/xg_dc.py`
+
+### 联赛增加后每日任务和临场档的抓取时间变长
+
+- 状态：未解决
+- 日期：2026-10-25
+- 现象：2026-10-24 两次每日任务各约 26 分钟，其中时间窗内 15 场的 OddsPortal 抓取占大头。加入六个联赛后同一时间窗的场次会多一到两倍。
+- 原因：OddsHarvester 逐页打开浏览器抓取，耗时随场次线性增长。`FootballPredictNear` 单次上限 40 分钟，周末同一开球时段（如北京时间 23:00）场次集中。
+- 处理：未处理。先看 11 个联赛下 `logs/daily.log`、`logs/near.log` 的实际耗时；临场档超时被杀只会少存档 `*_t1`，不会写错数据。若超时，可选：临场档只抓部分联赛、调大计划任务上限，或把每日的 `--hours 30` 缩短。
+- 位置：`run_daily.bat`、`run_near.bat`、`football_prediction/data/oddsportal.py`
+
 ### 临场档依赖电脑开机，且可能与每日任务争 SQLite 锁
 
 - 状态：未解决
@@ -38,6 +56,15 @@
 - 位置：`football_prediction/data/understat.py`、`football_prediction/data/fotmob.py`
 
 ## 已解决
+
+### football-data 赛果晚几天，实盘评分一直落后
+
+- 状态：已解决（review 1.5.0 / data_fotmob 1.1.0 / live 1.8.0）
+- 日期：2026-10-25
+- 现象：2026-10-25 检查时 `predictions` 已评分 0 条；存档覆盖 10-23 至 10-26 的场次，而 `matches` 最新赛果是 10-21。成绩单和 `promotion_check` 拿不到样本。
+- 原因：评分只认 `matches`，而 `matches` 只来自 football-data 赛季 CSV，它在完赛后数天才更新。
+- 处理：`live` 更新数据时抓 FotMob 各联赛页的完赛比分写入 `fotmob.db` 的 `fotmob_results`（不进 `matches`，不影响模型拟合）；`matches` 没有赛果时先用它评分（`result_src='fotmob'`），football-data 到达后 `reconcile_results` 核对，不一致按 football-data 重评并在日志里打印。判负 / 取消的场次不取。成绩单和 `promotion_check` 取已评分预测时原先 `JOIN matches`，会漏掉 FotMob 先评的场次，已去掉这个 JOIN（复制库实测：14 场进入成绩单）。
+- 位置：`football_prediction/data/fotmob.py`（`collect_results`）、`football_prediction/review/store.py`（`score_predictions` / `reconcile_results`）、`football_prediction/live.py`
 
 ### 阵容调整系数还没有定
 

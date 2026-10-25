@@ -1,5 +1,5 @@
 """
-football_prediction/live.py  v1.7.0
+football_prediction/live.py  v1.9.0
 实盘预测闭环：更新数据（含赔率快照）→ 赛后评分 → 对未开赛场次存档预测 → 预测报告 → 实盘成绩单。
 每轮比赛前后各跑一次即可（开赛前多跑几次可记录盘口变动）：
     python -m football_prediction.live
@@ -24,6 +24,11 @@ v1.6.0: 实盘联赛加意甲 I1、法甲 F1（2122 起的赛季，与另外三�
         原三联赛的预测不受影响）。
 v1.7.0: 临场档先抓阵容再抓赔率；lineup_t1 按赔率与首次看到正式首发的先后选阵容系数（model_lineup 1.1.0
         合并规则），extra 记 odds_vs_lineup；每场打印临场最终看法（阵容调整 > T1 市场隐含），不另存档。
+v1.8.0: 更新数据时抓 FotMob 各联赛页的完赛比分（fotmob_results，每联赛 1 次请求）；football-data 赛果未到时
+        先用它评分，到达后 reconcile_results 核对，不一致按 football-data 重评。预测与模型拟合不受影响。
+v1.9.0: 实盘联赛加英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1（2122 起；模型按联赛分别拟合，
+        原五联赛的预测不受影响）。understat 没有这六个联赛，跳过 load_xg，xG 只靠 FotMob 补，补不到时
+        dc_xg 用进球兜底。
 """
 import argparse
 import shutil
@@ -34,7 +39,7 @@ from football_prediction.data                 import fotmob, oddsportal
 from football_prediction.data.loader          import init_db, load_season, season_of
 from football_prediction.data.fixtures        import load_fixtures
 from football_prediction.data.oddsportal      import book_consensus
-from football_prediction.data.understat       import load_xg
+from football_prediction.data.understat       import US_LEAGUES, load_xg
 from football_prediction.model_blend.blend    import MODEL_NAME as BLEND_NAME
 from football_prediction.model_dc.market_dc   import MODEL_NAME as DC_MARKET_NAME
 from football_prediction.model_lineup.adjust  import (
@@ -53,10 +58,12 @@ from football_prediction.output.report        import (
 )
 from football_prediction.review.store         import (
     has_prediction, save_prediction, score_predictions, live_report, promotion_check, horizon_report,
+    pending_fotmob, reconcile_results,
 )
 
 DB_PATH = "football.db"
-LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲", "I1": "意甲", "F1": "法甲"}
+LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲", "I1": "意甲", "F1": "法甲",
+           "E1": "英冠", "N1": "荷甲", "P1": "葡超", "SC0": "苏超", "B1": "比甲", "T1": "土超"}
 MARKET_VER = "1.1.0"   # 市场基准算法版本（1/赔率 按比例去抽水），算法变化时才改
 T1_HOURS = 1.5         # 临场档：开球前 1.5 小时内
 T1_FRESH_MIN = 90      # 临场档只用 90 分钟内抓到的多家赔率
@@ -72,6 +79,8 @@ def _update_data(conn, today: str) -> None:
             print(f"  [{name}] {season} 新增赛果 {n} 场")
         except Exception as e:
             print(f"  [{name}] {season} 下载失败（{type(e).__name__}），使用本地数据")
+        if lg not in US_LEAGUES:   # understat 没有的联赛，xG 只靠下面的 FotMob 补
+            continue
         # xG 依赖 matches 已有赛果，必须在 load_season 之后
         try:
             n, miss = load_xg(conn, lg, season)
@@ -87,6 +96,12 @@ def _update_data(conn, today: str) -> None:
         print(f"  未开赛赛程 {n} 场（赔率快照已追加）")
     except Exception as e:
         print(f"  赛程下载失败（{type(e).__name__}），使用上次缓存的赛程")
+    # football-data 赛果常晚几天；FotMob 联赛页的完赛比分只用于先评分，不进 matches
+    try:
+        n = fotmob.collect_results(conn, list(LEAGUES), season)
+        print(f"  FotMob 赛果 新增 {n} 场（只用于评分，football-data 到达后核对）")
+    except Exception as e:
+        print(f"  FotMob 赛果抓取失败（{type(e).__name__}），评分只用 football-data")
 
 
 def _markets_extra(m, kickoff) -> dict:
@@ -306,7 +321,16 @@ def main(argv: list[str] | None = None):
     _update_data(conn, today)
 
     print("\n>>> [2] 赛后评分 ...")
+    n, bad = reconcile_results(conn)
+    if n:
+        print(f"  football-data 赛果核对 {n} 条先用 FotMob 比分评过的预测，比分不一致 {len(bad)} 场"
+              + ("（已按 football-data 重评）" if bad else ""))
+    for b in bad:
+        print(f"    {b['match_id']}: FotMob {b['fotmob']} → football-data {b['fd']}")
     print(f"  本次评分 {score_predictions(conn)} 条")
+    n = pending_fotmob(conn)
+    if n:
+        print(f"  其中 {n} 场暂用 FotMob 比分，等 football-data 核对")
 
     print("\n>>> [3] 未开赛场次预测存档（所有模型，首次预测为准）...")
     cache = ModelCache(conn, today)

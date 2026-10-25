@@ -1,5 +1,5 @@
 """
-review/store.py  v1.4.0
+review/store.py  v1.5.0
 复盘层：保存预测记录、赛后评分、跨版本对比。
 预测记录永不覆盖，旧版本预测保留，确保公平比较。
 v1.1.0: has_prediction 去重（每场每模型版本只留开赛前首次预测）；live_report 实盘同场对比市场。
@@ -7,6 +7,9 @@ v1.2.0: live_report 加命中率与配对 SE；promotion_check 按 version.PROMO
 v1.3.0: 赛后另评大小2.5（extra 有 over_2.5）与精确比分（extra 有 score_matrix）的 log loss；
         成绩单增加这两列；首条记录改用 drop_duplicates 取整行（不再逐列取首个非空值）。
 v1.4.0: 临场档（模型名以 _t1 结尾）不参加 promotion_check；新增 horizon_report，临场档与赛前档同场配对。
+v1.5.0: matches 还没有赛果时用 fotmob_results 的比分先评分（predictions.result_src="fotmob"）；
+        reconcile_results 在 football-data 赛果到达后核对，不一致按 football-data 重评；pending_fotmob 计数。
+        成绩单 / 替换检查（_scored_first）不再 JOIN matches，FotMob 先评的场次也计入。
 修改此文件后请同步更新 version.py 中 "review" 的版本号。
 """
 import sqlite3
@@ -17,7 +20,7 @@ from math import log
 import numpy as np
 import pandas as pd
 
-LAYER_VERSION = "1.4.0"
+LAYER_VERSION = "1.5.0"
 HORIZON_SUFFIX = "_t1"                          # 临场档模型名后缀（live --near 存档）
 HORIZON_BASE = {"lineup_t1": "lineup_base_t1"}  # 临场档的默认对照是去掉后缀的赛前档，例外在此登记
 
@@ -40,7 +43,8 @@ CREATE TABLE IF NOT EXISTS predictions (
     ou25_log_loss  REAL,            -- 大小2.5 log loss（有 over_2.5 时）
     score_log_loss REAL,            -- 精确比分 log loss（有 score_matrix 时）
     scored_at      TEXT,
-    layer_ver      TEXT NOT NULL
+    layer_ver      TEXT NOT NULL,
+    result_src     TEXT             -- 评分用的赛果："fd"（matches）/ "fotmob"（待 football-data 核对）；旧行为空 = fd
 );
 """
 
@@ -51,10 +55,19 @@ SCORE_N = 9   # score_matrix 为 9×9（0~8 球）按行展平，行=主队进�
 def _init_review_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
     have = {r[1] for r in conn.execute("PRAGMA table_info(predictions)")}
-    for col in ("ou25_log_loss", "score_log_loss"):   # 旧库迁移，幂等
+    for col, typ in (("ou25_log_loss", "REAL"), ("score_log_loss", "REAL"),
+                     ("result_src", "TEXT")):         # 旧库迁移，幂等
         if col not in have:
-            conn.execute(f"ALTER TABLE predictions ADD COLUMN {col} REAL")
+            conn.execute(f"ALTER TABLE predictions ADD COLUMN {col} {typ}")
     conn.commit()
+
+
+def _has_fotmob_results(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute("SELECT 1 FROM fotmob_results LIMIT 1")
+        return True
+    except sqlite3.OperationalError:
+        return False
 
 
 def market_log_losses(extra: dict, hg: int, ag: int) -> tuple[float | None, float | None]:
@@ -124,57 +137,101 @@ def save_prediction(
     return pred_id
 
 
+def _score_row(conn: sqlite3.Connection, row, hg: int, ag: int, src: str, scored_at: str) -> None:
+    outcome = "home_win" if hg > ag else ("draw" if hg == ag else "away_win")
+    p = {"home_win": row["p_home_win"],
+         "draw":     row["p_draw"],
+         "away_win": row["p_away_win"]}
+    ll = -log(max(p[outcome], 1e-7))
+    br = sum((p[k] - (1.0 if k == outcome else 0.0)) ** 2
+             for k in ("home_win", "draw", "away_win"))
+    ex = row["extra_markets"]                  # 缺失时 pandas 读成 NaN/None
+    extra = json.loads(ex) if isinstance(ex, str) and ex else {}
+    ou, sc = market_log_losses(extra, hg, ag)
+    conn.execute(
+        """UPDATE predictions
+           SET actual_outcome=?, log_loss=?, brier=?, ou25_log_loss=?, score_log_loss=?,
+               scored_at=?, result_src=?
+           WHERE pred_id=?""",
+        (outcome, round(ll, 6), round(br, 6),
+         None if ou is None else round(ou, 6), None if sc is None else round(sc, 6),
+         scored_at, src, row["pred_id"]),
+    )
+
+
 def score_predictions(conn: sqlite3.Connection) -> int:
     """
-    关联 matches 表中已有实际结果，自动填写 log_loss / brier。
-    只处理尚未评分的记录，幂等可多次调用。
-    返回本次评分的条数。
+    关联实际结果，自动填写 log_loss / brier。赛果优先用 matches（football-data）；
+    matches 还没有、但挂了 fotmob.db 且 fotmob_results 有比分时先用 FotMob（result_src="fotmob"），
+    之后由 reconcile_results 用 football-data 核对。
+    只处理尚未评分的记录，幂等可多次调用。返回本次评分的条数。
     """
     _init_review_db(conn)
+    fm = _has_fotmob_results(conn)
     unscored = pd.read_sql_query(
-        """SELECT p.pred_id, p.p_home_win, p.p_draw, p.p_away_win, p.extra_markets,
-                  m.home_goals, m.away_goals
-           FROM predictions p
-           JOIN matches m ON p.match_id = m.match_id
-           WHERE p.actual_outcome IS NULL
-             AND m.home_goals IS NOT NULL""",
+        f"""SELECT p.pred_id, p.p_home_win, p.p_draw, p.p_away_win, p.extra_markets,
+                   m.home_goals AS fd_h, m.away_goals AS fd_a,
+                   {"r.home_goals" if fm else "NULL"} AS fm_h, {"r.away_goals" if fm else "NULL"} AS fm_a
+            FROM predictions p
+            LEFT JOIN matches m ON p.match_id = m.match_id
+            {"LEFT JOIN fotmob_results r ON p.match_id = r.match_id" if fm else ""}
+            WHERE p.actual_outcome IS NULL""",
         conn,
     )
 
     count = 0
     scored_at = datetime.now(timezone.utc).isoformat()
     for _, row in unscored.iterrows():
-        hg, ag = int(row["home_goals"]), int(row["away_goals"])
-        if hg > ag:
-            outcome = "home_win"
-        elif hg == ag:
-            outcome = "draw"
+        if pd.notna(row["fd_h"]) and pd.notna(row["fd_a"]):
+            hg, ag, src = int(row["fd_h"]), int(row["fd_a"]), "fd"
+        elif pd.notna(row["fm_h"]) and pd.notna(row["fm_a"]):
+            hg, ag, src = int(row["fm_h"]), int(row["fm_a"]), "fotmob"
         else:
-            outcome = "away_win"
-
-        p = {"home_win": row["p_home_win"],
-             "draw":     row["p_draw"],
-             "away_win": row["p_away_win"]}
-        ll = -log(max(p[outcome], 1e-7))
-        br = sum((p[k] - (1.0 if k == outcome else 0.0)) ** 2
-                 for k in ("home_win", "draw", "away_win"))
-        ex = row["extra_markets"]                  # 缺失时 pandas 读成 NaN/None
-        extra = json.loads(ex) if isinstance(ex, str) and ex else {}
-        ou, sc = market_log_losses(extra, hg, ag)
-
-        conn.execute(
-            """UPDATE predictions
-               SET actual_outcome=?, log_loss=?, brier=?, ou25_log_loss=?, score_log_loss=?,
-                   scored_at=?
-               WHERE pred_id=?""",
-            (outcome, round(ll, 6), round(br, 6),
-             None if ou is None else round(ou, 6), None if sc is None else round(sc, 6),
-             scored_at, row["pred_id"]),
-        )
+            continue
+        _score_row(conn, row, hg, ag, src, scored_at)
         count += 1
 
     conn.commit()
     return count
+
+
+def reconcile_results(conn: sqlite3.Connection) -> tuple[int, list[dict]]:
+    """用 FotMob 比分评过、现在 matches 已有 football-data 赛果的预测：比分一致只改标记为 fd，
+    不一致按 football-data 重评。返回（核对的预测条数, 不一致的场次 [{match_id, fotmob, fd}]）。
+    这是评分用的赛果更正，不改预测本身。"""
+    _init_review_db(conn)
+    fm = _has_fotmob_results(conn)
+    rows = pd.read_sql_query(
+        f"""SELECT p.pred_id, p.match_id, p.p_home_win, p.p_draw, p.p_away_win, p.extra_markets,
+                   m.home_goals AS fd_h, m.away_goals AS fd_a,
+                   {"r.home_goals" if fm else "NULL"} AS fm_h, {"r.away_goals" if fm else "NULL"} AS fm_a
+            FROM predictions p
+            JOIN matches m ON p.match_id = m.match_id
+            {"LEFT JOIN fotmob_results r ON p.match_id = r.match_id" if fm else ""}
+            WHERE p.result_src = 'fotmob' AND m.home_goals IS NOT NULL""",
+        conn,
+    )
+    bad, seen = [], set()
+    scored_at = datetime.now(timezone.utc).isoformat()
+    for _, row in rows.iterrows():
+        fd = (int(row["fd_h"]), int(row["fd_a"]))
+        fmv = (int(row["fm_h"]), int(row["fm_a"])) if pd.notna(row["fm_h"]) else None
+        if fmv == fd:
+            conn.execute("UPDATE predictions SET result_src='fd' WHERE pred_id=?", (row["pred_id"],))
+            continue
+        _score_row(conn, row, *fd, "fd", scored_at)      # 没挂 fotmob.db 时无从比较，直接按 fd 重评
+        if fmv is not None and row["match_id"] not in seen:
+            seen.add(row["match_id"])
+            bad.append({"match_id": row["match_id"], "fotmob": fmv, "fd": fd})
+    conn.commit()
+    return len(rows), bad
+
+
+def pending_fotmob(conn: sqlite3.Connection) -> int:
+    """用 FotMob 比分评分、还在等 football-data 核对的场数。"""
+    _init_review_db(conn)
+    return conn.execute(
+        "SELECT COUNT(DISTINCT match_id) FROM predictions WHERE result_src='fotmob'").fetchone()[0]
 
 
 def compare_versions(conn: sqlite3.Connection,
@@ -205,7 +262,7 @@ def _scored_first(conn: sqlite3.Connection) -> pd.DataFrame:
         """SELECT p.match_id, p.model_name, p.model_ver, p.log_loss, p.brier,
                   p.ou25_log_loss, p.score_log_loss,
                   p.p_home_win, p.p_draw, p.p_away_win, p.actual_outcome
-           FROM predictions p JOIN matches m ON p.match_id = m.match_id
+           FROM predictions p
            WHERE p.actual_outcome IS NOT NULL
            ORDER BY p.generated_at""",
         conn,

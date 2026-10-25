@@ -1,5 +1,5 @@
 """
-data/fotmob.py  v1.0.0（数据层的一部分）
+data/fotmob.py  v1.2.0（数据层的一部分）
 FotMob 阵容与球员 xG：只抓 HTML 页面（robots.txt 允许），不调用 /api/（robots.txt 禁止），每次请求间隔 ≥3 秒。
   fotmob_matches：FotMob 场次 ↔ match_id、全队 xG；lineups：每次抓取一个批次（预测阵容 / 正式阵容 / 伤停）；
   player_match：赛后球员分钟、xG、xA、npxG；fotmob_shots：逐脚射门（分钟、xG）。
@@ -9,6 +9,10 @@ FotMob 阵容与球员 xG：只抓 HTML 页面（robots.txt 允许），不调�
 - 只挂到库里已有的 match_id（matches 或 fixtures），不新增比赛行。
 - 只补不改：player_match / fotmob_shots INSERT OR IGNORE；lineups 以 (match_id, fetched_at, side, player_id) 为键。
 - backfill_xg：understat 拿不到时，用 FotMob 全队 xG 补 match_xg 里缺的场次（us_match_id 记为 "fotmob:{id}"）。
+v1.1.0: collect_results：当前赛季联赛赛程页（每联赛 1 页）里的完赛比分 → fotmob_results（判负场次不写）。
+v1.2.0: 命令行 --leagues 默认取 fotmob_parse.LEAGUE_IDS 全部联赛（新增六个联赛）。
+  football-data 赛果通常晚几天，review 层在 matches 还没有赛果时用它先评分；matches 与模型拟合不受影响。
+  match_id 用 loader 同一算法（本库队名 + 日期），日期按 0 / -1 / +1 天依次试，优先取库里已有的 id。
 修改此文件后请同步更新 version.py 中 "data_fotmob" 的版本号。
 """
 import argparse, gzip, json, os, sqlite3, time
@@ -17,10 +21,10 @@ from datetime import date, datetime, timedelta, timezone
 import requests
 
 from football_prediction.data.fotmob_parse import (
-    LEAGUE_IDS, compact_match, league_matches, next_data, pair_matches, season_param)
-from football_prediction.data.loader import season_of
+    LEAGUE_IDS, compact_match, league_matches, next_data, pair_matches, season_param, team_map)
+from football_prediction.data.loader import _make_match_id, season_of
 
-LAYER_VERSION = "1.0.0"
+LAYER_VERSION = "1.2.0"
 
 BASE = "https://www.fotmob.com"
 UA = "Mozilla/5.0 (football-prediction research; low-frequency)"
@@ -53,6 +57,11 @@ CREATE TABLE IF NOT EXISTS {s}.fotmob_shots (
     match_id TEXT NOT NULL, shot_id INTEGER NOT NULL, side TEXT NOT NULL, player_id INTEGER,
     minute INTEGER, xg REAL, own_goal INTEGER, situation TEXT,
     PRIMARY KEY (match_id, shot_id)
+);
+CREATE TABLE IF NOT EXISTS {s}.fotmob_results (
+    match_id TEXT PRIMARY KEY, fotmob_id TEXT NOT NULL,
+    home_goals INTEGER NOT NULL, away_goals INTEGER NOT NULL,   -- FotMob 完赛比分（不含判负场次）
+    fetched_at TEXT NOT NULL, layer_ver TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS {s}.idx_lineups_match ON lineups(match_id, fetched_at);
 CREATE INDEX IF NOT EXISTS {s}.idx_player_match_player ON player_match(player_id);
@@ -248,6 +257,59 @@ def collect_upcoming(conn: sqlite3.Connection, now: datetime, hours: float,
     return out
 
 
+def _team_names(conn: sqlite3.Connection, league: str, season: str) -> list[str]:
+    """本库队名：本赛季与上赛季 matches + 当前 fixtures（赛季初 matches 里还没有升班马）。"""
+    prev = f"{(int(season[:2]) - 1) % 100:02d}{season[:2]}"
+    q = "SELECT home_team, away_team FROM {t} WHERE league=? AND season IN (?, ?)"
+    rows = conn.execute(q.format(t="matches"), (league, season, prev)).fetchall()
+    try:
+        rows += conn.execute(q.format(t="fixtures"), (league, season, prev)).fetchall()
+    except sqlite3.OperationalError:
+        pass
+    return sorted({n for r in rows for n in r})
+
+
+def _known_ids(conn: sqlite3.Connection) -> set[str]:
+    ids = set()
+    for t in ("matches", "fixtures", "predictions"):
+        try:
+            ids |= {r[0] for r in conn.execute(f"SELECT DISTINCT match_id FROM {t}")}
+        except sqlite3.OperationalError:
+            pass
+    return ids
+
+
+def collect_results(conn: sqlite3.Connection, leagues, season: str, log=print, fetch=None) -> int:
+    """当前赛季各联赛赛程页的完赛比分 → fotmob_results（只补不改），返回新写入场数。一个联赛失败不影响其他。"""
+    fetch = fetch or fetch_league
+    known, stamp, new = _known_ids(conn), datetime.now(timezone.utc).isoformat(), 0
+    for lg in leagues:
+        if lg not in LEAGUE_IDS:
+            continue
+        try:
+            fm = [m for m in fetch(lg, season)
+                  if m.get("score") and not m["awarded"] and not m["cancelled"] and m.get("kickoff_utc")]
+        except Exception as e:  # noqa: BLE001
+            log(f"  FotMob {lg} 赛果页失败：{e}")
+            continue
+        tm = team_map([n for m in fm for n in (m["home"], m["away"])], _team_names(conn, lg, season))
+        rows = []
+        for m in fm:
+            home, away = tm.get(m["home"]), tm.get(m["away"])
+            if not home or not away:
+                continue
+            d0 = date.fromisoformat(m["kickoff_utc"][:10])
+            ids = [_make_match_id(lg, season, (d0 + timedelta(days=k)).isoformat(), home, away)
+                   for k in (0, -1, 1)]
+            mid = next((i for i in ids if i in known), ids[0])
+            rows.append((mid, m["fotmob_id"], *m["score"], stamp, LAYER_VERSION))
+        before = conn.total_changes
+        conn.executemany("INSERT OR IGNORE INTO fotmob_results VALUES (?,?,?,?,?,?)", rows)
+        conn.commit()
+        new += conn.total_changes - before
+    return new
+
+
 def _save_pre(rec: dict, match_id: str, page_url: str, stamp: str) -> None:
     """赛前阵容也落一份缓存（fotmob.db 不进版本库，靠缓存重建）。"""
     d = os.path.join(CACHE_DIR, "pre")
@@ -290,7 +352,7 @@ def main() -> None:
     ap.add_argument("--db", default="football.db")
     ap.add_argument("--fotmob-db", default=DB_PATH)
     ap.add_argument("--reload-pre", action="store_true", help="从缓存重放赛前阵容（重建 fotmob.db 后用）")
-    ap.add_argument("--leagues", default="E0,D1,SP1,I1,F1")
+    ap.add_argument("--leagues", default=",".join(LEAGUE_IDS))
     ap.add_argument("--history", default="", help="赛季，如 2324,2425,2526")
     ap.add_argument("--upcoming", type=float, default=0, help="抓未来 N 小时内开球场次的阵容")
     ap.add_argument("--limit", type=int, default=None)

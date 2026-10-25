@@ -19,7 +19,8 @@ from football_prediction.output.pipeline import ModelCache, analyse_match, lates
 
 LAYER_VERSION = "1.4.0"
 DB_PATH = "football.db"
-LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲", "I1": "意甲", "F1": "法甲"}
+LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲", "I1": "意甲", "F1": "法甲",
+           "E1": "英冠", "N1": "荷甲", "P1": "葡超", "SC0": "苏超", "B1": "比甲", "T1": "土超"}
 
 
 def _league(s: str) -> str:

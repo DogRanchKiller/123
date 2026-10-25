@@ -1,6 +1,7 @@
 """
-data/oddsportal.py  v1.6.0
+data/oddsportal.py  v1.7.0
 v1.6.0: 命令行默认联赛加意甲 I1、法甲 F1。
+v1.7.0: 命令行 --leagues 默认取 LEAGUE_SLUGS 全部联赛（新增英冠 / 荷甲 / 葡超 / 苏超 / 比甲 / 土超）。
 多家公司赔率：用开源 OddsHarvester（Playwright 浏览器）抓 OddsPortal 未开赛比赛，
 写入 book_odds 表（逐家、逐盘口，含开盘价；只追加，每次抓取一批）。
 - 只抓未开赛比赛页；历史赛季页被 robots.txt 禁止，历史赔率继续用 football-data。
@@ -24,7 +25,7 @@ from football_prediction.data.oddsportal_parse import (  # noqa: F401  原导入
     LEAGUE_SLUGS, MATCH_MIN, NAME_ALIASES, link_teams, market_of, match_links, name_sim,
     norm_name, pair_score, parse_record, record_orientation)
 
-LAYER_VERSION = "1.6.0"
+LAYER_VERSION = "1.7.0"
 
 AH_DEFAULT = (-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5)   # 不知道亚盘线时抓的范围
 
@@ -225,7 +226,7 @@ def book_consensus(conn: sqlite3.Connection, match_id: str,
 
 
 def main(argv: list[str] | None = None) -> None:
-    """python -m football_prediction.data.oddsportal [--hours 48] [--leagues E0,D1,SP1,I1,F1]
+    """python -m football_prediction.data.oddsportal [--hours 48] [--leagues E0,D1,...]
     刷新赛程 → 抓时间窗内多家赔率 → 打印与 football-data 平均赔率的对照。"""
     import argparse
     from football_prediction.data.fixtures import load_fixtures
@@ -234,7 +235,7 @@ def main(argv: list[str] | None = None) -> None:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--hours", type=float, default=48.0)
-    ap.add_argument("--leagues", default="E0,D1,SP1,I1,F1")
+    ap.add_argument("--leagues", default=",".join(LEAGUE_SLUGS))
     ap.add_argument("--db", default="football.db")
     ap.add_argument("--no-scrape", action="store_true", help="只打印已有数据，不抓取")
     ns = ap.parse_args(argv)

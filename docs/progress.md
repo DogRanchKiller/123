@@ -1,6 +1,6 @@
 # 项目进度
 
-系统版本：1.7.0，与 `football_prediction/version.py` 的 `SYSTEM_VERSION` 一致。
+系统版本：1.9.0，与 `football_prediction/version.py` 的 `SYSTEM_VERSION` 一致。
 
 更新日期：2026-10-25。
 
@@ -10,7 +10,7 @@
 
 命令行预测可以跑。网页、HTTP 接口和 `services/` 中间层还没有写。
 
-- 联赛：英超 E0、德甲 D1、西甲 SP1、意甲 I1、法甲 F1（实盘库都从 2122 起）。研究库 `research.db` 为同 5 联赛 9394–2526（赔率从 0001 起，xG 从 1415 起）。
+- 联赛：英超 E0、德甲 D1、西甲 SP1、意甲 I1、法甲 F1、英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1（实盘库都从 2122 起；后六个没有 understat xG）。研究库 `research.db` 只有前 5 联赛 9394–2526（赔率从 0001 起，xG 从 1415 起）。
 - 主模型：`market_implied` / `model_market` 1.0.0（市场赔率反推比分）。无赔率时回退 `dc_xg` / `model_xg` 1.0.0。
 - 实盘：`python -m football_prediction.live`；单场说明：`python -m football_prediction.explain 英超 Arsenal Chelsea`
 - 多家赔率：`python -m football_prediction.data.oddsportal --hours 30`
@@ -25,8 +25,8 @@
 
 | 层 | 版本 | 状态 |
 |---|---|---|
-| data | 1.6.0 | 赛果、赔率（含亚盘 / Pinnacle / 赛程大小球）、射正、赛程、赔率快照、understat xG、OddsPortal 多家赔率 `book_odds`；意甲 / 法甲 2122–2627 已入实盘库 |
-| data_fotmob | 1.0.0 | FotMob HTML 页：阵容（预测 / 正式）、伤停、球员分钟与 xG / xA、射门；understat 缺时补 `match_xg`。历史补抓进行中（E0 / D1 / SP1 2324 起） |
+| data | 1.7.0 | 赛果、赔率（含亚盘 / Pinnacle / 赛程大小球）、射正、赛程、赔率快照、understat xG、OddsPortal 多家赔率 `book_odds`；意甲 / 法甲与英冠 / 荷甲 / 葡超 / 苏超 / 比甲 / 土超 2122–2627 已入实盘库 |
+| data_fotmob | 1.2.0 | FotMob HTML 页：阵容（预测 / 正式）、伤停、球员分钟与 xG / xA、射门；understat 缺时补 `match_xg`；联赛页完赛比分 `fotmob_results`（只用于先评分）。11 个联赛都已登记；历史补抓 E0 / D1 / SP1 2324 起，新增六个联赛只有 2627 |
 | features | 1.0.0 | 截止日之前的特征 |
 | model_dc | 1.3.0 | Dixon-Coles，`shrink=0.5` |
 | model_sot | 1.0.0 | 射正版，进球权重 `w=0.7` |
@@ -41,8 +41,8 @@
 | calibration | 1.0.0 | Platt；2425 上没有增益，不进实盘 |
 | output | 1.4.0 | 判断流程（`analysis.py`）、报告、explain 单场说明、亚盘五种结算；信心档按 Shin 概率在 5 联赛重标定，报告与 explain 列本场命中估计；报告与 explain 优先用多家中位数赔率（`pipeline.latest_odds`），列赔率来源 |
 | validation | 1.1.0 | 时间外回测、市场基准、同场配对 |
-| review | 1.4.0 | 首次预测落库、赛后评分（含大小 2.5 / 精确比分）、`promotion_check`（跳过 `_t1`）、`horizon_report` 临场对赛前 |
-| live | 1.7.0 | 5 联赛；更新数据、评分、预测、报告、成绩单；存档 market_implied / blend / market_shin / dc_market；`--near` 临场档 `*_t1` 与 lineup_t1 / lineup_base_t1，先抓阵容再抓赔率，打印临场最终看法 |
+| review | 1.5.0 | 首次预测落库、赛后评分（含大小 2.5 / 精确比分；football-data 未到时先用 FotMob 比分，到达后 `reconcile_results` 核对）、`promotion_check`（跳过 `_t1`）、`horizon_report` 临场对赛前 |
+| live | 1.9.0 | 11 联赛；更新数据（含 FotMob 完赛比分）、评分、预测、报告、成绩单；存档 market_implied / blend / market_shin / dc_market；`--near` 临场档 `*_t1` 与 lineup_t1 / lineup_base_t1，先抓阵容再抓赔率，打印临场最终看法 |
 
 `2526` 留出，不在该季上重选 shrink 和权重。替换主模型只看实盘 `promotion_check`，场数至少 1000。
 
@@ -57,10 +57,21 @@
 - `server/`：FastAPI。见 `docs/stack.md`。
 - `football_prediction/services/`：中间层。写 `server/` 时和 `live.py`、`explain.py`、`main.py`、`output/pipeline.py` 的编排一起落地。见 `docs/modules.md`。
 - `football_prediction/model_nn/`：还没有神经网络。`requirements.txt` 里还没有 `torch`、`fastapi`、`uvicorn`。
+- 用户定的顺序（2026-10-25）：扩联赛（1.9.0 已做六个一级联赛）→ 网页 + 接口（局域网 / 群友内网访问）→ 神经网络穿插进行 → 新信息源持续做。
+- 杯赛档（欧冠、国内杯赛）：football-data 没有杯赛数据，需另找赛果与赔率来源；有加时 / 点球，评分要先定按 90 分钟还是最终结果；跨联赛对阵不能用按联赛拟合的 Elo / DC，只能用市场赔率。
+- 新增六个联赛的 xG：football-data 2627 起有 `HxG` / `AxG` 列，可作为 understat 之外的来源（见 issues）。
 
 ## 版本记录
 
-### 1.7.0（当前）
+### 1.9.0（当前）
+
+实盘联赛从 5 个加到 11 个：英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1，赛季 2122–2627 共 10740 场写入 `football.db`（`_diag/expand/add_live_leagues.py`）。赔率只有 T1 2223 缺 29 场，其余全有；`MARKET_TIERS` 在六个联赛 2122–2526 的 10228 场上核对过（高 73.6% / 90.4%、中 52.0% / 79.1%、低 41.1% / 71.9%），与现有档位一致，不重标（`_diag/explore/new_league_tiers.log`）。Elo / DC 按联赛分别拟合，原五联赛的预测不变。FotMob 登记六个联赛的 id 与队名别名，2627 全部球队都能映射；OddsPortal 登记 slug 与队名别名（含 Wolves、Dundee Utd）。understat 没有这六个联赛，`live` 跳过 `load_xg`，xG 只靠 FotMob 补。`data.oddsportal` 和 `data.fotmob` 的默认联赛改为全部已登记联赛。成绩单和 `promotion_check` 也计入 FotMob 先评分的场次（review 1.5.0 内修正）。版本：data 1.7.0、data_fotmob 1.2.0、live 1.9.0。
+
+### 1.8.0
+
+预测、存档模型和模型拟合不变。football-data 的赛季 CSV 常在完赛几天后才有赛果，实盘评分因此一直落后。`live` 更新数据时另抓 FotMob 5 个联赛页（每联赛 1 次请求，HTML 的 `__NEXT_DATA__`），把完赛比分写入 `fotmob.db` 的 `fotmob_results`（判负 / 取消的场次跳过，按队名相似度与日期 ±1 天算 match_id）。`score_predictions` 在 `matches` 还没有赛果时先用它评分，`predictions.result_src` 记 `fotmob`；football-data 赛果到达后 `reconcile_results` 核对，一致只改标记为 `fd`，不一致按 football-data 重评并打印。`fotmob_results` 不进 `matches`，Elo / DC 拟合只用 football-data 赛果（data_fotmob 1.1.0、review 1.5.0、live 1.8.0）。
+
+### 1.7.0
 
 主模型、存档和比分算法不变。报告与 explain 的定价赔率改由 `pipeline.latest_odds` 选：OddsPortal 多家中位数在 24 小时内、≥3 家、1X2 与大小 2.5 都齐时用它，否则用 football-data 赛程表快照（赛程表约每周更新一次，常比多家赔率旧）。报告新增「赔率来源」列，explain 第 [1] 段写明来源。盘口变动仍只在赛程表快照之间比，不跨来源。赛前存档（`live._predict_upcoming`）仍用赛程表赔率，存档口径不变（output 1.4.0）。
 

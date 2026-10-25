@@ -1,6 +1,6 @@
 # 足球预测系统
 
-仓库根目录的可运行项目是 `football_prediction`（实盘联赛：英超 E0 / 德甲 D1 / 西甲 SP1 / 意甲 I1 / 法甲 F1，实盘库都从 2122 赛季起）。在仓库根目录工作，数据库与报告路径都相对 cwd。
+仓库根目录的可运行项目是 `football_prediction`（实盘联赛：英超 E0 / 德甲 D1 / 西甲 SP1 / 意甲 I1 / 法甲 F1 / 英冠 E1 / 荷甲 N1 / 葡超 P1 / 苏超 SC0 / 比甲 B1 / 土超 T1，实盘库都从 2122 赛季起；后六个没有 understat xG）。在仓库根目录工作，数据库与报告路径都相对 cwd。
 
 目标是预测比赛赛果（胜平负 / 比分 / 大小球），不是找价值投注。主模型是市场赔率反推（`market_implied`），自研模型（Dixon-Coles 系、Elo）只作对照和无赔率时的兜底：5 联赛 × 9 赛季、16k 场样本外回测里，自研模型每个联赛、每个赛季都不如赛前市场，融合只改善约 0.002 log loss，命中率不变。要提高准确率，靠的是赔率里还没有的信息（临场赔率、阵容），而不是改进球模型。
 
@@ -70,7 +70,7 @@ python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下�
 | `data/understat.py` | understat xG → `match_xg`；已结束赛季缓存在 `_cache/understat/` |
 | `data/fixtures.py` | `fixtures.csv` → `fixtures`，每次刷新追加 `odds_snapshots`；`odds_movement` |
 | `data/oddsportal.py` | 调 OddsHarvester（独立 venv `.venv-scrape`，可用环境变量 `ODDSHARVESTER` 覆盖）抓未开赛比赛的多家赔率 → `book_odds`；`book_consensus()` 返回与 fixtures 同键名的多家中位数。队名配对与输出解析在 `oddsportal_parse.py` |
-| `data/fotmob.py` | FotMob 比赛页 HTML（不碰 `/api/`）→ 单独的 `fotmob.db`（gitignore，`attach()` 挂为 schema `fm`）：`lineups`（预测 / 正式首发、替补、伤停）、`player_match`（分钟、xG、xA、npxG）、`fotmob_shots`；understat 缺的 `match_xg` 用它补。页面解析在 `fotmob_parse.py`，页面缓存在 `_cache/fotmob/` |
+| `data/fotmob.py` | FotMob 比赛页 HTML（不碰 `/api/`）→ 单独的 `fotmob.db`（gitignore，`attach()` 挂为 schema `fm`）：`lineups`（预测 / 正式首发、替补、伤停）、`player_match`（分钟、xG、xA、npxG）、`fotmob_shots`；understat 缺的 `match_xg` 用它补；联赛页完赛比分 → `fotmob_results`，只在 football-data 赛果未到时用于评分。页面解析在 `fotmob_parse.py`，页面缓存在 `_cache/fotmob/` |
 | `features/builder.py` | 特征；只用截止日之前的比赛 |
 | `model_market/implied.py` | 由 1X2 + 大小 2.5 + 亚盘去水概率反推 λ，再套 DC 比分矩阵；当前主模型。`devig.py` 是 Shin 去水（并行存档 `market_shin`） |
 | `model_dc/` | Dixon-Coles、射正版 `sot_dc`、xG 版 `xg_dc`（无赔率时的兜底）、市场版 `market_dc`（进球与历史赔率 λ 混合估强度，并行存档 `dc_market`） |
@@ -80,13 +80,13 @@ python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下�
 | `output/analysis.py` | 判断流程，纯函数、不读库，报告与 explain 共用：市场去水 → 市场隐含比分 → 自研分歧提示（8pp）→ 盘口变动（5pp 或亚盘线变化）→ 风险 → 倾向 / 双选 / 信心档 |
 | `output/pipeline.py` | `ModelCache` 按联赛懒加载并拟合模型，`analyse_match` 把库里的数据接到 `analysis`；`latest_odds` 给报告和 explain 选赔率（24 小时内 ≥3 家的多家中位数优先，否则赛程表快照；存档仍用赛程表） |
 | `output/derive.py` `output/report.py` | 比分矩阵 → 各盘口（含亚盘五种结算）；报告写到 `reports/预测_YYYY-MM-DD.csv` |
-| `review/store.py` | `predictions` 表的存档、赛后评分、实盘成绩单（同场对比 `market_avg`）、`promotion_check` |
+| `review/store.py` | `predictions` 表的存档、赛后评分（`matches` 无赛果时先用 `fotmob_results`，`reconcile_results` 待 football-data 到达后核对重评）、实盘成绩单（同场对比 `market_avg`）、`promotion_check` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
 | `live.py` | 实盘入口。`services/` 建立后只保留命令行，编排规则见 [`docs/modules.md`](docs/modules.md) |
 | `explain.py` | 单场说明入口。同上 |
 | `main.py` | 回测演示入口。同上 |
 
-联赛列表 `LEAGUES` 分别在 `live.py`、`explain.py` 中定义。模型统一用 `fit(conn, league, cutoff_date)`。
+联赛列表 `LEAGUES` 分别在 `live.py`、`explain.py` 中定义。加联赛时同时登记 `fotmob_parse.LEAGUE_IDS` 与 `oddsportal_parse.LEAGUE_SLUGS`（`tests/test_fotmob.py::test_league_lists_agree` 检查四处一致），再用 `_diag/expand/add_live_leagues.py` 写入 2122 起的赛季；understat 只覆盖 `understat.US_LEAGUES`。模型统一用 `fit(conn, league, cutoff_date)`。
 
 `football.db` 每次实盘都会变，已纳入版本库；需要备份时由用户决定是否提交。不要为了"清理工作区"还原或覆盖它。`reports/`、`_cache/`、`_diag/`（诊断与研究脚本及输出）同样是运行产物，按惯例纳入版本库作备份。`research.db` 已 gitignore。
 
@@ -95,7 +95,7 @@ python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下�
 - 入库只补不改：`matches` 用 `INSERT OR IGNORE`；`match_odds` 已有值永不覆盖，只补空列；`match_xg` 只 `INSERT OR IGNORE`；`book_odds` 以 `(match_id, fetched_at, bookmaker, market, line)` 为键，每次抓取是一个新批次。
 - 不要把历史赛季加进 `football.db`：Elo 会遍历全部历史，加入老赛季会让实盘模型在版本号不变的情况下改变结果。扩样本研究用 `research.db`（5 联赛 9394–2526；赔率从 0001 起，射正约从 0506 起，xG 从 1415 起），由 `_diag/expand/build_research_db.py` 从 `_cache/fd_research` 重建；老 CSV 的 `BbAv*` 列映射为 `Avg*`，0001–0405 没有平均列，用各家公司的均值代替。2000 年前的赛季代码（`9394`…`9900`）按字符串排在 `2526` 之后，研究脚本按 `match_date` 排序，不要按赛季字符串比大小。
 - 数据下载失败时沿用本地库，不要把空结果写成"已更新"。xG 必须在该赛季 `matches` 写入之后再拉。
-- 新联赛队名先走 `data/loader.py` 的 `TEAM_ALIASES`。understat 队名靠同日 ±1 天且同比分投票，不要手写第二套映射。OddsPortal 新队名对不上时在 `oddsportal_parse.NAME_ALIASES` 里补别名。
+- 新联赛队名先走 `data/loader.py` 的 `TEAM_ALIASES`。understat 队名靠同日 ±1 天且同比分投票，不要手写第二套映射。OddsPortal 新队名对不上时在 `oddsportal_parse.NAME_ALIASES` 里补别名，FotMob 的在 `fotmob_parse.FOTMOB_ALIASES` 里补（FotMob 名字也先过 `NAME_ALIASES`）。
 - football-data 的 `fixtures.csv` 大约每周更新，不是临场更新；临场赔率靠 OddsPortal 爬虫。
 - OddsPortal：本机出口 IP 在美国，只能看到 5 家美国公司。robots.txt 禁止抓赛季归档和 ajax 接口，因此只抓即将开赛的比赛，不能用来补历史。列表页开球时间不准，配对靠"日期 ±1 天 + 队名"；链接 slug 里两队按字母顺序排列，真实主队以记录里的 `home_team` 为准。
 - 500.com 有 WAF，球探（titan007）的 robots.txt 禁止抓赔率页，都没有采用。不要绕过反爬机制。

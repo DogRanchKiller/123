@@ -1,11 +1,14 @@
 """
-data/fotmob_parse.py  v1.0.0
+data/fotmob_parse.py  v1.2.0
 FotMob 页面解析（纯函数，不联网、不读库）。数据来自 HTML 页里的 <script id="__NEXT_DATA__">，
 不调用 /api/（robots.txt 禁止）。
-  league_matches：联赛赛程页 → 每场 FotMob id、页面地址、主客队、开球时间、状态。
+  league_matches：联赛赛程页 → 每场 FotMob id、页面地址、主客队、开球时间、状态、完赛比分、是否判负。
   compact_match：比赛页 → 精简记录（首发/替补/伤停、球员分钟与 xG/xA、逐脚射门、全队 xG）。
   pair_matches：FotMob 场次 ↔ 本库 match_id（队名映射相似度 ≥0.9 + 主客方向一致 + 日期 ±1 天）。
   2324–2627 三联赛核对：完赛场次除 1 场中止重赛、1 场改期外全部配上。
+v1.1.0: league_matches 增加 awarded 与 score（完赛比分，供 fotmob.collect_results 提前评分）。
+v1.2.0: LEAGUE_IDS 加英冠 E1 / 荷甲 N1 / 葡超 P1 / 苏超 SC0 / 比甲 B1 / 土超 T1（2026-10-25 用 2627 赛程核对），
+        FOTMOB_ALIASES 补 QPR、Sittard、Sporting、Hearts、OH Leuven、Basaksehir。
 修改此文件后请同步更新 version.py 中 "data_fotmob" 的版本号。
 """
 import json
@@ -14,12 +17,14 @@ from datetime import date
 
 from football_prediction.data.oddsportal_parse import name_sim, norm_name
 
-LAYER_VERSION = "1.0.0"
+LAYER_VERSION = "1.2.0"
 
 # football-data 联赛代码 -> (FotMob 联赛 id, 页面 slug)；2026-10-25 核对过（I1 / F1 用 2627 赛程核对，
 # PSG 靠 oddsportal_parse.NAME_ALIASES 配上）
 LEAGUE_IDS = {"E0": (47, "premier-league"), "D1": (54, "bundesliga"), "SP1": (87, "laliga"),
-              "I1": (55, "serie"), "F1": (53, "ligue-1")}
+              "I1": (55, "serie"), "F1": (53, "ligue-1"),
+              "E1": (48, "championship"), "N1": (57, "eredivisie"), "P1": (61, "liga-portugal"),
+              "SC0": (64, "premiership"), "B1": (40, "first-division-a"), "T1": (71, "super-lig")}
 TEAM_MIN = 0.9          # 队名映射的最低相似度（0.6 会把 Real Madrid 配到 Ath Madrid）
 
 # 队名别名：FotMob 写法（规范化后）-> football-data 写法（规范化后）。对不上的新队名补在这里。
@@ -27,6 +32,8 @@ FOTMOB_ALIASES = {   # 2026-10-25 用 E0/D1/SP1 2324–2627 全部球队核对�
     "nottinghamforest": "nottmforest", "bayernmunchen": "bayernmunich",
     "borussiamonchengladbach": "mgladbach", "athleticclub": "athbilbao",
     "atleticomadrid": "athmadrid", "deportivoacoruna": "lacoruna",
+    "queensparkrangers": "qpr", "fortunasittard": "forsittard", "sportingcp": "splisbon",
+    "heartofmidlothian": "hearts", "ohleuven": "oudheverleeleuven", "basaksehir": "buyuksehyr",
 }
 
 _NEXT_RE = re.compile(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S)
@@ -52,8 +59,15 @@ def fm_sim(fotmob_name: str, our_name: str) -> float:
     return name_sim(fm_norm(fotmob_name), our_name)
 
 
+def _score(s) -> tuple[int, int] | None:
+    """scoreStr "2 - 1" → (2, 1)；其他格式返回 None。"""
+    m = re.fullmatch(r"\s*(\d+)\s*-\s*(\d+)\s*", str(s or ""))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
 def league_matches(nd: dict) -> list[dict]:
-    """赛程页 __NEXT_DATA__ → [{fotmob_id, page_url, home, away, kickoff_utc, started, finished, cancelled}]"""
+    """赛程页 __NEXT_DATA__ → [{fotmob_id, page_url, home, away, kickoff_utc, started, finished, cancelled,
+    awarded, score}]；score 只在完赛时给 (主, 客)，否则 None。"""
     pp = nd.get("props", {}).get("pageProps", {})
     out = []
     for m in (pp.get("fixtures") or {}).get("allMatches") or []:
@@ -61,7 +75,9 @@ def league_matches(nd: dict) -> list[dict]:
         out.append({"fotmob_id": str(m["id"]), "page_url": m["pageUrl"].split("#")[0],
                     "home": m["home"]["name"], "away": m["away"]["name"],
                     "kickoff_utc": st.get("utcTime"), "started": bool(st.get("started")),
-                    "finished": bool(st.get("finished")), "cancelled": bool(st.get("cancelled"))})
+                    "finished": bool(st.get("finished")), "cancelled": bool(st.get("cancelled")),
+                    "awarded": bool(st.get("awarded")),
+                    "score": _score(st.get("scoreStr")) if st.get("finished") else None})
     return out
 
 
