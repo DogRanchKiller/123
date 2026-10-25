@@ -16,7 +16,10 @@ async function load(params: Props["params"]) {
 }
 
 export async function generateMetadata({ params }: Props) {
-  const { match } = await load(params);
+  const { matchId } = await params;
+  const data = await readDemoMatch(matchId);
+  if (!data) return pageMetadata("找不到这场比赛", "请返回比赛列表选择比赛。", "/predictions/" + matchId);
+  const { match } = data;
   return pageMetadata(
     match.home + " vs " + match.away + " · 比赛预测",
     match.leagueName +

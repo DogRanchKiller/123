@@ -11,6 +11,7 @@ export function useListState() {
   const [warning, setWarning] = useState<string | null>(null);
   const lastY = useRef(0);
   const latest = useRef(filters);
+  const cancelRestore = useRef(() => {});
 
   useEffect(() => {
     let targetY = 0;
@@ -45,6 +46,12 @@ export function useListState() {
         restoring = false;
       });
     });
+    cancelRestore.current = () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(secondFrame);
+      restoring = false;
+      lastY.current = window.scrollY;
+    };
     const save = () => {
       try {
         sessionStorage.setItem(
@@ -72,6 +79,7 @@ export function useListState() {
   }, []);
 
   function changeFilters(next: Filters) {
+    cancelRestore.current();
     setFilters(next);
     latest.current = next;
     try {

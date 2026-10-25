@@ -76,7 +76,7 @@ server/routes/<资源>.py  一个资源一个文件，例如 report、review
 
 ```text
 web/src/app/          Next.js 路由、布局、metadata、Provider；页面只组装
-web/src/features/     predictions、match、following、review；按业务分模块
+web/src/features/     entry、auth、predictions、match、following、review；按业务分模块
 web/src/components/   多模块共用展示组件
 web/src/lib/          按职责命名的基础能力；服务端模块标明 server-only
 web/src/styles/       主题变量、全局样式
@@ -89,6 +89,8 @@ web/src/api/          未来 OpenAPI 生成物，禁止手改；本轮不建
 
 客户端不得导入 .server 模块、演示源或 server-only。未来请求入口放功能 hook，底层 HTTP 能力放职责明确的 lib 文件；服务端取数与客户端刷新隔离。生成类型与展示模型分开，展示类型放使用它的功能模块；不要在 api/ 放手写契约。
 
+根布局仅承担 HTML/Provider/跳过链接；`app/(browse)/layout.tsx` 和 `app/site-frame.tsx` 组装业务壳层，业务 URL 不变。首页 `app/page.tsx` 动态读取并投影 current 字段，`entry` 内分离刷新 hook、HTML 卡片、静态海报及懒加载 3D。场景不得接收概率、比赛 ID、读取回执或以其作为 key。`auth` 只管理弹窗表单与焦点，不创建账号服务。根级错误页含壳，业务组错误页复用组布局，不能重复导航或 main。
+
 ### 演示契约与状态
 
 每场含 ID、联赛/球队、UTC 开球时间、状态、推荐标记、档名、历史命中率、模型及来源、当前预测、首次预测存档、来源/获取/预测三种时间、可空比分、inplay 状态。无赔率来源可为 blend 或 dc_xg，前端只显示字段，不重新兜底。高信心推荐由契约提供，不重算概率阈值。
@@ -97,7 +99,7 @@ web/src/api/          未来 OpenAPI 生成物，禁止手改；本轮不建
 
 ### 展示与错误边界
 
-主题与移动适配遵循 stack.md：只用语义色变量，inplay 表示滚球，UTC 比较、北京时间展示。页面不写模型规则；当前结果和首次存档分区显示。缺数据显示暂无数据，不补零。
+主题与移动适配遵循 stack.md。业务页用语义色变量；首页 3D 材质可以用 stack.md 里的专用场景色。inplay 表示滚球，UTC 比较、北京时间展示。页面不写模型规则；当前结果和首次存档分区显示。缺数据显示暂无数据，不补零。
 
 比赛页按请求动态渲染，metadata 与正文复用请求内读取；检查完成前不开始 streaming，不缓存失败结果。未知 ID 使用 notFound 返回 404；读取失败有旧值则展示旧值和延迟，无旧值则抛错误并返回 5xx。客户端刷新错误不等于文档 404。只用服务端测试配置注入故障，不增加公开测试路由。生产 HTTP 测试必须覆盖失败恢复及状态码。
 

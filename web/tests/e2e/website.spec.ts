@@ -144,7 +144,7 @@ test("关注保存、筛选恢复、前进后退及无水合错误", async ({ pa
   expect(errors).toEqual([]);
 });
 
-for (const width of [360, 390, 768, 1440]) {
+for (const width of [360, 390, 768, 1023, 1024, 1440]) {
   test("响应式布局 " + width, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     for (const path of [
@@ -161,9 +161,12 @@ for (const width of [360, 390, 768, 1440]) {
         ),
       ).toBe(true);
     }
-    if (width < 640) {
+    if (width <= 1023) {
       await page.getByRole("button", { name: "展开导航" }).click();
       await expect(page.getByRole("navigation")).toBeVisible();
+      await expect
+        .poll(() => page.locator(".nav-link").evaluateAll((links) => links.map((link) => Math.round(link.getBoundingClientRect().height))))
+        .toEqual([44, 44, 44, 44]);
       await page.getByRole("link", { name: "比赛预测", exact: true }).click();
       await expect(page.getByRole("navigation")).not.toBeVisible();
     } else {

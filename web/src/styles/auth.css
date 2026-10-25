@@ -1,0 +1,20 @@
+.auth-trigger { border-radius: 24px; border-color: var(--scene-light); color: var(--accent); white-space: nowrap; }
+.auth-dialog { color: var(--foreground); background: var(--surface); border: 1px solid var(--border); border-radius: 22px; width: min(460px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 0; box-shadow: var(--shadow); }
+.auth-dialog::backdrop { background: rgb(0 5 12 / 82%); backdrop-filter: blur(8px); }
+.auth-content { padding: 40px 30px 26px; position: relative; }
+.auth-close { position: absolute; top: 8px; right: 8px; font-size: 23px; border: 0; }
+.auth-intro { color: var(--muted); font-size: 13px; margin: 12px 0 24px; }
+.auth-tabs, .auth-methods { display: flex; gap: 8px; margin-bottom: 18px; }
+.auth-tabs button, .auth-methods button { min-height: 44px; border: 0; color: var(--muted); background: transparent; padding: 8px 16px; border-radius: 8px; }
+.auth-tabs button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.auth-methods { border-bottom: 1px solid var(--border); }
+.auth-methods button[aria-pressed="true"] { color: var(--foreground); border-bottom: 2px solid var(--accent); border-radius: 0; }
+.auth-content label { display: block; font-size: 13px; margin: 14px 0; }
+.auth-content input { width: 100%; min-width: 0; min-height: 48px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground); padding: 12px; display: block; margin-top: 7px; }
+.auth-content input::placeholder { color: var(--muted); }
+.auth-password { display: flex; gap: 8px; align-items: center; }
+.auth-password input { flex: 1; }
+.auth-password button { flex-shrink: 0; min-height: 44px; border: 0; background: transparent; color: var(--accent); font-size: 12px; }
+.auth-submit { width: 100%; margin: 12px 0 18px; }
+.auth-message { padding: 12px; background: var(--warning-soft); color: var(--warning); font-size: 13px; border-radius: 8px; margin-bottom: 16px; }
+@media (max-width: 639px) { .auth-content { padding: 40px 20px 22px; } .header-inner .auth-trigger { margin-left: auto; } }

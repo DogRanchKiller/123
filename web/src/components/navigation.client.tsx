@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Icon } from "@/components/icon";
 
 const navigation = [
+  { href: "/", label: "首页", icon: "ball" },
   { href: "/predictions", label: "比赛预测", icon: "grid" },
   { href: "/following", label: "我的关注", icon: "star" },
   { href: "/review", label: "赛后成绩单", icon: "chart" },
@@ -37,7 +38,7 @@ export function Navigation() {
             href={href}
             scroll={href === "/predictions" ? false : undefined}
             className="nav-link"
-            aria-current={pathname.startsWith(href) ? "page" : undefined}
+            aria-current={(href === "/" ? pathname === "/" : pathname.startsWith(href)) ? "page" : undefined}
             onClick={() => setOpen(false)}
           >
             <Icon name={icon} />

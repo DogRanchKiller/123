@@ -1,0 +1,29 @@
+import Link from "next/link";
+import { percentage, beijingTime } from "@/lib/display";
+import type { EntryPrediction } from "./types";
+
+export function PredictionCards({ match, delayed }: { match: EntryPrediction | null; delayed: boolean }) {
+  return <div className="entry-data" aria-label="当前预测">
+    {delayed && <p className="entry-delay" role="status">更新延迟{match ? " · 当前保留上次有效预测" : " · 暂无有效预测"}</p>}
+    {match && <>
+      <section className="entry-glass entry-match">
+        <p className="entry-card-label"><span className="entry-dot" /> {match.leagueName} <span>{match.statusLabel}</span></p>
+        <Link href={`/predictions/${match.id}`} className="entry-match-link">{match.home}<span>vs</span>{match.away}</Link>
+        <p className="fine-print">{match.kickoffUtc ? beijingTime(match.kickoffUtc) : "暂无数据"} 开球 · 北京时间</p>
+        <div className="entry-probabilities">
+          {["主胜", "平局", "客胜"].map((label, index) => <div key={label}><span>{label}</span><strong data-testid={`entry-probability-${index}`}>{match.probabilities[index] == null ? "暂无数据" : percentage(match.probabilities[index])}</strong></div>)}
+        </div>
+        <p className="entry-data-note">演示数据 · 获取于 {match.fetchedAt ? beijingTime(match.fetchedAt) : "暂无数据"}（北京时间）</p>
+      </section>
+      <section className="entry-glass entry-outlook">
+        <p className="entry-card-label">MATCH OUTLOOK <span>当前预测</span></p>
+        <dl>
+          <div><dt>赛果倾向</dt><dd>{match.lean || "暂无数据"}</dd></div>
+          <div><dt>大 2.5 球</dt><dd>{match.over25 === null ? "暂无数据" : percentage(match.over25)}</dd></div>
+          <div><dt>可能比分</dt><dd>{match.likelyScores.length ? match.likelyScores.join(" / ") : "暂无数据"}</dd></div>
+        </dl>
+        <p className="entry-source">{match.sourceNote || "暂无数据"}</p>
+      </section>
+    </>}
+  </div>;
+}

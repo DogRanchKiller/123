@@ -13,16 +13,6 @@
   .header-inner {
     gap: 25px;
   }
-}
-@media (max-width: 639px) {
-  .header-inner {
-    min-height: 70px;
-    padding: 14px 18px;
-    gap: 12px;
-  }
-  .header-tag {
-    margin-left: auto;
-  }
   .button.menu-button {
     display: inline-flex;
   }
@@ -33,6 +23,16 @@
   }
   .navigation[data-open="true"] {
     display: flex;
+  }
+}
+@media (max-width: 639px) {
+  .header-inner {
+    min-height: 70px;
+    padding: 14px 18px;
+    gap: 12px;
+  }
+  .header-tag {
+    margin-left: auto;
   }
   .site-main {
     padding: 26px 18px 42px;
