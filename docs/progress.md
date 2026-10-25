@@ -2,13 +2,13 @@
 
 系统版本：1.4.0，与 `football_prediction/version.py` 的 `SYSTEM_VERSION` 一致。
 
-更新日期：2026-10-24。
+更新日期：2026-10-25。
 
 这份文件只描述当前状态。规则在 `AGENTS.md`、`docs/stack.md`、`docs/modules.md`、`docs/ml-stack.md`。问题记录在 [issues.md](issues.md)。
 
 ## 当前
 
-命令行预测可以跑。网页、HTTP 接口和 `services/` 中间层还没有写。
+命令行预测可以跑。Next.js 网站演示骨架已实现；真实 HTTP 接口和 `services/` 中间层尚未建立。
 
 - 联赛：英超 E0、德甲 D1、西甲 SP1。研究库 `research.db` 另含意甲 I1、法甲 F1。
 - 主模型：`market_implied` / `model_market` 1.0.0（市场赔率反推比分）。无赔率时回退 `dc_xg` / `model_xg` 1.0.0。
@@ -20,6 +20,16 @@
 - 定时：Windows 任务计划每天 18:07、23:37 跑 `run_daily.bat`（live + oddsportal），日志 `logs/daily.log`。
 
 ## 已完成
+
+### 网站演示骨架（web 0.1.0）
+
+- Next.js 16 + React + TypeScript strict，Node.js 24 LTS；npm 锁文件与前端检查命令已加入。
+- 预测列表、高信心推荐、比赛详情、首次预测存档、手动关注和成绩单页面；全部使用固定演示数据，明确标识。
+- 浅色语义主题、手机可折叠菜单和单列卡片；关注 localStorage、筛选/滚动 sessionStorage，挂载后恢复。
+- 比赛详情按请求渲染；稳定 ID、北京时间展示、来源/获取/预测三类时间；无赔率来源直接显示契约字段。
+- 演示站整站 noindex、robots 禁止抓取，不发布 sitemap，不建 /api；真实比分、滚球能力只展示未接入状态。
+- 验收通过：TypeScript、ESLint、6 项组件测试、生产构建、8 项生产 HTTP/Chromium 测试；覆盖 360/390/768/1440 视口、404/5xx 与恢复、关注、筛选和滚动恢复。Python 97 项测试通过，预测版本不变。
+- 已检查 Chromium 桌面/手机宽度截图；桌面 Safari、Google Chrome 人工响应式检查及手机真机尚未执行，不能视为通过。尚未正式部署。
 
 | 层 | 版本 | 状态 |
 |---|---|---|
@@ -45,7 +55,11 @@
 ## 已约定，尚未写代码
 
 - `book_odds` 接入判断流程：多家临场赔率已入库（`book_consensus()`），报告和 explain 仍用 football-data 赛程赔率。
-- `web/`：Vite + React + TypeScript。见 `docs/stack.md`。
+- 网站真实数据：FastAPI 接入后生成 OpenAPI 类型，加入 TanStack Query 和同域 /api 代理；现在只有静态演示。
+- 数据更新：先评估免费 API 的覆盖、授权与额度，再实现赛前赔率持续更新；目标 1–5 分钟，以数据源实际能力为准。
+- 实时比分与比赛状态：未接入。
+- 滚球预测（inplay）：未实现，需独立模型与数据链路，不能复用赛前结果冒充。
+- 正式部署与搜索收录：尚未上线；真实数据上线后才开放指定页面并建立 sitemap。
 - `server/`：FastAPI。见 `docs/stack.md`。
 - `football_prediction/services/`：中间层。写 `server/` 时和 `live.py`、`explain.py`、`main.py`、`output/pipeline.py` 的编排一起落地。见 `docs/modules.md`。
 - `football_prediction/model_nn/`：还没有神经网络。`requirements.txt` 里还没有 `torch`、`fastapi`、`uvicorn`。

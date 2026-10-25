@@ -56,7 +56,25 @@ python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下�
 - 输出含中文，Windows 下设 `PYTHONIOENCODING=utf-8`。不经 `-m pytest` 直接跑脚本时需要 `PYTHONPATH=.`。
 - 不要跑不带路径的 `pytest`：它会收集 `大模型项目/` 里依赖 torch 的测试并在收集阶段失败。
 - 改完一层后跑 `python -m pytest tests`。`tests/` 只用内存 SQLite 和合成比赛（`tests/conftest.py`）；新测试保持离线，爬虫测试通过替换 `runner` 参数模拟。lightgbm 缺失时相关测试会 skip。
-- 没有 lint 或 build 步骤。依赖见 `requirements.txt`。
+- Python 没有 lint 或 build 步骤，依赖见 `requirements.txt`。前端依赖和锁文件独立在 `web/`。
+
+前端使用 Node.js 24 LTS（Mac/Windows 同主版本），在 `web/` 执行：
+
+```bash
+npm ci
+npx playwright install chromium # 首次运行浏览器测试时安装测试浏览器
+npm run dev        # 仅本机开发
+npm run typecheck
+npm run lint
+npm run test       # Vitest 组件测试
+npm run build
+npm run test:e2e   # 自动启动构建后的 next start，含 HTTP 与 Chromium 测试
+npm run start     # 部署运行，前置 npm run build
+```
+
+前端验收包括 360/390/768/1440 视口、SSR 正文与 metadata、404/5xx、演示 noindex、关注与筛选恢复。桌面 Safari/Chrome 响应式可用于人工验收，未做真机测试要明确。根目录仍执行 `python -m pytest tests`；不运行 live、不触碰实盘库。
+
+依赖安装完成后再运行检查；typecheck 和 build 都写入 .next，需顺序执行，不能与 npm ci 或彼此并行。test:e2e 使用刚构建的生产产物；WEB_TEST_CONTROL_FILE 仅用于本机测试，不配置到正式服务。
 ## 布局
 
 分层包 `football_prediction/`，各层通过同一个 SQLite 库（默认 `football.db`）交换数据。

@@ -4,25 +4,43 @@
 
 三层分工固定：浏览器只展示和发请求；FastAPI 只暴露现有预测能力；训练只在 Python 里进行，不在 TypeScript 里训练。
 
-## 前端
+## 网站前端
 
-语言是 TypeScript。应用是 Vite + React，样式用 Tailwind CSS，服务端数据用 TanStack Query。路由用 React Router。
+公开只读网站，访客可查看预测与比赛状态，不提供训练或修改数据操作。目录 `web/`；框架 Next.js 16 稳定版 + React，App Router；TypeScript strict；Tailwind CSS + 语义主题变量。替代原 Vite / React Router 方案。Next.js 只负责网站渲染，不计算概率或模型兜底。
 
-接口类型从后端 OpenAPI 生成（`openapi-typescript`），不手写一套与响应对不齐的类型。
+Mac、Windows 统一 Node.js 24 LTS（`.nvmrc`、`package.json engines`），npm 管理依赖；提交 `web/package-lock.json`，用 `npm ci` 安装。生产需 Node 服务端，不能静态导出。开发和检查命令见 `AGENTS.md`。
 
-页面覆盖现有报告和成绩单：未开赛场次的胜平负概率、倾向、信心档、最可能比分、大 2.5 球，以及赛后评分。计算留在 `football_prediction`，页面不重算概率。
+首次浏览器测试运行 `npx playwright install chromium`。typecheck、build 和 npm ci 顺序执行，避免生成目录或依赖被并发替换。组件测试用 Vitest/Testing Library；端到端检查对 next start 的生产产物执行。
 
-落地目录是 `web/`。在此之前不要加前端依赖。
+首轮只有演示骨架：服务端组件直接引入静态演示契约，不建后端、services、`app/api`、OpenAPI 生成目录或 HTTP 演示接口。TanStack Query 在真实接口接入时再启用；接口类型用 openapi-typescript 从 FastAPI OpenAPI 生成，禁止手改。
 
-## 后端
+### 展示与手机适配
 
-语言是 Python（3.12+，与现有 `.venv` 相同）。框架是 FastAPI，进程是 Uvicorn，请求和响应模型是 Pydantic v2。
+中文界面，根布局 `lang="zh-CN"`。浅色主题；背景、文字、边框、强调色、状态色都使用语义 CSS 变量，组件不写固定颜色。新主题改变量，不逐个改组件。
 
-代码放在 `server/`，只调用 `football_prediction/services/` 的用例。路由里不写 Dixon-Coles、LightGBM 或神经网络。目录、调用方向和文件尺度见 [modules.md](modules.md)。数据库继续用仓库根目录的 `football.db`，不另起一套库。
+移动端优先：手机单列卡片与可折叠菜单，桌面多列或表格；360px 不发生页面级横向溢出，宽表仅在容器内滚动。触摸目标至少 44×44px，支持键盘焦点、文字缩放，操作不依赖悬停。验收宽度 360 / 390 / 768 / 1440；桌面 Safari、Chrome 响应式模式，真机未测不得宣称通过。
 
-开发时为 Vite 源站打开 CORS。契约以 FastAPI 自动生成的 OpenAPI 为准。当前是本机单用户，第一版不加登录。
+存储与时间比较用 UTC 瞬间，展示用 Asia/Shanghai 并标注北京时间。模型、档名、命中率与来源均显示数据字段。保留高信心档历史上仍约四分之一未命中的提示。滚球代码名 inplay，与 Python live 实盘入口区分。
 
-`fastapi` 和 `uvicorn` 在实现 `server/` 时再写入依赖。在此之前 `pytest tests` 保持现有依赖可跑。
+### 渲染、SEO 与部署
+
+比赛页按请求动态渲染；存在性、数据和 metadata 在输出响应前检查，不用提前流式 loading 掩盖 404/5xx。实际状态码以 `next build` + `next start` 验收为准。正式取数 no-store，失败不缓存；数据刷新不能改写真实数据时间。
+
+演示阶段整站 `noindex`、`X-Robots-Tag: noindex, nofollow`、robots `Disallow: /`，不发布 sitemap。页面仍提供正文、标题、描述和 canonical。真实数据上线后才单独开放收录、生成真实比赛 sitemap；关注页始终不收录。比赛路径直接使用后端 match_id，不按球队名称生成；延期改期身份由后端处理。
+
+开发：在 web 执行 `npm ci`、`npm run dev`，默认仅监听 localhost。生产：`npm run build` 后 `npm run start`，由 HTTPS 反向代理转发至 Next.js，配置 `SITE_URL` 为实际域名。首轮不购买或部署云服务。环境变量示例在 `web/.env.example`；密钥不得放进 NEXT_PUBLIC 变量或客户端代码。
+
+SITE_URL 在生产构建前设置，静态页面 metadata 会使用构建时域名。进程管理器负责重启和日志，反向代理不缓存动态比赛及错误响应。WEB_TEST_CONTROL_FILE 只用于本机故障注入，正式运行不设置。演示成功结果仅有进程内缓存，重启后不保留；真实接入时改由后端提供持久的最近有效结果。
+
+## 后端与后续数据接入
+
+Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `football_prediction/services/`，数据库继续使用根目录 football.db。建立后端时按 [modules.md](modules.md) 同时迁移现有编排，不提前建空包。
+
+FastAPI 接入后由 Next 开发服务器代理 `/api`；生产同域，浏览器不需要 CORS。首轮不占用 `/api`，不建 Next Route Handler 或代理。Web 不提供公开训练、采集或写库入口。
+
+先评估允许公开展示的免费 API：三联赛覆盖、盘口种类、额度、实际延迟。目标刷新 1–5 分钟，不能将页面刷新频率当作数据源实时能力；搜索引擎不是赔率源，爬虫只作允许访问的补充。依次接入赛前赔率、实时比分与状态、独立滚球模型。后端集中采集与缓存，网页只读；当前预测与首次预测存档分离。接口应提供数据来源时间、获取时间、预测时间以及新鲜度状态。
+
+真实接口接入时使用 TanStack Query；手机后台暂停轮询，恢复前台重新取数，保留筛选与滚动。无新结果时保留旧值并提示延迟，不伪造概率。训练、FastAPI 依赖仍在对应功能落地时引入。
 
 ## 训练
 

@@ -1,0 +1,223 @@
+.match-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.match-card.featured {
+  border-top: 3px solid var(--accent);
+}
+.card-body {
+  padding: 22px;
+}
+.card-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.card-teams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 26px 0 23px;
+  text-align: center;
+}
+.team-name {
+  font-weight: 700;
+  margin-top: 9px;
+  overflow-wrap: anywhere;
+}
+.team-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 46px;
+  height: 50px;
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 18px 18px;
+  background: var(--surface-subtle);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--accent);
+}
+.versus {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+.score {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.probability-labels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.probability-labels span:nth-child(2) {
+  text-align: center;
+}
+.probability-labels span:last-child {
+  text-align: right;
+}
+.probability-labels strong {
+  font-size: 16px;
+  color: var(--foreground);
+  margin-left: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.probability-track {
+  height: 6px;
+  border-radius: 5px;
+  overflow: hidden;
+  display: flex;
+  gap: 3px;
+}
+.probability-track span:nth-child(1) {
+  background: var(--home-probability);
+}
+.probability-track span:nth-child(2) {
+  background: var(--draw-probability);
+}
+.probability-track span:nth-child(3) {
+  background: var(--away-probability);
+}
+.card-summary {
+  margin-top: 18px;
+  padding: 12px 14px;
+  background: var(--surface-subtle);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.card-summary strong {
+  color: var(--foreground);
+  font-size: 14px;
+}
+.card-footer {
+  border-top: 1px solid var(--border);
+  padding: 8px 17px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.text-link {
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.button:hover {
+  background: var(--surface-subtle);
+}
+.button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.button-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+.button-primary:hover {
+  background: var(--accent-hover);
+}
+.detail-hero {
+  text-align: center;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.detail-hero .card-teams {
+  max-width: 520px;
+  margin: auto;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 24px;
+}
+.prediction-section h2 {
+  margin-bottom: 18px;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+.stat {
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--surface-subtle);
+}
+.stat p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.stat strong {
+  display: block;
+  font-size: 20px;
+  margin-top: 5px;
+}
+.score-chip {
+  display: inline-block;
+  padding: 5px 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 650;
+  margin: 10px 8px 0 0;
+}
+.table-wrap {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+th {
+  color: var(--muted);
+  background: var(--surface-subtle);
+  font-size: 12px;
+  font-weight: 500;
+}
+td,
+th {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}

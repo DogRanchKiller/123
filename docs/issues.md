@@ -30,6 +30,24 @@
 
 ## 已解决
 
+### 返回预测列表时滚动恢复被路由重置
+
+- 状态：已解决（web 0.1.0，预测版本不变）
+- 日期：2026-10-25
+- 现象：筛选保留，但从详情返回列表后偶发滚回顶部。
+- 原因：Next Link 自动滚动与 sessionStorage 的恢复同时执行，路由切换也可能在卸载前改变 window.scrollY。
+- 处理：返回列表链接关闭路由自动滚动；记录最后一次列表滚动位置，卸载时不读取新页面的位置；生产浏览器测试覆盖刷新和返回恢复。
+- 位置：`web/src/features/predictions/list-state.client.ts`、`web/src/features/match/match-detail.tsx`
+
+### 网站错误页重试没有重新读取服务端数据
+
+- 状态：已解决（web 0.1.0，预测版本不变）
+- 日期：2026-10-25
+- 现象：生产测试注入取数故障得到 5xx；故障解除后点击“重新读取”仍显示错误页。
+- 原因：Next.js error boundary 的 reset 只重置组件，不保证重新请求失败的服务端数据。
+- 处理：按钮改为重新请求当前文档；生产浏览器测试验证 5xx、错误文案、重试恢复以及旧结果延迟展示。
+- 位置：`web/src/app/error.tsx`、`web/tests/e2e/website.spec.ts`
+
 ### Windows 上 `.claude/skills/` 符号链接检出为普通文本
 
 - 状态：已解决

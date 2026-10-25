@@ -15,3 +15,14 @@ Thumbs.db
 
 # 研究库（可由 _diag/expand/build_research_db.py 从 _cache 重建）
 research.db
+
+# 前端依赖、本机配置与生成物
+web/node_modules/
+web/.next/
+web/coverage/
+web/test-results/
+web/playwright-report/
+web/.env*
+!web/.env.example
+web/*.tsbuildinfo
+web/.test-control.json

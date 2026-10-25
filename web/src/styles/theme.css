@@ -1,0 +1,33 @@
+:root {
+  --background: #f6f8f7;
+  --surface: #ffffff;
+  --surface-subtle: #edf2ef;
+  --foreground: #192d26;
+  --muted: #62756b;
+  --border: #dfe7e2;
+  --accent: #176c4d;
+  --accent-hover: #10543b;
+  --accent-soft: #e5f2eb;
+  --on-accent: #ffffff;
+  --warning: #825b17;
+  --warning-soft: #fbf3df;
+  --danger: #a33b34;
+  --home-probability: #258362;
+  --draw-probability: #b7c9be;
+  --away-probability: #738c7e;
+  --shadow: 0 8px 32px rgb(25 45 38 / 4%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+}
