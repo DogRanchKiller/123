@@ -1,0 +1,10 @@
+disc av+shin          - av+prop  -0.00077 +- 0.00023 n=9117
+disc ps+proportional  - av+prop  -0.00100 +- 0.00029 n=9117
+disc ps+shin          - av+prop  -0.00123 +- 0.00037 n=9117
+disc mix+shin          - av+prop  -0.00105 +- 0.00029 n=9117
+disc ps+shin - av+shin  -0.00045 +- 0.00022
+conf av+shin          - av+prop  -0.00040 +- 0.00016 n=15247
+conf ps+proportional  - av+prop  -0.00028 +- 0.00014 n=15247
+conf ps+shin          - av+prop  -0.00044 +- 0.00022 n=15247
+conf mix+shin          - av+prop  -0.00045 +- 0.00018 n=15247
+conf ps+shin - av+shin  -0.00004 +- 0.00013
