@@ -3,7 +3,8 @@ football_prediction/explain.py  v1.5.0（输出层的一部分）
 单场判断说明：按判断流程逐步列出依据。
     python -m football_prediction.explain 英超 Arsenal Chelsea
     python -m football_prediction.explain E0 Arsenal Chelsea --odds 1.9 3.6 4.2 --ou 1.85 2.0 --ah -0.5 1.95 1.95
-赔率与报告相同（pipeline.latest_odds）：24 小时内有 ≥3 家的多家中位数时用它，否则用赛程表（fixtures）快照；
+赔率与报告相同（services.latest_odds）；取数与判断在 services/match_analysis.explain_inputs，本文件只排版。
+24 小时内有 ≥3 家的多家中位数时用它，否则用赛程表（fixtures）快照；
 不在赛程表里的比赛可用 --odds/--ou/--ah 手动输入（欧赔）。
 只读数据库，不保存任何预测。
 v1.4.0: 赔率来源改用 latest_odds（多家中位数优先），[1] 写明来源与抓取时间。
@@ -18,12 +19,9 @@ from datetime import datetime, timezone
 
 from football_prediction.data.loader import init_db
 from football_prediction.output.analysis import ah_pick_text, ah_text
-from football_prediction.output.pipeline import ModelCache, analyse_match, latest_odds
+from football_prediction.services import DB_PATH, LEAGUES, explain_inputs
 
 LAYER_VERSION = "1.5.0"
-DB_PATH = "football.db"
-LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲", "I1": "意甲", "F1": "法甲",
-           "E1": "英冠", "N1": "荷甲", "P1": "葡超", "SC0": "苏超", "B1": "比甲", "T1": "土超"}
 
 
 def _league(s: str) -> str:
@@ -51,19 +49,7 @@ def explain(conn, league, home, away, manual: dict | None = None,
             now: datetime | None = None) -> str:
     """返回多行说明文本"""
     now = now or datetime.now(timezone.utc)
-    conn.row_factory = sqlite3.Row
-    fx = conn.execute("SELECT * FROM fixtures WHERE league=? AND home_team=? AND away_team=? "
-                      "ORDER BY match_date LIMIT 1", (league, home, away)).fetchone()
-    conn.row_factory = None
-    fx = dict(fx) if fx else None
-    if manual:
-        odds, src = dict(manual), "手动输入"
-    elif fx:
-        odds, src = latest_odds(conn, fx, now)
-    else:
-        odds, src = None, "无（不在赛程表，未输入）"
-    a = analyse_match(conn, ModelCache(conn, now.date().isoformat()), league, home, away,
-                      odds, fx["match_id"] if fx and not manual else None)
+    fx, odds, src, a = explain_inputs(conn, league, home, away, manual, now)
 
     L = [f"{LEAGUES[league]}  {home} vs {away}" + (f"  开球(UTC) {fx['kickoff_utc']}" if fx else "")]
     L.append(f"\n[1] 赔率来源：{src}")

@@ -1,15 +1,17 @@
 """
-output/pipeline.py  v1.5.0（输出层的一部分）
-把数据库、模型与判断流程（analysis.analyse）连起来：按联赛缓存拟合好的模型，
-对一场比赛给出完整判断。live（存档）、report（报告）、explain（单场说明）共用。
-v1.4.0: latest_odds：报告与 explain 优先用 OddsPortal 多家中位数（≥3 家、24 小时内、有 1X2 与大小 2.5），
-        否则用赛程表快照；存档（live._predict_upcoming）仍用赛程表赔率，不受影响。
-v1.5.0: analyse_match 另取赛程表首条快照作亚盘初盘（只有一条快照时也有），给亚盘轨迹用。
-修改此文件后请同步更新 version.py 中 "output" 的版本号。
+services/match_analysis.py  单场判断编排（中间层）
+把数据库、模型与判断流程（output/analysis.analyse）连起来：按联赛缓存拟合好的模型，对一场比赛给出完整判断。
+实盘一轮（存档、报告）、explain（单场说明）共用。原 output/pipeline.py（output 1.5.0）与
+output/report.build_report 挪到这里，行为不变：
+- latest_odds：报告与 explain 优先用 OddsPortal 多家中位数（≥3 家、24 小时内、有 1X2 与大小 2.5），
+  否则用赛程表快照；存档（live_round.predict_upcoming）仍用赛程表赔率。
+- analyse_match 另取赛程表首条快照作亚盘初盘（只有一条快照时也有），给亚盘轨迹用。
 """
 import sqlite3
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+
+import pandas as pd
 
 from football_prediction.data.fixtures import odds_movement
 from football_prediction.data.loader import season_of
@@ -21,8 +23,7 @@ from football_prediction.model_dc.sot_dc import SotDixonColesModel
 from football_prediction.model_dc.xg_dc import XgDixonColesModel
 from football_prediction.model_elo.elo import EloModel
 from football_prediction.output.analysis import analyse, devig, matrix_1x2
-
-LAYER_VERSION = "1.5.0"
+from football_prediction.output.report import report_row, upcoming_fixtures
 
 THIN_MATCHES = 10   # 某队在该联赛历史场数少于此值视为数据少
 BOOK_MIN = 3        # 报告用多家中位数：至少 3 家公司
@@ -134,3 +135,50 @@ def _first_snapshot(conn: sqlite3.Connection, match_id: str) -> dict | None:
     r = conn.execute("SELECT ah_line, avg_ahh, avg_aha FROM odds_snapshots WHERE match_id=? "
                      "ORDER BY fetched_at LIMIT 1", (match_id,)).fetchone()
     return dict(zip(("ah_line", "avg_ahh", "avg_aha"), r)) if r else None
+
+
+def analyse_upcoming(conn: sqlite3.Connection, leagues, now: datetime,
+                     cache: ModelCache | None = None) -> list[tuple[dict, dict, str]]:
+    """未开赛场次按最新赔率现算：[(赛程行, 判断结果, 赔率来源)]，按开球时间排序。
+    报告 CSV 与给接口读的本轮快照都由这一份结果生成，不重复拟合。"""
+    cache = cache or ModelCache(conn, now.date().isoformat())
+    out = []
+    for r in upcoming_fixtures(conn, leagues, now):
+        odds, src = latest_odds(conn, r, now)
+        out.append((r, analyse_match(conn, cache, r["league"], r["home_team"], r["away_team"],
+                                     odds, r["match_id"]), src))
+    return out
+
+
+def build_report(conn: sqlite3.Connection, league_names: dict[str, str], now: datetime,
+                 cache: ModelCache | None = None, analysed: list | None = None) -> pd.DataFrame:
+    """未开赛场次的预测报告（按最新赔率现算），按开球时间排序。analysed 为 analyse_upcoming 的结果。"""
+    if analysed is None:
+        analysed = analyse_upcoming(conn, league_names, now, cache)
+    out = [{**report_row(r, a, league_names), "赔率来源": src} for r, a, src in analysed]
+    if not out:
+        return pd.DataFrame()
+    return pd.DataFrame(out).sort_values("_kickoff", kind="stable").drop(columns="_kickoff") \
+        .reset_index(drop=True)
+
+
+def explain_inputs(conn: sqlite3.Connection, league: str, home: str, away: str,
+                   manual: dict | None, now: datetime) -> tuple[dict | None, dict | None, str, dict]:
+    """explain 的取数与判断：(赛程行, 定价赔率, 赔率来源, 判断结果)。只读，不存档。
+    manual 为手动输入的赔率（fixtures 列名），有它时不取盘口变动。"""
+    conn.row_factory = sqlite3.Row
+    try:
+        fx = conn.execute("SELECT * FROM fixtures WHERE league=? AND home_team=? AND away_team=? "
+                          "ORDER BY match_date LIMIT 1", (league, home, away)).fetchone()
+    finally:
+        conn.row_factory = None
+    fx = dict(fx) if fx else None
+    if manual:
+        odds, src = dict(manual), "手动输入"
+    elif fx:
+        odds, src = latest_odds(conn, fx, now)
+    else:
+        odds, src = None, "无（不在赛程表，未输入）"
+    a = analyse_match(conn, ModelCache(conn, now.date().isoformat()), league, home, away,
+                      odds, fx["match_id"] if fx and not manual else None)
+    return fx, odds, src, a

@@ -10,6 +10,7 @@ v1.3.0: 信心档按 Shin 概率、5 联赛重标定；新增列「本场估计(
 v1.4.0: 赔率改由 pipeline.latest_odds 选（多家中位数优先），新增列「赔率来源」。
 v1.5.0: 亚盘为主：主客队之后依次为「亚盘」（数字线 + 赢 / 赢半 / 走 / 输半 / 输）、「亚盘选择」、
         「亚盘信心」（档[历史命中]）、「亚盘变动」（线与水位轨迹）；控制台第一行是亚盘。
+拟合与取赔率的编排（原 build_report、pipeline）在 services/match_analysis.py；本文件只管行格式与写文件。
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 """
 import os
@@ -23,7 +24,6 @@ from football_prediction.output.analysis import (   # noqa: F401  confidence_tie
     confidence_tier, double_label as _double_label, MARKET_TIERS as CONFIDENCE_TIERS,
     ah_pick_text, ah_text,
 )
-from football_prediction.output.pipeline import ModelCache, analyse_match, latest_odds
 
 LAYER_VERSION = "1.5.0"
 
@@ -92,22 +92,6 @@ def report_row(r: dict, a: dict, league_names: dict[str, str]) -> dict:
         "比分来源": a["source"],
         "_kickoff": r.get("kickoff_utc") or r["match_date"],
     }
-
-
-def build_report(conn: sqlite3.Connection, league_names: dict[str, str], now: datetime,
-                 cache: ModelCache | None = None) -> pd.DataFrame:
-    """未开赛场次的预测报告（按最新赔率现算），按开球时间排序。"""
-    cache = cache or ModelCache(conn, now.date().isoformat())
-    out = []
-    for r in upcoming_fixtures(conn, league_names, now):
-        odds, src = latest_odds(conn, r, now)
-        a = analyse_match(conn, cache, r["league"], r["home_team"], r["away_team"],
-                          odds, r["match_id"])
-        out.append({**report_row(r, a, league_names), "赔率来源": src})
-    if not out:
-        return pd.DataFrame()
-    return pd.DataFrame(out).sort_values("_kickoff", kind="stable").drop(columns="_kickoff") \
-        .reset_index(drop=True)
 
 
 def write_report(df: pd.DataFrame, now: datetime) -> str:

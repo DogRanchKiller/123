@@ -30,7 +30,6 @@ MODULES = {
     "football_prediction.output.derive":         "output",
     "football_prediction.output.report":         "output",
     "football_prediction.output.analysis":       "output",
-    "football_prediction.output.pipeline":       "output",
     "football_prediction.explain":               "output",
     "football_prediction.validation.backtest":   "validation",
     "football_prediction.review.store":          "review",
