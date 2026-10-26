@@ -16,7 +16,10 @@ vi.mock("next/dynamic", () => ({ default: () => function Scene() {
 
 const prediction: Prediction = {
   modelName:"sample", modelVersion:"1", probabilitySource:"market", scoreSource:"sample",
-  sourceNote:"测试来源", confidence:"中", historicalFirstHit:.5, historicalDoubleHit:.7,
+  sourceNote:"测试来源", oddsSource:"赛程表", asian:{
+    line:-0.25, lineSource:"市场线", outcome:{win:.45,halfWin:0,push:0,halfLose:.25,lose:.3},
+    side:"主", pCover:.57, tier:"高", historicalHit:.607, selfHomeCover:null, movement:null,
+  }, confidence:"中", historicalFirstHit:.5, historicalDoubleHit:.7,
   probabilities:[.48,.32,.2], lean:"主胜", double:"主胜或平", likelyScores:["1–0","1–1"],
   over25:.35, sourceAt:null, fetchedAt:"2026-10-25T10:00:00Z", generatedAt:"2026-10-25T10:01:00Z",
 };
@@ -44,13 +47,21 @@ describe("首页选场契约", () => {
     expect(selectEntryPrediction([])).toBeNull();
     expect(match.probabilities).toEqual([.48,.32,.2]);
     expect(match).not.toHaveProperty("archived");
+    expect(match.asianPick).toBe("主-0.25 57%");
+    expect(selectEntryPrediction([{...fixture,current:{...prediction,asian:null}}])?.asianPick).toBeNull();
   });
   it("显示传入球队、北京时间，缺失字段不补零", () => {
-    render(<EntryScreen result={ok(1,{...match,probabilities:[null,.32,.2],over25:null,likelyScores:[],lean:""})} />);
+    render(<EntryScreen result={ok(1,{...match,probabilities:[null,.32,.2],over25:null,likelyScores:[],lean:"",asianPick:null})} />);
     expect(screen.getByText("队伍甲",{exact:false})).toBeInTheDocument();
     expect(screen.getByTestId("entry-probability-0")).toHaveTextContent("暂无数据");
     expect(screen.getByText(/10\/26 20:00 开球/)).toBeInTheDocument();
-    expect(screen.getAllByText("暂无数据")).toHaveLength(4);
+    expect(screen.getAllByText("暂无数据")).toHaveLength(5);
+  });
+  it("亚盘选择排在赛果倾向之前", () => {
+    render(<EntryScreen result={ok(1)} />);
+    const terms = screen.getAllByRole("term").map((node) => node.textContent);
+    expect(terms.slice(0, 2)).toEqual(["亚盘选择","赛果倾向"]);
+    expect(screen.getByText("主-0.25 57%")).toBeInTheDocument();
   });
 });
 

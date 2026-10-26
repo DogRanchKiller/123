@@ -8,7 +8,7 @@
 
 ## 当前
 
-命令行预测可以跑。网站 `/` 是深色全息首页，预测、关注、详情和成绩单共用同一套深色业务页。页面数据仍是演示数据。真实 HTTP 接口、账号服务和 `services/` 中间层尚未建立。
+命令行预测可以跑。网站 `/` 是深色全息首页，预测、关注、详情和成绩单共用同一套深色业务页。中间层 `services/` 已建立，实盘每轮写快照 `reports/latest_round.json`；只读接口 `python -m server`（FastAPI，无鉴权，默认只听本机）读快照和首次存档。网站配置 `API_URL` 时显示本机实盘数据，不配置时显示演示数据。账号服务尚未建立。
 
 - 联赛：英超 E0、德甲 D1、西甲 SP1、意甲 I1、法甲 F1、英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1（实盘库都从 2122 起；后六个没有 understat xG）。研究库 `research.db` 只有前 5 联赛 9394–2526（赔率从 0001 起，xG 从 1415 起）。
 - 主模型：`market_implied` / `model_market` 1.0.0（市场赔率反推比分）。无赔率时回退 `dc_xg` / `model_xg` 1.0.0。
@@ -24,16 +24,30 @@
 
 ## 已完成
 
+### 只读接口与网站实盘数据（2026-10-26，预测版本不变）
+
+- `server/`：FastAPI 只读接口 `GET /api/matches`（快照里尚未开球的场次 + `recent`：最近 `recent_days` 天（默认 3，上限 14）已开球、有首次存档的场次和比分）、`/api/matches/{id}`（快照看法 + 首次存档与赛后评分）、`/api/review`（快照成绩单）。只调 `services`；库以只读方式打开，无快照 503，未知比赛 404。没有鉴权，默认 127.0.0.1。依赖 fastapi 0.149.0、pydantic 2.14.1、uvicorn 0.54.0，测试用 httpx 0.28.1。
+- `services/match_read.py`：读函数从 `live_round.py` 移出；`read_recent` 给列表附带最近已开球场次；`open_readonly` 在 `fotmob.db` 存在时只读挂上，football-data 赛果没到时用 `fotmob_results` 的比分（与评分同一顺序，`score_source` 标来源）。之前详情页只读 `football.db`，FotMob 先评分的场次比分为空。赛程表 `fixtures` 每次刷新整表替换，赛果到之前就被换掉的场次查不到对阵，列表里跳过。快照每场加 `model_name` / `model_version` / `recommended`（市场线且亚盘信心高或中）/ `recommendation_note`。
+- 网站：`web/openapi.json` → `src/api/schema.d.ts`（openapi-typescript）；`API_URL` 有值时各页经服务端读取接口并转成展示契约，标「本机实盘」与本轮生成时间，否则仍是演示样本（e2e 走演示模式）。关注页和「进行中 / 已完赛」筛选用 `recent`；关注里超出窗口的场次提示场数。`API_URL` 无效时报出地址错误；接口不可用时首页仍标「本机实盘」。快照替换在 Windows 上被读取占用时重试 5 次。TanStack Query 暂缓，见 `docs/stack.md`。
+
+### 中间层 services（2026-10-26，预测版本不变）
+
+- `football_prediction/services/`：`live_round.py`（实盘一轮、快照；读函数后来移到 `match_read.py`）、`near_round.py`（临场档）、`match_analysis.py`（原 `output/pipeline.py`，加报告与 explain 的串联）、`backtest_run.py`（原 `main.py` 的串联）。`live.py`、`explain.py`、`main.py` 只剩参数、打印和调用；`output/pipeline.py` 已删除，`output/report.py` 不再拟合模型。
+- 实盘一轮只拟合一次：同一份单场判断同时写报告 CSV 和快照 `reports/latest_round.json`（schema 1，原子替换；每场看法亚盘在前，含成绩单行）。没有场次时也写空快照。
+- 读函数（给接口用，不按请求拟合）：`read_current`（快照里尚未开球的场次）、`read_match`（本轮看法 + 主模型首次存档，没有时用 dc_xg + 赛果）、`read_scorecard`。快照不存在时返回 None。
+- 验证：`tests/test_services.py` 7 项（实盘一轮写报告与快照、已开球剔除、首次存档不被覆盖、兜底存档、成绩单 NaN、领域包不反向引用 services）；Python 离线测试 195 项通过。真实库只读冒烟：explain 土超一场输出正常；6 场未开赛写临时快照约 12 KB、14 秒，全部是市场线；`football.db` 前后 md5 不变。（之后 2026-10-26 12:48 手动跑过一轮真实 `live`，已生成 `reports/latest_round.json`。）
+
 ### 网站演示骨架（web 0.1.0）
 
 - Next.js 16.4.3 + React 19 + TypeScript strict，Node.js 24 LTS；npm 锁文件与前端检查命令已加入，依赖审计 0 vulnerabilities。
 - 预测列表、高信心推荐、比赛详情、首次预测存档、手动关注和成绩单页面；全部使用固定演示数据，明确标识。
+- 展示契约已按报告字段改为亚盘为主（2026-10-26）：卡片、详情、首页先显示亚盘线 / 选择 / 亚盘信心，再显示胜平负；成绩单先列亚盘场次、亚盘 Log Loss、亚盘命中，并显示与 market_avg 的同场差值 ± SE。联赛筛选扩到 11 个（与 `live.LEAGUES` 同序），演示数据加了一场土超。
 - 全站深色语义主题；独立 `/` 入口壳层与 3D 全息球场，业务页使用静态背景；关注 localStorage、筛选/滚动 sessionStorage，挂载后恢复。
 - 首页预测卡片来自当前演示预测，按推荐优先选场；可见时每 60 秒刷新，失败保留旧值并提示延迟，场景与概率刷新隔离。
 - 首页 3D 使用 Three.js / React Three Fiber、程序化球场和粒子；WebGL/减少动态效果可降级静态海报。邮箱和手机登录注册仅有校验表单，不接账号服务、不持久化凭据。
 - 比赛详情按请求渲染；稳定 ID、北京时间展示、来源/获取/预测三类时间；无赔率来源直接显示契约字段。
 - 演示站整站 noindex、robots 禁止抓取，不发布 sitemap，不建 /api；真实比分、滚球能力只展示未接入状态。
-- 验收通过：TypeScript、ESLint、12 项组件测试、Next.js 生产构建、20 项生产 Chromium 测试；覆盖首页选场/刷新失败恢复/超时后重试/Canvas 稳定、登录键盘与校验、SSR/metadata/404/5xx、关注/筛选/滚动恢复及 360/390/768/1023/1024/1440 页面溢出与平板折叠菜单。Python 离线测试 98 项通过；预测版本不变。
+- 验收通过（2026-10-26）：TypeScript、ESLint、19 项组件测试（含亚盘文字与 Python 写法一致）、Next.js 生产构建、20 项生产 Chromium 测试；覆盖首页选场/刷新失败恢复/超时后重试/Canvas 稳定、登录键盘与校验、SSR/metadata/404/5xx、关注/筛选/滚动恢复及 360/390/768/1023/1024/1440 页面溢出与平板折叠菜单。Python 离线测试 189 项通过；预测版本不变。
 - 已在桌面 Google Chrome 与 Safari 打开检查首页，Playwright Chromium 覆盖六种视口；手机为响应式模拟，未做真机测试。球场帧率未做设备级测量，60/30fps 仍是优化目标。尚未正式部署。
 
 | 层 | 版本 | 状态 |
@@ -52,7 +66,7 @@
 | model_blend | 1.0.0 | dc_xg 0.77 + Elo 0.23 的 1X2 融合，并行存档 |
 | model_lgbm | 1.1.0 | 在 Dixon-Coles 上做残差修正，滚动样本外 |
 | calibration | 1.0.0 | Platt；2425 上没有增益，不进实盘 |
-| output | 1.5.0 | 亚盘为主：报告列「亚盘 / 亚盘选择 / 亚盘信心 / 亚盘变动」紧跟对阵，explain 第 [2] 段为亚盘，`AH_LINES` 覆盖 −4…+4；判断流程（`analysis.py`）、报告、explain 单场说明、亚盘五种结算；信心档按 Shin 概率在 5 联赛重标定，报告与 explain 列本场命中估计；报告与 explain 优先用多家中位数赔率（`pipeline.latest_odds`），列赔率来源 |
+| output | 1.5.0 | 亚盘为主：报告列「亚盘 / 亚盘选择 / 亚盘信心 / 亚盘变动」紧跟对阵，explain 第 [2] 段为亚盘，`AH_LINES` 覆盖 −4…+4；判断流程（`analysis.py`）、报告、explain 单场说明、亚盘五种结算；信心档按 Shin 概率在 5 联赛重标定，报告与 explain 列本场命中估计；报告与 explain 优先用多家中位数赔率（`services.latest_odds`），列赔率来源 |
 | validation | 1.1.0 | 时间外回测、市场基准、同场配对 |
 | review | 1.6.0 | 首次预测落库、赛后评分（含亚盘：按存档时的市场线算五种结算 log loss 与赢盘命中，`ah_line` / `ah_log_loss` / `ah_hit`；成绩单代码在 `scorecard.py`）（含大小 2.5 / 精确比分；football-data 未到时先用 FotMob 比分，到达后 `reconcile_results` 核对）、`promotion_check`（跳过 `_t1`）、`horizon_report` 临场对赛前 |
 | live | 1.10.0 | 11 联赛；成绩单加亚盘场数 / LL / 赢盘命中；更新数据（含 FotMob 完赛比分）、评分、预测、报告、成绩单；存档 market_implied / blend / market_shin / dc_market；`--near` 临场档 `*_t1` 与 lineup_t1 / lineup_base_t1，先抓阵容再抓赔率，打印临场最终看法 |
@@ -66,15 +80,14 @@
 - 兜底模型：建议把 `FALLBACK_MODEL` 换成 `dc_market`（回测在 4/5 联赛优于 dc_xg），由用户决定；按规则也可等实盘配对。
 - 临场档信心档：`MARKET_TIERS` 已按 Shin 赛前概率重标（output 1.3.0）；临场档（T1 多家中位数）有实盘样本后再核对档位命中率。
 - 多家中位数的准确度：报告已改用 OddsPortal 多家中位数（只有 5 家美国公司），它与 football-data 平均赔率哪个更准，等 `horizon_report` 和赛前存档有足够已评分场次后再比；赛前存档仍用赛程表赔率。
-- 网站真实数据：FastAPI 接入后生成 OpenAPI 类型，加入 TanStack Query 和同域 /api 代理。首页现在每 60 秒重读演示数据；演示内容不变时，卡片数字不会变。
+- 网站数据刷新：接口只反映最近一次实盘运行（每天两次定时 + 手动）；首页每 60 秒重读。需要更快刷新或客户端轮询时再引入 TanStack Query。
 - 账号与短信：顶栏已有登录/注册表单（邮箱密码、确认密码、手机验证码）和校验。提交、验证码和找回密码只提示服务未接入。账号服务、短信和登录会话尚未实现。
 - 数据更新：先评估免费 API 的覆盖、授权与额度，再实现赛前赔率持续更新；目标 1–5 分钟，以数据源实际能力为准。
 - 实时比分与比赛状态：未接入。
 - 滚球预测（inplay）：未实现，需独立模型与数据链路，不能复用赛前结果冒充。
 - 正式部署与搜索收录：尚未上线；真实数据上线后才开放指定页面并建立 sitemap。
-- `server/`：FastAPI。见 `docs/stack.md`。
-- `football_prediction/services/`：中间层。写 `server/` 时和 `live.py`、`explain.py`、`main.py`、`output/pipeline.py` 的编排一起落地。见 `docs/modules.md`。
-- `football_prediction/model_nn/`：还没有神经网络。`requirements.txt` 里还没有 `torch`、`fastapi`、`uvicorn`。
+- 接口鉴权与部署：`server/` 没有鉴权，给群友内网访问前要在网络层限制范围或加鉴权；接口和网站都还没有常驻进程或计划任务。
+- `football_prediction/model_nn/`：还没有神经网络。`requirements.txt` 里还没有 `torch`。
 - 亚盘研究（第 3 步）：在 `research.db` 上看哪些信息能改进市场线上的赢盘概率（盘口与水位变动、Pinnacle 对平均、四分之一线结算形状），沿用同场配对与 2526 留出规则。
 - Pinnacle 亚盘（第 4 步）：先核对本机能否看到、服务条款与 robots.txt，允许才接入；不绕过反爬。
 - 用户定的顺序（2026-10-25）：扩联赛（1.9.0 已做六个一级联赛）→ 网页 + 接口（局域网 / 群友内网访问）→ 神经网络穿插进行 → 新信息源持续做。

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { DemoNotice } from "@/components/presentation";
+import { DataNotice } from "@/components/presentation";
 import { beijingTime } from "@/lib/display";
 import { PredictionSection } from "./prediction-section";
 import type { MatchRead } from "./types";
@@ -12,13 +12,13 @@ export function MatchDetail({
   data: MatchRead;
   action: ReactNode;
 }) {
-  const { match, delayed } = data;
+  const { match, delayed, source } = data;
   return (
     <>
       <Link href="/predictions" scroll={false} className="text-link mb-4">
         ← 返回比赛列表
       </Link>
-      <DemoNotice />
+      <DataNotice source={source} />
       {delayed && (
         <p className="status-notice" role="status">
           更新延迟：当前显示上次有效结果，以下数据时间保持原值。

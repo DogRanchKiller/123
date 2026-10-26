@@ -31,7 +31,7 @@ const missing: MatchRecord = {
 describe("缺失数据", () => {
   it("缺比分和模型不伪造零或概率，显示北京时间", () => {
     render(
-      <MatchDetail data={{ match: missing, delayed: false }} action={null} />,
+      <MatchDetail data={{ match: missing, delayed: false, source: { mode: "demo" } }} action={null} />,
     );
     expect(screen.getByText("比分暂无数据")).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { name: "暂无数据" })).toHaveLength(
@@ -43,7 +43,7 @@ describe("缺失数据", () => {
 
   it("延迟标识与比赛存在分开", () => {
     render(
-      <MatchDetail data={{ match: missing, delayed: true }} action={null} />,
+      <MatchDetail data={{ match: missing, delayed: true, source: { mode: "demo" } }} action={null} />,
     );
     expect(screen.getByRole("status")).toHaveTextContent("更新延迟");
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(

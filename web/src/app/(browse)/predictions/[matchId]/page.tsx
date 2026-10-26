@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { MatchDetail } from "@/features/match";
-import { readDemoMatch } from "@/features/match/read.server";
+import { readMatch } from "@/features/match/read.server";
 import { FollowButton } from "@/features/following";
 import { pageMetadata } from "@/lib/site.server";
 
@@ -10,14 +10,14 @@ type Props = { params: Promise<{ matchId: string }> };
 
 async function load(params: Props["params"]) {
   const { matchId } = await params;
-  const data = await readDemoMatch(matchId);
+  const data = await readMatch(matchId);
   if (!data) notFound();
   return data;
 }
 
 export async function generateMetadata({ params }: Props) {
   const { matchId } = await params;
-  const data = await readDemoMatch(matchId);
+  const data = await readMatch(matchId);
   if (!data) return pageMetadata("找不到这场比赛", "请返回比赛列表选择比赛。", "/predictions/" + matchId);
   const { match } = data;
   return pageMetadata(
@@ -27,7 +27,8 @@ export async function generateMetadata({ params }: Props) {
       match.home +
       "对" +
       match.away +
-      "的预测、来源、首次存档与比赛状态。演示数据。",
+      "的预测、来源、首次存档与比赛状态。" +
+      (data.source.mode === "demo" ? "演示数据。" : ""),
     "/predictions/" + match.id,
   );
 }

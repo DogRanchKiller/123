@@ -12,7 +12,7 @@ Mac、Windows 统一 Node.js 24 LTS（`.nvmrc`、`package.json engines`），npm
 
 首次浏览器测试运行 `npx playwright install chromium`。typecheck、build 和 npm ci 顺序执行，避免生成目录或依赖被并发替换。组件测试用 Vitest/Testing Library；端到端检查对 next start 的生产产物执行。
 
-首轮只有演示骨架：服务端组件直接引入静态演示契约，不建后端、services、`app/api`、OpenAPI 生成目录或 HTTP 演示接口。TanStack Query 在真实接口接入时再启用；接口类型用 openapi-typescript 从 FastAPI OpenAPI 生成，禁止手改。
+服务端组件取数：未配置 `API_URL`（只在服务端读取，运行时生效，不加 `NEXT_PUBLIC_`）时用固定演示样本，配置后请求只读接口。接口类型用 openapi-typescript 7.13.0 从 `web/openapi.json` 生成到 `src/api/schema.d.ts`（`npm run api:types`），禁止手改；`openapi.json` 由 `python -m server --openapi web/openapi.json` 导出，`tests/test_server.py` 检查两者一致。不建 `app/api` 或 /api 代理。TanStack Query 暂缓：数据每轮实盘才变，服务端组件取数加现有的首页定时刷新已够用，需要客户端轮询或乐观更新时再引入。
 
 ### 展示与手机适配
 
@@ -40,13 +40,13 @@ SITE_URL 在生产构建前设置，静态页面 metadata 会使用构建时域�
 
 ## 后端与后续数据接入
 
-Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `football_prediction/services/`，数据库继续使用根目录 football.db。建立后端时按 [modules.md](modules.md) 同时迁移现有编排，不提前建空包。
+Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `football_prediction/services/`，数据库继续使用根目录 football.db。`services/` 已建立；接口读实盘一轮写的快照 `reports/latest_round.json` 和 `predictions` 首次存档，不按请求拟合模型（见 [modules.md](modules.md)）。
 
-FastAPI 接入后由 Next 开发服务器代理 `/api`；生产同域，浏览器不需要 CORS。首轮不占用 `/api`，不建 Next Route Handler 或代理。Web 不提供公开训练、采集或写库入口。
+只读接口：`python -m server`（默认 127.0.0.1:8000；`--host/--port/--db/--snapshot/--fotmob`），`GET /api/matches`（`?recent_days=` 附带最近已开球场次，默认 3）、`/api/matches/{id}`、`/api/review`。库以 `mode=ro` 打开（`fotmob.db` 同样只读挂上补比分），无快照时 503，未知比赛 404。没有鉴权：默认只监听本机，改 `--host` 时会打印警告，局域网访问范围要在网络层限制。网站服务端用 `API_URL` 直连，浏览器不访问接口，不需要 CORS，也不建 Next Route Handler 或代理。Web 不提供公开训练、采集或写库入口。
 
-先评估允许公开展示的免费 API：三联赛覆盖、盘口种类、额度、实际延迟。目标刷新 1–5 分钟，不能将页面刷新频率当作数据源实时能力；搜索引擎不是赔率源，爬虫只作允许访问的补充。依次接入赛前赔率、实时比分与状态、独立滚球模型。后端集中采集与缓存，网页只读；当前预测与首次预测存档分离。接口应提供数据来源时间、获取时间、预测时间以及新鲜度状态。
+先评估允许公开展示的免费 API：11 个实盘联赛的覆盖、盘口种类、额度、实际延迟。目标刷新 1–5 分钟，不能将页面刷新频率当作数据源实时能力；搜索引擎不是赔率源，爬虫只作允许访问的补充。依次接入赛前赔率、实时比分与状态、独立滚球模型。后端集中采集与缓存，网页只读；当前预测与首次预测存档分离。接口应提供数据来源时间、获取时间、预测时间以及新鲜度状态。
 
-真实接口接入时使用 TanStack Query；手机后台暂停轮询，恢复前台重新取数，保留筛选与滚动。无新结果时保留旧值并提示延迟，不伪造概率。训练、FastAPI 依赖仍在对应功能落地时引入。
+以后引入 TanStack Query 时：手机后台暂停轮询，恢复前台重新取数，保留筛选与滚动。现在单场读取失败时保留同一服务进程内的上次结果并提示延迟，不伪造概率。训练依赖仍在对应功能落地时引入。
 
 ## 训练
 

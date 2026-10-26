@@ -53,6 +53,8 @@ python -m football_prediction.data.oddsportal --hours 30   # 抓多家公司赔�
 python -m football_prediction.live --near   # 临场档：开球前 1.5 小时内先抓 FotMob 阵容再抓多家赔率，存 *_t1 并打印最终看法（run_near.bat）
 python -m football_prediction.data.fotmob   # 抓即将开赛的阵容 / 伤停；--history E0 2425 补历史球员数据，--reload-pre 从缓存重建
 python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下载赛季 CSV，很慢
+python -m server   # 只读接口 127.0.0.1:8000，读 reports/latest_round.json 与首次存档；无鉴权
+python -m server --openapi web/openapi.json   # 导出 OpenAPI，再在 web/ 运行 npm run api:types
 ```
 
 - 输出含中文，Windows 下设 `PYTHONIOENCODING=utf-8`。不经 `-m pytest` 直接跑脚本时需要 `PYTHONPATH=.`。
@@ -73,6 +75,8 @@ npm run build
 npm run test:e2e   # 自动启动构建后的 next start，含 HTTP 与 Chromium 测试
 npm run start     # 部署运行，前置 npm run build
 ```
+
+网站服务端读环境变量 `API_URL`（如 `http://127.0.0.1:8000`）时显示接口里的实盘数据，不设时显示演示样本；e2e 不设 `API_URL`。
 
 前端验收包括 360/390/768/1440 视口、SSR 正文与 metadata、404/5xx、演示 noindex、关注与筛选恢复、首页预测刷新，以及登录表单在服务未接入时的提示。桌面 Safari/Chrome 响应式可用于人工验收，未做真机测试要明确。根目录仍执行 `python -m pytest tests`；不运行 live、不触碰实盘库。
 
@@ -96,16 +100,20 @@ npm run start     # 部署运行，前置 npm run build
 | `model_elo/` `model_blend/` `model_lgbm/` | Elo；dc_xg + Elo 的 1X2 融合；LightGBM 残差修正 |
 | `calibration/platt.py` | Platt；2425 验证无增益，不进实盘主流程 |
 | `output/analysis.py` | 判断流程，纯函数、不读库，报告与 explain 共用：市场去水 → 市场隐含比分 → 亚盘（市场线五种结算、赢盘信心档 `AH_TIERS`、初盘 → 最新 → 定价的盘口与水位、dc_xg 同线分歧 8pp）→ 自研分歧提示（8pp）→ 盘口变动（5pp 或亚盘线变化）→ 风险 → 倾向 / 双选 / 信心档 |
-| `output/pipeline.py` | `ModelCache` 按联赛懒加载并拟合模型，`analyse_match` 把库里的数据接到 `analysis`；`latest_odds` 给报告和 explain 选赔率（24 小时内 ≥3 家的多家中位数优先，否则赛程表快照；存档仍用赛程表） |
+| `services/match_analysis.py` | 中间层。`ModelCache` 按联赛懒加载并拟合模型，`analyse_match` 把库里的数据接到 `analysis`；`latest_odds` 给报告和 explain 选赔率（24 小时内 ≥3 家的多家中位数优先，否则赛程表快照；存档仍用赛程表）；`build_report`、`explain_inputs` |
+| `services/live_round.py` `services/near_round.py` | 实盘一轮（`run_round`：更新数据 → 评分 → 存档 → 报告 → 成绩单 → 替换检查，每轮写快照 `reports/latest_round.json`）；临场档 `run_near`。服务函数用参数 `log` 输出进度 |
+| `services/match_read.py` | 给接口的读函数：`open_readonly`（`mode=ro`，有 `fotmob.db` 时只读挂上补比分）、`read_current` / `read_recent`（最近已开球场次的首次存档与比分）/ `read_match`（快照看法 + 首次存档）/ `read_scorecard` |
+| `services/backtest_run.py` | 回测演示的串联 |
 | `output/derive.py` `output/report.py` | 比分矩阵 → 各盘口（亚盘五种结算，`AH_LINES` −4…+4）；报告写到 `reports/预测_YYYY-MM-DD.csv`，亚盘四列紧跟对阵 |
 | `review/store.py` | `predictions` 表的存档、赛后评分（`matches` 无赛果时先用 `fotmob_results`，`reconcile_results` 待 football-data 到达后核对重评）；亚盘评分 `ah_settle` / `ah_scores`：同场所有模型都用存档时的市场亚盘线（本行 `odds.ah_line`，否则同场同档最早一行），旧行自动回填 |
 | `review/scorecard.py` | 实盘成绩单（同场对比 `market_avg`，含亚盘列，只作参考）、`promotion_check`（只看 1X2）、`horizon_report` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
-| `live.py` | 实盘入口。`services/` 建立后只保留命令行，编排规则见 [`docs/modules.md`](docs/modules.md) |
+| `server/`（仓库根目录） | FastAPI 只读接口 `/api/matches`（含最近已开球场次 `recent`）、`/api/matches/{id}`、`/api/review`；只调 `services`，不写 SQL；无鉴权，默认只听 127.0.0.1 |
+| `live.py` | 实盘入口，只有参数、打印和调用 `services`；编排规则见 [`docs/modules.md`](docs/modules.md) |
 | `explain.py` | 单场说明入口。同上 |
 | `main.py` | 回测演示入口。同上 |
 
-联赛列表 `LEAGUES` 分别在 `live.py`、`explain.py` 中定义。加联赛时同时登记 `fotmob_parse.LEAGUE_IDS` 与 `oddsportal_parse.LEAGUE_SLUGS`（`tests/test_fotmob.py::test_league_lists_agree` 检查四处一致），再用 `_diag/expand/add_live_leagues.py` 写入 2122 起的赛季；understat 只覆盖 `understat.US_LEAGUES`。模型统一用 `fit(conn, league, cutoff_date)`。
+联赛列表 `LEAGUES` 定义在 `services/live_round.py`，`live.py`、`explain.py` 再导出。加联赛时同时登记 `fotmob_parse.LEAGUE_IDS` 与 `oddsportal_parse.LEAGUE_SLUGS`（`tests/test_fotmob.py::test_league_lists_agree` 检查四处一致），再用 `_diag/expand/add_live_leagues.py` 写入 2122 起的赛季；understat 只覆盖 `understat.US_LEAGUES`。模型统一用 `fit(conn, league, cutoff_date)`。
 
 `football.db` 每次实盘都会变，已纳入版本库；需要备份时由用户决定是否提交。不要为了"清理工作区"还原或覆盖它。`reports/`、`_cache/`、`_diag/`（诊断与研究脚本及输出）同样是运行产物，按惯例纳入版本库作备份。`research.db` 已 gitignore。
 

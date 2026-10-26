@@ -1,6 +1,6 @@
 import { FollowingList } from "@/features/following";
-import { readDemoMatches } from "@/features/match/read.server";
-import { DemoNotice } from "@/components/presentation";
+import { readMatches } from "@/features/match/read.server";
+import { DataNotice } from "@/components/presentation";
 import { pageMetadata } from "@/lib/site.server";
 
 export const metadata = pageMetadata(
@@ -9,7 +9,10 @@ export const metadata = pageMetadata(
   "/following",
 );
 
-export default function FollowingPage() {
+export const dynamic = "force-dynamic";
+
+export default async function FollowingPage() {
+  const { matches, source } = await readMatches();
   return (
     <>
       <div className="page-heading">
@@ -20,8 +23,8 @@ export default function FollowingPage() {
         </div>
         <span className="pill">仅保存在当前浏览器</span>
       </div>
-      <DemoNotice />
-      <FollowingList matches={readDemoMatches()} />
+      <DataNotice source={source} />
+      <FollowingList matches={matches} />
     </>
   );
 }

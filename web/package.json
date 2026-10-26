@@ -13,7 +13,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "api:types": "openapi-typescript openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
@@ -39,6 +40,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.4.3",
     "jsdom": "^29.0.0",
+    "openapi-typescript": "7.13.0",
     "tailwindcss": "^4.3.1",
     "typescript": "^5.9.0",
     "vitest": "^4.1.10"

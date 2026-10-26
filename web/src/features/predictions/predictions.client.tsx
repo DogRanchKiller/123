@@ -1,15 +1,27 @@
 "use client";
 
-import { MatchCard, type MatchRecord } from "@/features/match";
+import {
+  LEAGUES,
+  LEAGUE_SUMMARY,
+  MatchCard,
+  type MatchRecord,
+} from "@/features/match";
 import { FollowButton } from "@/features/following";
 import {
-  DemoNotice,
+  DataNotice,
   EmptyState,
   SectionHeading,
 } from "@/components/presentation";
+import type { DataSource } from "@/lib/display";
 import { useListState } from "./list-state.client";
 
-export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
+export function Predictions({
+  matches,
+  source,
+}: {
+  matches: readonly MatchRecord[];
+  source: DataSource;
+}) {
   const { filters, changeFilters, warning } = useListState();
   const recommendations = matches.filter((match) => match.recommended);
   const visible = matches.filter(
@@ -29,9 +41,9 @@ export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
           <h1>每一场比赛，都有迹可循。</h1>
           <p>从赛前概率到赛后验证，清楚了解每一次判断。</p>
         </div>
-        <span className="pill">英超 · 德甲 · 西甲</span>
+        <span className="pill">{LEAGUE_SUMMARY}</span>
       </div>
-      <DemoNotice />
+      <DataNotice source={source} />
       <section aria-label="高信心推荐">
         <SectionHeading
           title="值得关注的比赛"
@@ -81,9 +93,11 @@ export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
                 }
               >
                 <option value="all">全部联赛</option>
-                <option value="E0">英超</option>
-                <option value="D1">德甲</option>
-                <option value="SP1">西甲</option>
+                {LEAGUES.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
@@ -129,7 +143,7 @@ export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
             <p className="eyebrow">MODEL NOTES</p>
             <h3>让预测有据可查</h3>
             <p>
-              胜平负概率、比分与模型来源一起呈现。预测会变化，首次判断会被保留。
+              亚盘为主，胜平负、比分与大小球为辅，模型来源一起呈现。预测会变化，首次判断会被保留。
             </p>
             <dl>
               <div className="definition">
@@ -142,7 +156,7 @@ export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
               </div>
               <div className="definition">
                 <dt>当前数据</dt>
-                <dd>固定演示样本</dd>
+                <dd>{source.mode === "demo" ? "固定演示样本" : "本机实盘快照"}</dd>
               </div>
             </dl>
           </section>

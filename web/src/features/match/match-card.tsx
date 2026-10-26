@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Icon } from "@/components/icon";
 import { ProbabilityBar } from "@/components/presentation";
 import { beijingTime } from "@/lib/display";
+import { AsianSummary } from "./asian-section";
 import type { MatchRecord } from "./types";
 
 export function MatchCard({
@@ -51,6 +52,7 @@ export function MatchCard({
         </div>
         {prediction ? (
           <>
+            <AsianSummary asian={prediction.asian} />
             <ProbabilityBar values={prediction.probabilities} />
             <div className="card-summary">
               <span>
@@ -60,7 +62,7 @@ export function MatchCard({
                     prediction.confidence === "高" ? "pill pill-accent" : "pill"
                   }
                 >
-                  {prediction.confidence}信心
+                  胜平负{prediction.confidence}
                 </span>
               </span>
               <span>
@@ -70,6 +72,7 @@ export function MatchCard({
             </div>
             <p className="fine-print mt-3">
               概率来源：{prediction.probabilitySource} · {prediction.modelName}
+              {prediction.oddsSource && " · 赔率：" + prediction.oddsSource}
             </p>
           </>
         ) : (

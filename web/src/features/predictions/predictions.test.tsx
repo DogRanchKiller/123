@@ -6,7 +6,7 @@ import { FollowingProvider } from "@/features/following";
 it("没有推荐时不强行选择比赛", () => {
   render(
     <FollowingProvider>
-      <Predictions matches={[]} />
+      <Predictions matches={[]} source={{ mode: "demo" }} />
     </FollowingProvider>,
   );
   expect(screen.getByRole("heading", { name: "暂无推荐" })).toBeInTheDocument();

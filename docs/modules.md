@@ -22,11 +22,12 @@ live.py / main.py  --------^
 
 前端和后端是两个目录、两个进程。中间层是两边的唯一业务入口：`server/` 的路由和命令行入口都调用它，不再各写一套「更新数据 → 评分 → 预测 → 报告」。
 
-`server/` 和 `services/` 还没有。开始写 `server/` 的那一次改动里同时建立 `services/`，把 `live.py` 的编排挪进 `services/live_round.py`，把 `main.py` 的编排挪进 `services/backtest_run.py`。入口文件只保留参数、打印和调用。在那之前，`live.py`、`explain.py` 和 `main.py` 临时充当中间层。不要先建空包，也不要在路由里抄一份 `live.py`。
+`services/` 已建立：`live.py`、`explain.py`、`main.py` 只保留参数、打印和调用，原 `output/pipeline.py` 已并入 `services/match_analysis.py`。`server/` 已建立（只读）：路由只调 `services` 的读函数（`services/match_read.py`：只读打开库、读快照与首次存档），不在路由里抄编排；`tests/test_server.py` 检查 `server/` 只 import `football_prediction.services` / `version` 且不写 SQL。
 
-现有的两处例外，建 `services/` 时一并处理，在那之前不要新增同类引用：
+服务函数不直接 `print`，进度通过参数 `log`（默认 `print`）交给调用方；命令行传 `print`，接口可以传日志函数或空操作。
 
-- `output/pipeline.py`（`ModelCache`、`analyse_match`）会拟合模型，是报告和 `explain.py` 共用的编排，实际属于中间层。建 `services/` 时挪进去。
+现有的一处例外，不要新增同类引用：
+
 - `model_market/implied.py` 引用 `output/derive.py` 的亚盘结算函数（`margin_pmf`、`ah_outcome`、`ah_fair_prob`）来拟合市场隐含 λ。
 
 ## 领域包
@@ -56,10 +57,12 @@ live.py / main.py  --------^
 
 | 文件 | 用例 |
 |---|---|
-| `services/live_round.py` | 实盘一轮：更新数据、赛后评分、未开赛预测、主模型报告、成绩单、替换检查 |
-| `services/backtest_run.py` | 回测演示：现在 `main.py` 里的串联 |
+| `services/live_round.py` | 实盘一轮：更新数据、赛后评分、未开赛预测存档、主模型报告、成绩单、替换检查；每轮写快照 `reports/latest_round.json`；读函数 `read_current` / `read_match` / `read_scorecard` |
+| `services/near_round.py` | 临场档：开球前 1.5 小时内抓阵容和多家赔率，存 `*_t1` 并给最终看法 |
+| `services/match_analysis.py` | 单场判断的取数与拟合：`ModelCache`、`latest_odds`、`analyse_match`，以及报告（`build_report`）和 explain（`explain_inputs`）共用的串联 |
+| `services/backtest_run.py` | 回测演示：原 `main.py` 里的串联 |
 
-读接口如果只是把这一轮已经算好的报告或成绩单送出去，函数就放在 `live_round.py` 并在 `services/__init__.py` 再导出。出现第二种读法，或这个文件超过下面的行数上限时，再拆成第二个用例文件。
+读接口只送出这一轮已经算好的结果，不按请求拟合模型：实盘一轮把每场看法（亚盘在前）和成绩单原子写进快照，`read_current` 剔除快照后已开球的场次，`read_match` 把快照里的本轮看法、`predictions` 里主模型的首次存档（没有时用兜底 dc_xg）和赛果拼在一起。快照字段改名或删字段时升 `live_round.SNAPSHOT_SCHEMA`，并同时改路由和测试。`live_round.py` 超过下面的行数上限，或出现第二种读法时，把读函数拆到新的用例文件。
 
 `services/__init__.py` 只做再导出。路由和命令行从 `football_prediction.services` 引用用例函数，不从领域包里自己拼流程。
 
@@ -80,10 +83,10 @@ web/src/features/     entry、auth、predictions、match、following、review；
 web/src/components/   多模块共用展示组件
 web/src/lib/          按职责命名的基础能力；服务端模块标明 server-only
 web/src/styles/       主题变量、全局样式
-web/src/api/          未来 OpenAPI 生成物，禁止手改；本轮不建
+web/src/api/          OpenAPI 生成物 schema.d.ts（npm run api:types），禁止手改，ESLint 忽略
 ```
 
-前端骨架不建立 server/services，不迁移 Python 编排，不创建 web/src/app/api 或 /api 代理。演示数据从 server-only 模块由服务端组件直接读取，序列化后交给客户端组件；只传页面所需的公开数据。
+前端不创建 web/src/app/api 或 /api 代理。服务端组件经 `features/*/read.server.ts` 取数：未配置 `API_URL` 时读演示样本，配置后由 `lib/api.server.ts` 在服务端请求只读接口，再由各功能的 `api-adapter.ts`（纯函数）把生成类型转成展示契约；序列化后交给客户端组件，只传页面所需的公开数据。浏览器不直接访问接口。
 
 调用方向：app 组装 features / components；features 可以使用 components / lib；components 不反向引用 features。跨功能调用仅使用模块公开入口，其他模块内部文件通过 ESLint 禁止引用。app 只负责页面组合与路由语义；业务交互放功能组件和 hook。Provider 只在实际使用时创建。
 
@@ -93,7 +96,9 @@ web/src/api/          未来 OpenAPI 生成物，禁止手改；本轮不建
 
 ### 演示契约与状态
 
-每场含 ID、联赛/球队、UTC 开球时间、状态、推荐标记、档名、历史命中率、模型及来源、当前预测、首次预测存档、来源/获取/预测三种时间、可空比分、inplay 状态。无赔率来源可为 blend 或 dc_xg，前端只显示字段，不重新兜底。高信心推荐由契约提供，不重算概率阈值。
+每场含 ID、联赛/球队、UTC 开球时间、状态、推荐标记、档名、历史命中率、模型及来源、赔率来源、当前预测、首次预测存档、来源/获取/预测三种时间、可空比分、inplay 状态。无赔率来源可为 blend 或 dc_xg，前端只显示字段，不重新兜底。高信心推荐由契约提供，不重算概率阈值。
+
+预测里的亚盘块对应 `output/analysis.py` 的 `asian()`：主队方向数字线、市场线 / 公平线、五种结算概率、选择方与等效赢盘概率、亚盘信心档与历史命中（公平线不分档）、dc_xg 同线主队赢盘、盘口变动说明。页面先显示亚盘，再显示胜平负；前端只按 Python `ah_text` / `ah_pick_text` 的写法格式化，不换算中文盘口名，不重算概率。联赛代码与名称在 `features/match/leagues.ts`，顺序与 `live.LEAGUES` 一致。成绩单行对应 `review/scorecard.live_report()`，数值由页面格式化。
 
 筛选不进入 URL，通过 sessionStorage 保存筛选与滚动；关注用 localStorage，客户端 effect 读取，读完前不写空默认值。服务端与客户端首次渲染一致，存储被禁用时保留内存交互并提示无法保存。数据刷新不得重置交互状态。
 

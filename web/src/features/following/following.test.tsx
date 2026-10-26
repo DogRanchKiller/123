@@ -6,6 +6,7 @@ import {
   FollowButton,
   FOLLOWING_KEY,
 } from "./following.client";
+import { FollowingList } from "./following-list.client";
 
 function Watch() {
   return (
@@ -45,6 +46,17 @@ describe("手动关注", () => {
       "demo-test",
       "another",
     ]);
+  });
+
+  it("关注的比赛不在当前数据里时提示场数，不悄悄消失", async () => {
+    localStorage.setItem(FOLLOWING_KEY, JSON.stringify(["gone-1", "gone-2"]));
+    render(
+      <FollowingProvider>
+        <FollowingList matches={[]} />
+      </FollowingProvider>,
+    );
+    expect(await screen.findByRole("note")).toHaveTextContent("另有 2 场关注");
+    expect(screen.getByText("当前没有可显示的关注")).toBeInTheDocument();
   });
 
   it("存储不可用仍能临时关注并提示", async () => {

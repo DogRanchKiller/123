@@ -1,5 +1,6 @@
 import { ProbabilityBar, EmptyState } from "@/components/presentation";
 import { beijingTime, percentage } from "@/lib/display";
+import { AsianBlock } from "./asian-section";
 import type { Prediction } from "./types";
 
 export function PredictionSection({
@@ -21,14 +22,16 @@ export function PredictionSection({
     );
   return (
     <section className="panel prediction-section">
-      <div className="section-heading">
-        <h2>{title}</h2>
+      <h2>{title}</h2>
+      <AsianBlock asian={prediction.asian} />
+      <div className="section-heading mt-6">
+        <h3>胜平负</h3>
         <span
           className={
             prediction.confidence === "高" ? "pill pill-accent" : "pill"
           }
         >
-          {prediction.confidence}信心
+          胜平负信心 {prediction.confidence}
         </span>
       </div>
       <ProbabilityBar values={prediction.probabilities} />
@@ -68,6 +71,10 @@ export function PredictionSection({
         <div className="definition">
           <dt>概率来源</dt>
           <dd>{prediction.probabilitySource}</dd>
+        </div>
+        <div className="definition">
+          <dt>赔率来源</dt>
+          <dd>{prediction.oddsSource ?? "无赔率"}</dd>
         </div>
         <div className="definition">
           <dt>历史首选 / 双选命中</dt>
