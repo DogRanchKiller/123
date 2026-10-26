@@ -69,6 +69,7 @@ python -m venv .venv-ml   # Mac 用 python3.14 等与 .venv 同版本的解释�
 .venv-ml/bin/python -m pip install -r requirements.txt -r requirements-ml.txt -c constraints-ml.txt   # Windows 换 .venv-ml\Scripts\python
 .venv-ml/bin/python -m pip check
 .venv-ml/bin/python -m pytest tests   # 与 .venv 的 pytest tests 都要通过
+.venv-ml/bin/python -m agent.mcp_server   # 只读工具的 MCP 服务（stdio，给 Claude Code / Desktop 注册用；库路径见 agent/config.py）
 ```
 
 - `requirements-ml.txt` 只写直接依赖并钉 `==`；`constraints-ml.txt` 里与 `requirements.txt` 重叠的包必须等于 `.venv` 的实际版本。改了 `requirements.txt` 或 `.venv` 的版本时，同步改 `constraints-ml.txt`。
@@ -120,7 +121,8 @@ npm run start     # 部署运行，前置 npm run build
 | `review/store.py` | `predictions` 表的存档、赛后评分（`matches` 无赛果时先用 `fotmob_results`，`reconcile_results` 待 football-data 到达后核对重评）；亚盘评分 `ah_settle` / `ah_scores`：同场所有模型都用存档时的市场亚盘线（本行 `odds.ah_line`，否则同场同档最早一行），旧行自动回填 |
 | `review/scorecard.py` | 实盘成绩单（同场对比 `market_avg`，含亚盘列，只作参考）、`promotion_check`（只看 1X2）、`horizon_report` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
-| `agent/`（仓库根目录，**还没有代码**） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。`football_prediction/model_nn/`（同样还没有代码）是 PyTorch 预测网络，过 G1 之前不进实盘（`docs/ml-stack.md`） |
+| `services/team_read.py` | 按队名的读函数（Agent 工具层用）：`league_code`、`resolve_team_name`、`read_team_recent`、`read_next_fixture`、`read_lineups`、`read_grading` |
+| `agent/`（仓库根目录） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。现有 P1：`config.py`、`tools/`（7 个比赛工具 + `kb_search` 假实现，返回块）、`mcp_server.py`；知识库、编排和对话服务还没有代码。`football_prediction/model_nn/`（同样还没有代码）是 PyTorch 预测网络，过 G1 之前不进实盘（`docs/ml-stack.md`） |
 | `server/`（仓库根目录） | FastAPI 只读接口 `/api/matches`（含最近已开球场次 `recent`）、`/api/matches/{id}`、`/api/review`；只调 `services`，不写 SQL；无鉴权，默认只听 127.0.0.1 |
 | `live.py` | 实盘入口，只有参数、打印和调用 `services`；编排规则见 [`docs/modules.md`](docs/modules.md) |
 | `explain.py` | 单场说明入口。同上 |

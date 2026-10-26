@@ -32,14 +32,24 @@ live.py / main.py  --------^
 
 ## Agent 模块
 
-`agent/` 在仓库根目录，与 `server/` 并列（还没有代码，P1 起按 [agent-dev.md](agent-dev.md) 分阶段写）。它只在 `.venv-ml` 里运行（见 [stack.md](stack.md)）。
+`agent/` 在仓库根目录，与 `server/` 并列，按 [agent-dev.md](agent-dev.md) 分阶段写。它只在 `.venv-ml` 里运行（见 [stack.md](stack.md)）。现有（P1）：
+
+| 文件 | 做什么 |
+|---|---|
+| `agent/config.py` | 库、快照、FotMob 库路径与时钟；环境变量 > `.env` 的 `AGENT_DB_PATH` / `AGENT_SNAPSHOT_PATH` / `AGENT_FOTMOB_PATH` > 默认值，相对路径按仓库根目录；`connect()` 只读打开；测试用 `override()` |
+| `agent/tools/blocks.py` | 把 `services` 的返回包成块（开头 `scope`、主体键、`kind`、`at`）；开球后的快照看法改标 `last_pre_kickoff`，快照不早于开球的整块丢弃 |
+| `agent/tools/matches.py` | 比赛类只读工具：`list_upcoming`、`get_match`、`recent_results`、`explain_fixture`、`scorecard`、`resolve_team`、`team_news` |
+| `agent/tools/knowledge.py` | `kb_search`（P1 是假实现，P2 换成真实检索） |
+| `agent/mcp_server.py` | 用 MCP（stdio）注册 `agent.tools.TOOLS` 里的同一批函数，`ValueError` 转成工具错误 |
+
+工具是普通函数（类型注解 + 中文说明），不 import `mcp`；MCP 和以后的编排框架包装同一个函数，不写两份。
 
 ```
 agent  -->  football_prediction.services  -->  领域包
 ```
 
 - `agent/` 只调 `football_prediction.services` 的公开函数和 `version`，不直接 import 领域包，不写 SQL，库一律用 `open_readonly` 打开，不写 `football.db` / `fotmob.db`。需要的新读法加到 `services`（和接口共用）。
-- `football_prediction/` 和 `server/` 都不 import `agent`。`server/` 仍只 import `services` / `version`；对话服务是 `agent/serve.py` 单独一个进程，不挂在 `server/` 上。这两条在 P1 由 `tests/test_agent_boundary.py` 检查。
+- `football_prediction/` 和 `server/` 都不 import `agent`。`server/` 仍只 import `services` / `version`；对话服务是 `agent/serve.py` 单独一个进程，不挂在 `server/` 上。这两条和「`agent/` 里没有 SQL 字符串、不调用 `.execute`」由 `tests/test_agent_boundary.py`（AST 扫描）检查。
 - 前端「不建 `app/api` 或代理」的规则暂不变。网站对话需要的那一个转发路由，等 P6 决定做网站对话时再在这里写成例外。
 
 ## 领域包
@@ -71,7 +81,8 @@ agent  -->  football_prediction.services  -->  领域包
 |---|---|
 | `services/live_round.py` | 实盘一轮：更新数据、赛后评分、未开赛预测存档、主模型报告、成绩单、替换检查；每轮写快照 `reports/latest_round.json`；读函数 `read_current` / `read_match` / `read_scorecard` |
 | `services/near_round.py` | 临场档：开球前 1.5 小时内抓阵容和多家赔率，存 `*_t1`（0.6 小时内另存 `*_t2`）并给最终看法 |
-| `services/match_analysis.py` | 单场判断的取数与拟合：`ModelCache`、`latest_odds`、`analyse_match`，以及报告（`build_report`）和 explain（`explain_inputs`）共用的串联 |
+| `services/match_analysis.py` | 单场判断的取数与拟合：`ModelCache`、`latest_odds`、`analyse_match`，以及报告（`build_report`）和 explain（`explain_detail`，带赔率获取时间；`explain_inputs` 是它的元组版）共用的串联 |
+| `services/team_read.py` | 按队名的只读用例（Agent 工具层用，接口也可用）：`league_code`、`resolve_team_name`（原样 → 别名表 → 部分匹配 → 近似拼写）、`read_team_recent`、`read_next_fixture`、`read_lineups`（只读挂上的 `fotmob.db`）、`read_grading`（评分行，含 `result_src` 与指标列） |
 | `services/backtest_run.py` | 回测演示：原 `main.py` 里的串联 |
 
 读接口只送出这一轮已经算好的结果，不按请求拟合模型：实盘一轮把每场看法（亚盘在前）和成绩单原子写进快照，`read_current` 剔除快照后已开球的场次，`read_match` 把快照里的本轮看法、`predictions` 里主模型的首次存档（没有时用兜底 dc_market）和赛果拼在一起。快照字段改名或删字段时升 `live_round.SNAPSHOT_SCHEMA`，并同时改路由和测试。`live_round.py` 超过下面的行数上限，或出现第二种读法时，把读函数拆到新的用例文件。

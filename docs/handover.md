@@ -32,7 +32,7 @@
 | `*.bat` `setup_site.ps1` | Windows 定时任务与网站常驻脚本 |
 | `大模型项目/` | 只作训练写法参考，不参与预测，不要改 |
 
-不在包里：`.venv`、`.venv-ml`、`.venv-poc*`、`.venv-scrape`、`.env`、`agent_data/`、`checkpoints/`、`web/node_modules`、`web/.next`、`*.bak*` 备份库、`server_watchdog.log`。`agent/` 还没有代码。
+不在包里：`.venv`、`.venv-ml`、`.venv-poc*`、`.venv-scrape`、`.env`、`agent_data/`、`checkpoints/`、`web/node_modules`、`web/.next`、`*.bak*` 备份库、`server_watchdog.log`。
 
 ## 新机器从零跑起来
 
@@ -104,7 +104,7 @@ python -m server
 5. **评分**：赛果到了（football-data 晚几天时先用 FotMob 比分，之后核对重评）就算 log loss、Brier、亚盘五种结算 log loss 与选边命中。
 6. **出口**：`reports/预测_YYYY-MM-DD.csv`、快照 `reports/latest_round.json` → 接口 → 网站。
 
-调用方向：`web --HTTP--> server --> services --> 领域包`，命令行入口 `live.py` / `explain.py` / `main.py` 也只调 `services`。以后的 `agent/` 同样只调 `services`，现在还没有这段代码。细节见 [`modules.md`](modules.md)。
+调用方向：`web --HTTP--> server --> services --> 领域包`，命令行入口 `live.py` / `explain.py` / `main.py` 也只调 `services`。`agent/`（P1 起有只读工具层与 MCP）同样只调 `services`。细节见 [`modules.md`](modules.md)。
 
 ## 改东西从哪里下手
 
@@ -138,7 +138,7 @@ python -m server
 - 后六个联赛（E1/N1/P1/SC0/B1/T1）没有 understat xG，`dc_xg` 在这些联赛基本等于进球版。
 - OddsPortal 在本机美国出口 IP 下只看到 5 家美国公司。
 - 阵容模型的 `COEF_PRE` / `COEF_POST` 还是 0，研究未确认前不生效。
-- Agent 模块只完成了 P0（独立环境 `.venv-ml` 和规范）。还没有 `agent/` 代码，`requirements.txt` 里也没有 torch。实盘定时任务继续只用 `.venv`。
+- Agent 模块完成了 P0（独立环境 `.venv-ml` 和规范）；P1（`agent/` 的只读工具层与 MCP，`python -m agent.mcp_server`）已写完，待验收。还不接大模型，`requirements.txt` 里也没有 torch。实盘定时任务继续只用 `.venv`。
 - 未解决问题（抓取时间变长、临场档依赖开机和锁、understat / FotMob 条款未核验）见 [`issues.md`](issues.md)「未解决」。
 
 ## 其他文档
