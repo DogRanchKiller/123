@@ -3,6 +3,7 @@ review/scorecard.py  （review 层的一部分，版本跟 review/store.py 的 L
 实盘成绩单与对照：版本对比 compare_versions、成绩单 live_report（同场对比 market_avg）、
 主模型替换检查 promotion_check、临场档对赛前档 horizon_report。只读 predictions 表里已评分的行。
 v1.6.0: 从 store.py 拆出（行为不变）；成绩单增加亚盘列 ah_n / ah_ll / ah_hit（只作参考，不进替换检查）。
+v1.7.0: _scored_first 剔除 generated_at 不早于 extra.kickoff_utc 的行（开球后才存，不算赛前预测）。
 修改此文件后请同步更新 version.py 中 "review" 的版本号。
 """
 import sqlite3
@@ -42,7 +43,8 @@ def _scored_first(conn: sqlite3.Connection) -> pd.DataFrame:
     df = pd.read_sql_query(
         """SELECT p.match_id, p.model_name, p.model_ver, p.log_loss, p.brier,
                   p.ou25_log_loss, p.score_log_loss, p.ah_log_loss, p.ah_hit,
-                  p.p_home_win, p.p_draw, p.p_away_win, p.actual_outcome
+                  p.p_home_win, p.p_draw, p.p_away_win, p.actual_outcome,
+                  p.generated_at, json_extract(p.extra_markets, '$.kickoff_utc') AS kickoff_utc
            FROM predictions p
            WHERE p.actual_outcome IS NOT NULL
            ORDER BY p.generated_at""",
@@ -50,6 +52,10 @@ def _scored_first(conn: sqlite3.Connection) -> pd.DataFrame:
     )
     if df.empty:
         return df
+    # 开球后才存的行（v1.7.0 之前一轮耗时过长时会出现）不算赛前预测；不删库里的行，只在这里不计
+    gen = pd.to_datetime(df["generated_at"], utc=True, format="ISO8601")
+    ko = pd.to_datetime(df["kickoff_utc"], utc=True, format="ISO8601")
+    df = df[~(ko.notna() & (gen >= ko))]
     df = df.drop_duplicates(["match_id", "model_name", "model_ver"]).reset_index(drop=True)
     pick = np.array(["home_win", "draw", "away_win"])[
         df[["p_home_win", "p_draw", "p_away_win"]].to_numpy().argmax(axis=1)]

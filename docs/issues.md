@@ -57,6 +57,15 @@
 
 ## 已解决
 
+### 临场档在开球后才存档，多家赔率的抓取时间记早了
+
+- 状态：已解决（data 1.8.0 / review 1.7.0 / live 1.10.1）
+- 日期：2026-10-26
+- 现象：Sparta Rotterdam – Ajax（`d6878bf5e28f44ec`，开球 2026-10-25 15:45 UTC）的 `lineup_t1` / `lineup_base_t1` 在 16:08 存档，已开球 23 分钟。库里开球后才存的只有这 2 行；`book_odds` 没有记在开球后的行，但这一批的 `fetched_at` 比实际抓回时间早。
+- 原因：临场档 15:43 开始，`now` 在一轮开始时定下，窗口判断和"未开球"都按它算；OddsPortal 抓取约 25 分钟，阵容档在抓完后才存。`collect` 把整批的 `fetched_at` 都记成开始时刻，赔率新鲜度（90 分钟）因此偏宽。
+- 处理：`services.round_clock` 给每轮一个随真实时间走的时钟，`predict_upcoming` / `predict_near` 存档前按它重新判断，已开球就跳过；`save_prediction` 新增 `at`，`generated_at` 记真实存档时刻，`extra.kickoff_utc` 不晚于它时不存。`oddsportal.collect` 的 `fetched_at` 改为每组抓回时刻，抓回时已开球的场次不入库。旧行不删，成绩单与 `promotion_check` 的 `_scored_first` 排除 `generated_at ≥ kickoff_utc` 的行。
+- 位置：`football_prediction/services/live_round.py`（`round_clock`）、`football_prediction/services/near_round.py`、`football_prediction/review/store.py`（`started` / `save_prediction`）、`football_prediction/review/scorecard.py`、`football_prediction/data/oddsportal.py`
+
 ### football-data 赛果晚几天，实盘评分一直落后
 
 - 状态：已解决（review 1.5.0 / data_fotmob 1.1.0 / live 1.8.0）

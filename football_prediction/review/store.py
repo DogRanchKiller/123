@@ -1,5 +1,5 @@
 """
-review/store.py  v1.5.0
+review/store.py  v1.7.0
 复盘层：保存预测记录、赛后评分、跨版本对比。
 预测记录永不覆盖，旧版本预测保留，确保公平比较。
 v1.1.0: has_prediction 去重（每场每模型版本只留开赛前首次预测）；live_report 实盘同场对比市场。
@@ -16,6 +16,8 @@ v1.6.0: 亚盘评分（只作参考，不进 promotion_check）：在存档时�
         没有时取同场同档（赛前 / 临场 _t1）最早一条带亚盘线的存档，各模型同场同线、可配对。
         已评分的旧行由 score_predictions 补算；成绩单增加 ah_n / ah_ll / ah_hit 三列。
         文件超过 400 行，成绩单 / 替换检查 / 临场对照拆到 review/scorecard.py（同为 review 层）。
+v1.7.0: save_prediction 收生成时刻 at，extra 的开球时间不晚于 at 时不存（一轮里抓数据、拟合耗时长，
+        轮开头的 now 会过期）；成绩单 / 替换检查 / 临场对照不计 generated_at 不早于开球的旧行（不删不改）。
 修改此文件后请同步更新 version.py 中 "review" 的版本号。
 """
 import sqlite3
@@ -25,7 +27,7 @@ from math import log
 
 import pandas as pd
 
-LAYER_VERSION = "1.6.0"
+LAYER_VERSION = "1.7.0"
 HORIZON_SUFFIX = "_t1"                          # 临场档模型名后缀（live --near 存档）
 
 _SCHEMA = """
@@ -148,6 +150,12 @@ def _make_pred_id(match_id: str, model_name: str,
     return hashlib.sha1(key.encode()).hexdigest()[:20]
 
 
+def started(extra: dict | None, at: datetime) -> bool:
+    """extra 里记了开球时间且 at 已到开球：这时的预测不能算赛前预测。"""
+    ko = (extra or {}).get("kickoff_utc")
+    return bool(ko) and datetime.fromisoformat(ko) <= at
+
+
 def has_prediction(conn: sqlite3.Connection, match_id: str,
                    model_name: str, model_ver: str) -> bool:
     """该场比赛是否已有此模型版本的预测（实盘只保留首次预测，避免挑选结果）。"""
@@ -169,13 +177,18 @@ def save_prediction(
     p_draw: float,
     p_away_win: float,
     extra_markets: dict | None = None,
-) -> str:
+    at: datetime | None = None,
+) -> str | None:
     """
     保存一条预测记录，返回 pred_id。
     同一场比赛可保存多个模型版本的预测，互不覆盖。
+    at 是生成时刻（默认当前 UTC）；extra_markets 里的 kickoff_utc 不晚于它（已开球）时不存，返回 None。
     """
     _init_review_db(conn)
-    generated_at = datetime.now(timezone.utc).isoformat()
+    at = at or datetime.now(timezone.utc)
+    if started(extra_markets, at):
+        return None
+    generated_at = at.astimezone(timezone.utc).isoformat()
     pred_id = _make_pred_id(match_id, model_name, model_ver, generated_at)
 
     conn.execute(

@@ -18,7 +18,7 @@ import os
 import sqlite3
 import time
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from football_prediction import version
 from football_prediction.data import fotmob
@@ -34,7 +34,7 @@ from football_prediction.output.derive import derive_markets
 from football_prediction.output.report import upcoming_fixtures, write_report
 from football_prediction.review.scorecard import horizon_report, live_report, promotion_check
 from football_prediction.review.store import (
-    has_prediction, pending_fotmob, reconcile_results, save_prediction, score_predictions,
+    has_prediction, pending_fotmob, reconcile_results, save_prediction, score_predictions, started,
 )
 from football_prediction.services.match_analysis import (
     FIXTURE_ODDS, ModelCache, analyse_upcoming, build_report, fixture_odds,
@@ -49,6 +49,14 @@ MARKET_VER = "1.1.0"   # 市场基准算法版本（1/赔率 按比例去抽水�
 SNAPSHOT_PATH = os.path.join("reports", "latest_round.json")   # 本轮看法与成绩单，每轮覆盖
 SNAPSHOT_SCHEMA = 1
 REPLACE_TRIES, REPLACE_WAIT = 5, 0.2   # 替换快照被拒绝时的重试次数与间隔（秒）
+Clock = Callable[[], datetime]
+
+
+def round_clock(start: datetime) -> Clock:
+    """一轮的时钟：start 加上本轮已过去的秒数。一轮里抓数据、拟合可能要几十分钟，
+    存档前用它判断是否已开球；测试传合成的 start，时间只走几秒。"""
+    t0 = time.monotonic()
+    return lambda: start + timedelta(seconds=time.monotonic() - t0)
 
 
 def update_data(conn: sqlite3.Connection, today: str, db_path: str = DB_PATH,
@@ -118,8 +126,10 @@ def match_ident(r: dict) -> dict:
 
 
 def predict_upcoming(conn: sqlite3.Connection, now: datetime, cache: ModelCache | None = None,
-                     log: Log = print) -> int:
-    """对未开球的比赛存档 DC / 射正 DC / xG DC / Elo / blend / 市场 / 市场隐含，返回新保存条数。"""
+                     log: Log = print, clock: Clock | None = None) -> int:
+    """对未开球的比赛存档 DC / 射正 DC / xG DC / Elo / blend / 市场 / 市场隐含，返回新保存条数。
+    clock 是本轮时钟（默认从 now 起算）：每场拟合之后、存档之前再取一次时刻，已开球的跳过。"""
+    clock = clock or round_clock(now)
     cache = cache or ModelCache(conn, now.date().isoformat())
     feat_ver = version.get("features")
     vers = {"dixon_coles": version.get("model_dc"), "dc_sot": version.get("model_sot"),
@@ -129,14 +139,18 @@ def predict_upcoming(conn: sqlite3.Connection, now: datetime, cache: ModelCache 
 
     def save(mid, name, ver, p, extra):
         nonlocal saved
-        if not has_prediction(conn, mid, name, ver):
-            save_prediction(conn, mid, name, ver, feat_ver, p[0], p[1], p[2], extra)
+        if not has_prediction(conn, mid, name, ver) and \
+                save_prediction(conn, mid, name, ver, feat_ver, p[0], p[1], p[2], extra, at=at):
             saved += 1
 
-    for r in upcoming_fixtures(conn, LEAGUES, now):
+    for r in upcoming_fixtures(conn, LEAGUES, clock()):
         mid, lg, home, away, kickoff = (r["match_id"], r["league"], r["home_team"],
                                         r["away_team"], r["kickoff_utc"])
-        lm, ident = cache.get(lg), match_ident(r)
+        lm, ident = cache.get(lg), match_ident(r)   # 首次取某联赛时拟合，可能耗时
+        at = clock()
+        if started({"kickoff_utc": kickoff}, at):
+            log(f"  已开球，不存档：{home} vs {away}")
+            continue
         for t in (home, away):
             if not lm.known(t):
                 log(f"  ⚠ {t} 不在 {lg} 历史数据中，DC 用联赛均值兜底")
@@ -154,19 +168,20 @@ def predict_upcoming(conn: sqlite3.Connection, now: datetime, cache: ModelCache 
         save(mid, "elo", vers["elo"], inp["models"]["elo"], {"kickoff_utc": kickoff, **ident})
         save(mid, BLEND_NAME, vers[BLEND_NAME], inp["models"]["blend"], {"kickoff_utc": kickoff, **ident})
 
-        saved += save_market(conn, mid, fixture_odds(r), inp["rho"], kickoff, feat_ver, info=ident)
+        saved += save_market(conn, mid, fixture_odds(r), inp["rho"], kickoff, feat_ver, info=ident, at=at)
     return saved
 
 
 def save_market(conn: sqlite3.Connection, mid: str, odds: dict, rho: float, kickoff, feat_ver: str,
-                suffix: str = "", info: dict | None = None) -> int:
-    """市场基准 market_avg + 市场隐含（按比例去水 / Shin 去水）。suffix="_t1" 为临场存档。"""
+                suffix: str = "", info: dict | None = None, at: datetime | None = None) -> int:
+    """市场基准 market_avg + 市场隐含（按比例去水 / Shin 去水）。suffix="_t1" 为临场存档。
+    at 为生成时刻（默认当前 UTC），已开球时 save_prediction 不存。"""
     saved = 0
 
     def save(name, ver, p, extra):
         nonlocal saved
-        if not has_prediction(conn, mid, name, ver):
-            save_prediction(conn, mid, name, ver, feat_ver, p[0], p[1], p[2], {**extra, **(info or {})})
+        if not has_prediction(conn, mid, name, ver) and save_prediction(
+                conn, mid, name, ver, feat_ver, p[0], p[1], p[2], {**extra, **(info or {})}, at=at):
             saved += 1
 
     mkt = devig(odds["avg_h"], odds["avg_d"], odds["avg_a"])
@@ -195,18 +210,18 @@ def run_round(conn: sqlite3.Connection, now: datetime, db_path: str = DB_PATH,
               snapshot_path: str = SNAPSHOT_PATH, log: Log = print) -> dict:
     """实盘一轮。返回 report（DataFrame）、report_path、scorecard / promotion / horizon（DataFrame 或 None）、
     primary（主模型名, 版本）；报告 CSV 只在有场次时写，快照每轮都写（没有场次时 matches 为空）。"""
-    today = now.date().isoformat()
+    today, clock = now.date().isoformat(), round_clock(now)
     log("\n>>> [1] 更新数据 ...")
     update_data(conn, today, db_path, log)
     log("\n>>> [2] 赛后评分 ...")
     score_round(conn, log)
     log("\n>>> [3] 未开赛场次预测存档（所有模型，首次预测为准）...")
     cache = ModelCache(conn, today)
-    log(f"  新保存 {predict_upcoming(conn, now, cache, log)} 条预测")
+    log(f"  新保存 {predict_upcoming(conn, now, cache, log, clock)} 条预测")
 
     p_name, p_key = version.PRIMARY_MODEL
     primary = (p_name, version.get(p_key))
-    analysed = analyse_upcoming(conn, LEAGUES, now, cache)
+    analysed = analyse_upcoming(conn, LEAGUES, clock(), cache)   # 本轮期间开球的不进报告和快照
     report = build_report(conn, LEAGUES, now, analysed=analysed)
     rep = live_report(conn)
     out = {"report": report, "report_path": None if report.empty else write_report(report, now),
@@ -221,10 +236,11 @@ def run_round(conn: sqlite3.Connection, now: datetime, db_path: str = DB_PATH,
 
 
 def refresh_snapshot(conn: sqlite3.Connection, now: datetime, cache: ModelCache | None = None,
-                     snapshot_path: str = SNAPSHOT_PATH) -> int:
+                     snapshot_path: str = SNAPSHOT_PATH, clock: Clock | None = None) -> int:
     """按最新赔率重算未开赛场次的本轮看法并重写快照（临场档用：开球前的多家赔率进网站）。
-    不存档、不写报告 CSV、不评分；成绩单按库里现有评分重算。返回快照里的场次数。"""
-    analysed = analyse_upcoming(conn, LEAGUES, now, cache)
+    不存档、不写报告 CSV、不评分；成绩单按库里现有评分重算。返回快照里的场次数。
+    快照的生成时间记 now（本轮开始），场次按 clock 的当前时刻筛未开球的。"""
+    analysed = analyse_upcoming(conn, LEAGUES, (clock or round_clock(now))(), cache)
     write_snapshot(snapshot_path, now, [match_view(r, a, src) for r, a, src in analysed],
                    scorecard_rows(live_report(conn)))
     return len(analysed)

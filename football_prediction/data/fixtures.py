@@ -1,5 +1,5 @@
 """
-data/fixtures.py  v1.7.0
+data/fixtures.py  v1.8.0
 未开赛赛程与赔率快照：football-data fixtures.csv → fixtures 表；每次刷新追加 odds_snapshots。
 从 data/loader.py 拆出（行为不变）；表结构仍在 loader.DB_SCHEMA。
 修改此文件后请同步更新 version.py 中 "data" 的版本号。

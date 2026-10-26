@@ -1,6 +1,6 @@
 # 项目进度
 
-系统版本：1.10.0，与 `football_prediction/version.py` 的 `SYSTEM_VERSION` 一致。
+系统版本：1.10.1，与 `football_prediction/version.py` 的 `SYSTEM_VERSION` 一致。
 
 更新日期：2026-10-26。
 
@@ -97,7 +97,11 @@
 
 ## 版本记录
 
-### 1.10.0（当前）
+### 1.10.1（当前）
+
+主模型、存档模型和概率算法不变，修存档时间。每轮用随真实时间走的时钟（`services.round_clock`），赛前档与临场档存档前按它判断，已开球不存；`predictions.generated_at` 记真实存档时刻（此前是一轮开始的时刻），`extra.kickoff_utc` 不晚于它时 `save_prediction` 不存。OddsPortal 的 `fetched_at` 改为每组抓回时刻，抓回时已开球的不入库，临场档 90 分钟新鲜度按存档时刻算。旧库里开球后才存的 2 行（一场的 `lineup_t1` / `lineup_base_t1`）不删，成绩单与 `promotion_check` 不计开球后的存档。版本：data 1.8.0、review 1.7.0、live 1.10.1（见 issues「临场档在开球后才存档」）。
+
+### 1.10.0
 
 分析重心改为亚盘，主模型、存档模型和比分算法不变。报告与 explain 先列市场线亚盘：数字盘口（主队方向，负数 = 主让），赢盘 / 赢半 / 走 / 输半 / 输，选择方与等效赢盘概率，亚盘信心档，初盘 → 最新快照 → 定价的盘口与水位（升盘 / 降盘），dc_xg 在同一线上的赢盘分歧（8pp 提示）。没有市场亚盘时用比分矩阵的公平线，不分档。`AH_LINES` 扩到 −4…+4，存档的 `extra_markets` 从此多出 ±2.25…±4 的线，已有线的概率不变（output 1.5.0）。
 

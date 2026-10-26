@@ -1,4 +1,6 @@
 """评分、去重、实盘成绩单与主模型替换检查。"""
+import json
+from datetime import datetime, timezone
 from math import log
 
 import numpy as np
@@ -141,6 +143,23 @@ def test_scored_first_keeps_earliest(conn):
     assert len(df) == 1
     assert df.iloc[0]["p_away_win"] == pytest.approx(0.6)
     assert df.iloc[0]["hit"] == 1.0
+
+
+def test_no_archive_or_score_after_kickoff(conn):
+    """开球后不存档；旧库里开球后才存的行（generated_at ≥ kickoff_utc）不进成绩。"""
+    _match(conn, "m1", 0, 1)
+    ko = {"kickoff_utc": "2025-09-01T14:00:00+00:00"}
+    late = datetime(2025, 9, 1, 14, 5, tzinfo=timezone.utc)
+    assert save_prediction(conn, "m1", "x", "1", "1", 0.2, 0.2, 0.6, ko, at=late) is None
+    assert not has_prediction(conn, "m1", "x", "1")
+    early = datetime(2025, 9, 1, 13, 0, tzinfo=timezone.utc)
+    assert save_prediction(conn, "m1", "x", "1", "1", 0.2, 0.2, 0.6, ko, at=early)
+    conn.execute("""INSERT INTO predictions (pred_id, match_id, model_name, model_ver, feature_ver,
+                    layer_ver, p_home_win, p_draw, p_away_win, extra_markets, generated_at)
+                    VALUES ('old','m1','y','1','1','1',0.2,0.2,0.6,?,?)""",
+                 (json.dumps(ko), late.isoformat()))   # 修复前留下的开球后存档
+    score_predictions(conn)
+    assert set(_scored_first(conn)["model_name"]) == {"x"}
 
 
 def test_paired_diff_and_se():

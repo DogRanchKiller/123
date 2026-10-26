@@ -147,6 +147,32 @@ def test_predict_upcoming_saves_once(league, monkeypatch):
     assert len(df) == 1 and df.iloc[0]["最可能比分"] and df.iloc[0]["大2.5球"]
 
 
+def _jump_clock(start, later):
+    """第一次（取赛程）返回 start，之后返回 later：模拟本轮跑到一半时已开球。"""
+    ts = iter([start])
+    return lambda: next(ts, later)
+
+
+def test_rounds_skip_matches_started_mid_round(league):
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
+    _fixture(conn, "f1", (now + timedelta(minutes=30)).isoformat())
+    _books(conn, "f1", now - timedelta(minutes=10))
+    late = now + timedelta(minutes=40)
+    cache = services.ModelCache(conn, cutoff)
+    assert services.predict_upcoming(conn, now, cache, log=lambda *_: None,
+                                     clock=_jump_clock(now, late)) == 0
+    assert services.predict_near(conn, now, cache, log=lambda *_: None,
+                                 clock=_jump_clock(now, late)) == 0
+    assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name='predictions'").fetchone()
+    # 存档时间取本轮时钟：未开球时照常存，generated_at 是存档那一刻
+    mid = now + timedelta(minutes=5)
+    assert services.predict_upcoming(conn, now, cache, log=lambda *_: None,
+                                     clock=_jump_clock(now, mid)) == 9
+    got = {r[0] for r in conn.execute("SELECT DISTINCT generated_at FROM predictions")}
+    assert got == {mid.isoformat()}
+
+
 def test_predict_upcoming_no_ou_skips_implied(league):
     conn, cutoff = league
     now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")

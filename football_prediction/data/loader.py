@@ -1,5 +1,5 @@
 """
-data/loader.py  v1.7.0
+data/loader.py  v1.8.0
 数据层：下载 football-data.co.uk CSV，写入 SQLite，标准化球队 ID。
 v1.1.0: 保存赛前/收盘平均赔率（match_odds 表，作市场基准）；
         下载未开赛赛程 fixtures.csv（fixtures 表，供实盘预测）；CSV 按 utf-8-sig 解码。
@@ -15,13 +15,14 @@ v1.6.0: 实盘库加入意甲 I1、法甲 F1 的 2122–2627（_diag/expand/add_
         OddsPortal / FotMob 补意甲法甲联赛与队名；CSV 只有部分射门列时（老赛季）不再 KeyError，跳过该场统计。
 v1.7.0: 本文件未改；实盘库加入英冠 E1 / 荷甲 N1 / 葡超 P1 / 苏超 SC0 / 比甲 B1 / 土超 T1 的 2122–2627，
         OddsPortal 补联赛 slug 与队名，understat 导出 US_LEAGUES（新联赛没有 understat xG）。
+v1.8.0: 本文件未改；data/oddsportal.py 的 book_odds.fetched_at 改记每组抓回时刻，抓回时已开球的不入库。
 修改此文件后请同步更新 version.py 中 "data" 的版本号。
 """
 import sqlite3, hashlib, requests, io, time, glob, os
 import pandas as pd
 from datetime import date, datetime, timezone
 
-LAYER_VERSION = "1.7.0"
+LAYER_VERSION = "1.8.0"
 BUSY_TIMEOUT = 120     # 秒；SQLite 遇锁时的等待上限（init_db）
 
 # football-data.co.uk 赛季 URL 模板（www 会 302 到裸域名，直接用裸域名少一次握手）
