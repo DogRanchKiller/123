@@ -16,13 +16,16 @@ v1.6.0: 实盘库加入意甲 I1、法甲 F1 的 2122–2627（_diag/expand/add_
 v1.7.0: 本文件未改；实盘库加入英冠 E1 / 荷甲 N1 / 葡超 P1 / 苏超 SC0 / 比甲 B1 / 土超 T1 的 2122–2627，
         OddsPortal 补联赛 slug 与队名，understat 导出 US_LEAGUES（新联赛没有 understat xG）。
 v1.8.0: 本文件未改；data/oddsportal.py 的 book_odds.fetched_at 改记每组抓回时刻，抓回时已开球的不入库。
+v1.9.0: 入库前检查每组赔率（胜平负、大小 2.5、亚盘，赛前 / 收盘 / Pinnacle / B365）：
+        各项隐含概率之和 < 1 的一组整组当作缺失（clean_odds）。源数据里有平均水位被单家异常赔率拉高的行
+        （如 2526 AvgAHA≈4.4，见 docs/issues.md）；只影响新写入，库里已有的旧行不改（只补不改）。
 修改此文件后请同步更新 version.py 中 "data" 的版本号。
 """
 import sqlite3, hashlib, requests, io, time, glob, os
 import pandas as pd
 from datetime import date, datetime, timezone
 
-LAYER_VERSION = "1.8.0"
+LAYER_VERSION = "1.9.0"
 BUSY_TIMEOUT = 120     # 秒；SQLite 遇锁时的等待上限（init_db）
 
 # football-data.co.uk 赛季 URL 模板（www 会 302 到裸域名，直接用裸域名少一次握手）
@@ -185,6 +188,33 @@ def _float_or_none(v) -> float | None:
     return f if f == f else None   # NaN -> None
 
 
+# 同一组赔率（列名）；亚盘组带盘口线，整组当缺失时线也清空
+ODDS_GROUPS = [
+    ("avg_h", "avg_d", "avg_a"), ("avgc_h", "avgc_d", "avgc_a"),
+    ("b365_h", "b365_d", "b365_a"), ("ps_h", "ps_d", "ps_a"), ("psc_h", "psc_d", "psc_a"),
+    ("avg_over25", "avg_under25"), ("avgc_over25", "avgc_under25"),
+    ("avg_ahh", "avg_aha", "ah_line"), ("avgc_ahh", "avgc_aha", "ahc_line"),
+]
+_LINE_COLS = {"ah_line", "ahc_line"}
+
+
+def bad_market(*prices) -> bool:
+    """一组赔率齐全且各项隐含概率之和 < 1（不可能的负抽水）；不齐全时不判。"""
+    if any(p is None or p != p for p in prices):
+        return False
+    return any(p <= 0 for p in prices) or sum(1 / p for p in prices) < 1
+
+
+def clean_odds(odds: dict) -> dict:
+    """把 bad_market 的整组赔率置为 None（亚盘连盘口线一起），其余原样返回。"""
+    out = dict(odds)
+    for group in ODDS_GROUPS:
+        prices = [c for c in group if c not in _LINE_COLS]
+        if all(c in out for c in prices) and bad_market(*(out[c] for c in prices)):
+            out.update({c: None for c in group if c in out})
+    return out
+
+
 def season_of(match_date: str) -> str:
     """按日期推断赛季代码：7 月及以后归入新赛季，如 2026-10-24 -> "2627"。"""
     d = date.fromisoformat(match_date)
@@ -265,7 +295,7 @@ def load_season(
             int(row["FTHG"]), int(row["FTAG"]),
             url, fetched_at, LAYER_VERSION,
         ))
-        odds = {_ODDS_COLS[c]: _float_or_none(row[c]) for c in odds_src}
+        odds = clean_odds({_ODDS_COLS[c]: _float_or_none(row[c]) for c in odds_src})
         if any(v is not None for v in odds.values()):
             odds_rows.append({"match_id": match_id, **odds})
         stats = {_STATS_COLS[c]: _float_or_none(row[c]) for c in stats_src}

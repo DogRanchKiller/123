@@ -136,6 +136,29 @@ def test_upsert_odds_fills_nulls_only(conn):
     assert conn.execute("SELECT avg_h, ah_line FROM match_odds").fetchone() == (2.0, -0.5)
 
 
+def test_clean_odds_drops_impossible_groups():
+    """隐含概率之和 < 1 的一组整组置空（亚盘连线一起），正常组与不齐全的组不动。"""
+    assert loader.bad_market(1.92, 4.4) and not loader.bad_market(1.92, 1.95)
+    assert not loader.bad_market(1.92, None)
+    out = loader.clean_odds({"avg_h": 2.0, "avg_d": 3.4, "avg_a": 3.8, "ah_line": -0.25,
+                             "avg_ahh": 1.92, "avg_aha": 4.4, "ahc_line": -0.25,
+                             "avgc_ahh": 1.9, "avgc_aha": 1.95, "avg_over25": 1.8})
+    assert (out["avg_h"], out["ah_line"], out["avg_ahh"], out["avg_aha"]) == (2.0, None, None, None)
+    assert (out["ahc_line"], out["avgc_aha"], out["avg_over25"]) == (-0.25, 1.95, 1.8)
+
+
+def test_load_season_skips_bad_ah_but_fills_later(conn):
+    """坏的亚盘水位不入库；之后正确的数据仍可按「只补空列」补上。"""
+    import pandas as pd
+    row = {"Date": ["28/11/25"], "HomeTeam": ["A"], "AwayTeam": ["B"], "FTHG": [1], "FTAG": [0],
+           "AvgH": [2.0], "AHh": [-0.25], "AvgAHH": [1.92], "AvgAHA": [4.4]}
+    loader.load_season("E0", "2526", conn, df=pd.DataFrame(row))
+    q = "SELECT avg_h, ah_line, avg_ahh, avg_aha FROM match_odds"
+    assert conn.execute(q).fetchone() == (2.0, None, None, None)
+    loader.load_season("E0", "2526", conn, df=pd.DataFrame({**row, "AvgAHA": [1.95]}))
+    assert conn.execute(q).fetchone() == (2.0, -0.25, 1.92, 1.95)
+
+
 def test_load_season_partial_stats_columns():
     """老 CSV 只有射门（HS/AS）没有射正（HST/AST）：照常写赛果，不写统计。"""
     import pandas as pd

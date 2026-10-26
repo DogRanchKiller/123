@@ -1,9 +1,11 @@
 """
-data/oddsportal.py  v1.8.0
+data/oddsportal.py  v1.9.0
 v1.6.0: 命令行默认联赛加意甲 I1、法甲 F1。
 v1.7.0: 命令行 --leagues 默认取 LEAGUE_SLUGS 全部联赛（新增英冠 / 荷甲 / 葡超 / 苏超 / 比甲 / 土超）。
 v1.8.0: book_odds.fetched_at 记每组抓回的时刻（now + 已过秒数），不再记整批开始时刻；
         抓回时已开球的场次不入库（一批可能抓二十多分钟，之前会把开球后的盘口记成开球前）。
+v1.9.0: book_consensus 的中位数也过 loader.bad_market：胜平负 / 大小 2.5 隐含概率之和 < 1 时当作缺失，
+        亚盘不选这样的线。book_odds 里逐家原始赔率照存。
 多家公司赔率：用开源 OddsHarvester（Playwright 浏览器）抓 OddsPortal 未开赛比赛，
 写入 book_odds 表（逐家、逐盘口，含开盘价；只追加，每次抓取一批）。
 - 只抓未开赛比赛页；历史赛季页被 robots.txt 禁止，历史赔率继续用 football-data。
@@ -23,11 +25,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
+from football_prediction.data.loader import bad_market
 from football_prediction.data.oddsportal_parse import (  # noqa: F401  原导入路径保持可用
     LEAGUE_SLUGS, MATCH_MIN, NAME_ALIASES, link_teams, market_of, match_links, name_sim,
     norm_name, pair_score, parse_record, record_orientation)
 
-LAYER_VERSION = "1.8.0"
+LAYER_VERSION = "1.9.0"
 
 AH_DEFAULT = (-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5)   # 不知道亚盘线时抓的范围
 
@@ -228,11 +231,14 @@ def book_consensus(conn: sqlite3.Connection, match_id: str,
            "avg_a": _med(r[5] for r in x12),
            "avg_over25": _med(r[3] for r in ou), "avg_under25": _med(r[4] for r in ou),
            "ah_line": None, "avg_ahh": None, "avg_aha": None}
+    for group in (("avg_h", "avg_d", "avg_a"), ("avg_over25", "avg_under25")):
+        if bad_market(*(out[k] for k in group)):
+            out.update({k: None for k in group})
     best = None
     for line in sorted({r[2] for r in rows if r[1] == "ah"}):
         h = _med(r[3] for r in rows if r[1] == "ah" and r[2] == line)
         w = _med(r[4] for r in rows if r[1] == "ah" and r[2] == line)
-        if h and w and (best is None or abs(h - w) < best[0]):
+        if h and w and not bad_market(h, w) and (best is None or abs(h - w) < best[0]):
             best = (abs(h - w), line, h, w)
     if best:
         out.update(ah_line=best[1], avg_ahh=best[2], avg_aha=best[3])

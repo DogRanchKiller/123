@@ -1,10 +1,11 @@
 """
-data/oddsportal_parse.py  v1.8.0
+data/oddsportal_parse.py  v1.9.0
 OddsPortal 纯解析（不联网、不读库）：队名规范化与配对、比赛链接 ↔ fixtures 配对、
 OddsHarvester 输出的盘口键与逐家赔率解析。从 data/oddsportal.py 拆出（行为不变）。
 v1.6.0: NAME_ALIASES 补意甲 / 法甲（PSG）。FotMob 队名也先过这张表。
 v1.7.0: LEAGUE_SLUGS 加英冠 E1 / 荷甲 N1 / 葡超 P1 / 苏超 SC0 / 比甲 B1 / 土超 T1，NAME_ALIASES 补这六个联赛的队名。
 v1.8.0: 本文件未改（oddsportal.py 改 fetched_at 与开球后不入库）。
+v1.9.0: 本文件未改（数据层入库前剔除隐含概率之和 < 1 的赔率组）。
 修改此文件后请同步更新 version.py 中 "data" 的版本号。
 """
 import re
@@ -12,7 +13,7 @@ import unicodedata
 from datetime import date, datetime
 from difflib import SequenceMatcher
 
-LAYER_VERSION = "1.8.0"
+LAYER_VERSION = "1.9.0"
 
 LEAGUE_SLUGS = {   # football-data 联赛代码 -> OddsPortal 联赛 slug
     "E0": "england-premier-league", "D1": "germany-bundesliga", "SP1": "spain-laliga",

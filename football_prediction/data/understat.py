@@ -1,9 +1,10 @@
 """
-data/understat.py  v1.8.0（数据层的一部分）
+data/understat.py  v1.9.0（数据层的一部分）
 v1.5.0: 联赛映射新增意甲 I1 / 法甲 F1（研究库扩样本用）。
 v1.6.0: 本文件未改；实盘加入 I1 / F1，每次运行刷新它们当前赛季的 xG。
 v1.7.0: 导出 US_LEAGUES（understat 覆盖的联赛）。英冠等六个新联赛 understat 没有，xG 只靠 FotMob 补。
 v1.8.0: 本文件未改（数据层 oddsportal 改 fetched_at）。
+v1.9.0: 本文件未改（数据层入库前剔除隐含概率之和 < 1 的赔率组）。
 从 understat.com 下载每场 xG，按"联赛 + 日期±1天 + 主客队"对齐到 matches 表，写入 match_xg 表。
 - 两个数据源队名写法不同（如 "Wolverhampton Wanderers" / "Wolves"），
   用"同联赛、日期±1天、比分相同"的场次投票自动建立队名映射，无需手工维护。
@@ -19,7 +20,7 @@ import requests
 
 from football_prediction.data.loader import season_of   # match_xg 表结构在 loader.DB_SCHEMA
 
-LAYER_VERSION = "1.8.0"
+LAYER_VERSION = "1.9.0"
 
 _US_URL   = "https://understat.com/getLeagueData/{name}/{year}"
 _US_NAMES = {"E0": "EPL", "D1": "Bundesliga", "SP1": "La_liga", "I1": "Serie_A", "F1": "Ligue_1"}
