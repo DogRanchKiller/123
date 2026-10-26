@@ -1,5 +1,5 @@
 """
-output/analysis.py  v1.4.0（输出层的一部分）
+output/analysis.py  v1.5.0（输出层的一部分）
 单场判断流程（预测报告与 explain 共用，纯函数，不读库）：
   1 赔率快照（最新一次）
   2 胜平负 = 市场去水概率（无赔率时回退 blend / dc_xg）
@@ -14,6 +14,10 @@ v1.3.0: 信心档按 Shin 去水的最大概率分档，命中率改用 research
         研究显示 Shin 概率在各分箱与实际命中差 ≤ 2.3pp，联赛、赛季初、升班马在 p_max 之外都不显著，
         所以可靠度直接用本场 Shin 概率，不另建修正模型。胜平负显示仍为按比例去水（主模型不变）。
 v1.4.0: analyse 增加 last_row：定价赔率可来自多家中位数，盘口变动仍在赛程表快照之间比。
+v1.5.0: 亚盘为主。ah 块改为：市场线（缺时用比分矩阵的公平线）上的五种结算、等效赢盘概率、
+        选择方（赢盘概率较高的一方）与亚盘信心档 AH_TIERS（research.db 标定，_diag/explore/ah_baseline.py）；
+        同线自研 dc_xg 与市场分歧 > AH_DIVERGE_PP 时提示；亚盘线与水位轨迹 ah_trail（初盘 → 最新快照 → 定价，
+        升盘 / 降盘按让球方让得更多 / 更少）。ah_text / ah_pick_text 给报告与 explain 共用的数字写法。
 """
 import numpy as np
 
@@ -21,9 +25,10 @@ from football_prediction.model_market.devig import shin
 from football_prediction.model_market.implied import implied_matrix, fair_probs
 from football_prediction.output.derive import derive_markets, margin_pmf, ah_outcome, ah_fair_prob
 
-LAYER_VERSION = "1.4.0"
+LAYER_VERSION = "1.5.0"
 
 DIVERGE_PP = 0.08      # 自研与市场分歧提示阈值
+AH_DIVERGE_PP = 0.08   # 同一亚盘线上自研 dc_xg 与市场赢盘概率的分歧提示阈值
 MOVE_PP = 0.05         # 盘口变动阈值（主胜概率）
 FIT_RMSE_WARN = 0.02   # 市场隐含拟合误差提示阈值（回测中约 4% 的场次超过）
 
@@ -44,6 +49,77 @@ MODEL_TIERS = [
     (0.45, "中", 0.52, 0.76),
     (0.00, "低", 0.41, 0.71),
 ]
+# 亚盘信心档：(赢盘概率下限, 档名, 历史选择方命中率（不含走盘）)；赢盘概率 = 市场隐含比分在市场线上的
+# 等效赢盘概率，取较高一方。research.db 5 联赛赛前平均亚盘，1213–2425 标定（不含走盘 21564 场）：
+# 高 n=1414、中 n=2286、低 n=17864。2526 留出：高 0.457（n=35，±0.084，未确认）、中 0.574（n=61）、
+# 低 0.514（n=1517）。隐含赢盘与该线去水水位平均只差 0.003，分档实际看的是水位偏离五五开的程度
+# （_diag/explore/ah_baseline.log）。
+AH_TIERS = [
+    (0.56, "高", 0.607),
+    (0.54, "中", 0.562),
+    (0.00, "低", 0.517),
+]
+
+
+def ah_tier(p_cover: float) -> tuple[str, float]:
+    """按选择方赢盘概率返回 (档名, 历史命中率)。"""
+    for lo, name, hit in AH_TIERS:
+        if p_cover >= lo:
+            return name, hit
+    raise ValueError(p_cover)
+
+
+def ah_text(line: float, o: dict) -> str:
+    """主队方向的数字写法：主-0.75 赢盘54%（赢36%、赢半18%），输46%；有走盘时写「走x%」。"""
+    def part(word, short, full, half):
+        tot = o[full] + o[half]
+        if o[half] <= 0.005:
+            return f"{word}{tot:.0%}"
+        if o[full] <= 0.005:
+            return f"{word}{tot:.0%}（{short}半）"
+        return f"{word}{tot:.0%}（{short}{o[full]:.0%}、{short}半{o[half]:.0%}）"
+    s = f"主{line + 0.0:+.2f} " + part("赢盘", "赢", "win", "half_win")
+    if o["push"] > 0.005:
+        s += f"，走{o['push']:.0%}"
+    return s + "，" + part("输", "输", "lose", "half_lose")
+
+
+def ah_pick_text(ah: dict) -> str:
+    """选择方与等效赢盘概率：主-0.75 52% / 客+0.75 55%。"""
+    line = ah["line"] if ah["side"] == "主" else -ah["line"]
+    return f"{ah['side']}{line + 0.0:+.2f} {ah['p_cover']:.0%}"
+
+
+def _ah_stage(row: dict | None) -> tuple | None:
+    if not row or row.get("ah_line") is None:
+        return None
+    return float(row["ah_line"]), row.get("avg_ahh"), row.get("avg_aha")
+
+
+def _shift(l0: float, l1: float) -> str:
+    """升盘 / 降盘：按让球方让得更多 / 更少；让球方换边时写换边。"""
+    if l0 == l1:
+        return ""
+    if l0 * l1 < 0:
+        return f"让球方换边（{'主' if l1 < 0 else '客'}队让）"
+    giver = "主" if (l0 or l1) < 0 else "客"
+    return f"{'升盘' if abs(l1) > abs(l0) else '降盘'}（{giver}队让{'更多' if abs(l1) > abs(l0) else '更少'}）"
+
+
+def ah_trail(open_row: dict | None, last_row: dict | None, price_row: dict | None) -> str:
+    """亚盘线与主 / 客水位：初盘 → 最新快照 → 定价（相同的相邻阶段合并）；升盘 / 降盘看初盘到定价。
+    定价可能来自多家中位数，水位与 football-data 平均不是同一批公司，只作参考。"""
+    stages = []
+    for name, row in (("初盘", open_row), ("最新快照", last_row), ("定价", price_row)):
+        st = _ah_stage(row)
+        if st is not None and (not stages or stages[-1][1] != st):
+            stages.append((name, st))
+    if len(stages) < 2:
+        return ""
+    w = lambda x: "-" if x is None else f"{x:.2f}"
+    s = " → ".join(f"{n} 主{l + 0.0:+.2f}（{w(h)}/{w(a)}）" for n, (l, h, a) in stages)
+    sh = _shift(stages[0][1][0], stages[-1][1][0])
+    return s + (f"；{sh}" if sh else "；盘口未变，只有水位变化")
 
 
 def confidence_tier(p_max: float, tiers=MARKET_TIERS) -> tuple[str, float, float]:
@@ -102,12 +178,36 @@ def movement(first: dict | None, last: dict | None) -> str:
     return "；".join(parts) + f" → {side}（新信息，已含在最新赔率里，不反向理解）"
 
 
+def asian(matrix: np.ndarray, od: dict, xg_matrix: np.ndarray, priced: bool) -> tuple[dict, list[str]]:
+    """亚盘块与提示。有市场线用市场线，否则用比分矩阵的公平线（赢盘约五五开，不分档）。
+    priced：比分矩阵来自市场（市场隐含）时才和自研比分歧。"""
+    pmf, hints = margin_pmf(matrix), []
+    line, src = od.get("ah_line"), "市场线"
+    if line is None:
+        line, src = derive_markets(matrix)["ah_fair_line"], "公平线（无市场亚盘）"
+    line = float(line)
+    out = ah_outcome(pmf, line)
+    fair = ah_fair_prob(out)
+    side, p_cover = ("主", fair) if fair >= 0.5 else ("客", 1 - fair)
+    tier, hit = ah_tier(p_cover) if src == "市场线" else ("-", None)
+    mkt_ah = fair_probs(od).get("ah")
+    self_fair = ah_fair_prob(ah_outcome(margin_pmf(xg_matrix), line))
+    if priced and abs(self_fair - fair) > AH_DIVERGE_PP:
+        hints.append(f"dc_xg 在主{line + 0.0:+.2f} 的主队赢盘 {self_fair:.0%}，市场 {fair:.0%}，"
+                     f"差 {(self_fair - fair) * 100:+.0f}pp（仅提示，历史上市场更准）")
+    return {"line": line, "line_src": src, "outcome": out, "fair": fair, "side": side,
+            "p_cover": p_cover, "tier": tier, "hit": hit, "self_fair": self_fair,
+            "market_fair": mkt_ah[1] if mkt_ah else None}, hints
+
+
 def analyse(odds_row: dict | None, xg_matrix: np.ndarray, rho: float,
             models: dict[str, tuple] | None = None, first_row: dict | None = None,
-            risks: list[str] | tuple = (), last_row: dict | None = None) -> dict:
+            risks: list[str] | tuple = (), last_row: dict | None = None,
+            ah_open: dict | None = None) -> dict:
     """
     单场判断。odds_row：定价用的最新赔率（fixtures 列名，可为多家中位数）；
     first_row/last_row：同一来源的首条/最新快照，算盘口变动（last_row 缺省为 odds_row）；
+    ah_open：亚盘初盘（赛程表首条快照，只有一条快照时也有；缺省为 first_row）；
     xg_matrix、rho：dc_xg 比分矩阵与联赛 rho；models：自研 1X2 {名称: (主,平,客)}；
     risks：调用方已知的风险（升班马、数据少）。
     """
@@ -143,13 +243,8 @@ def analyse(odds_row: dict | None, xg_matrix: np.ndarray, rho: float,
                 hints.append(f"{name} 与市场分歧：{LABEL[_KEYS[i]]} {d[i]*100:+.0f}pp"
                              "（仅提示，历史上市场更准）")
 
-    ah = None
-    line = od.get("ah_line")
-    if line is not None:
-        out = ah_outcome(margin_pmf(matrix), line)
-        mkt_ah = fair_probs(od).get("ah")
-        ah = {"line": line, "outcome": out, "fair": ah_fair_prob(out),
-              "market_fair": mkt_ah[1] if mkt_ah else None}
+    ah, ah_hints = asian(matrix, od, xg_matrix, source == "市场隐含")
+    hints = ah_hints + hints                     # 亚盘为主：亚盘提示排在前
 
     probs = dict(zip(_KEYS, p))
     order = sorted(probs, key=probs.get, reverse=True)
@@ -165,6 +260,7 @@ def analyse(odds_row: dict | None, xg_matrix: np.ndarray, rho: float,
         "p1x2": p, "p_src": p_src, "market": mkt, "source": source, "fit": fit,
         "markets": mk, "ah": ah, "models": models, "hints": hints,
         "move": movement(first_row, last_row or odds_row) if first_row else "",
+        "ah_move": ah_trail(ah_open or first_row, last_row, odds_row),
         "risks": risks, "lean": LABEL[order[0]], "double": double_label(order[:2]),
         "tier": tier, "hit1": hit1, "hit2": hit2, "est1": est1, "est2": est2,
     }

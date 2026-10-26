@@ -2,7 +2,7 @@
 
 仓库根目录的可运行项目是 `football_prediction`（实盘联赛：英超 E0 / 德甲 D1 / 西甲 SP1 / 意甲 I1 / 法甲 F1 / 英冠 E1 / 荷甲 N1 / 葡超 P1 / 苏超 SC0 / 比甲 B1 / 土超 T1，实盘库都从 2122 赛季起；后六个没有 understat xG）。在仓库根目录工作，数据库与报告路径都相对 cwd。
 
-目标是预测比赛赛果（胜平负 / 比分 / 大小球），不是找价值投注。主模型是市场赔率反推（`market_implied`），自研模型（Dixon-Coles 系、Elo）只作对照和无赔率时的兜底：5 联赛 × 9 赛季、16k 场样本外回测里，自研模型每个联赛、每个赛季都不如赛前市场，融合只改善约 0.002 log loss，命中率不变。要提高准确率，靠的是赔率里还没有的信息（临场赔率、阵容），而不是改进球模型。
+目标是预测比赛赛果，亚盘为主，胜平负 / 比分 / 大小球为辅，不是找价值投注。亚盘一律用主队方向的数字线（负数 = 主队让球，如 `-0.75`），不用中文盘口名。主模型是市场赔率反推（`market_implied`），自研模型（Dixon-Coles 系、Elo）只作对照和无赔率时的兜底：5 联赛 × 9 赛季、16k 场样本外回测里，自研模型每个联赛、每个赛季都不如赛前市场，融合只改善约 0.002 log loss，命中率不变。要提高准确率，靠的是赔率里还没有的信息（临场赔率、阵容），而不是改进球模型。
 
 `大模型项目/` 只作**训练方式参考**（微调、P-Tuning / PET、RAG、Function Call 等写法）。它不是足球预测模型的代码、数据或依赖，不参与 `football_prediction` 的训练、预测和评分。
 
@@ -95,10 +95,11 @@ npm run start     # 部署运行，前置 npm run build
 | `model_lineup/` | 阵容模型：`ratings.py` 球员进攻评分、常规首发、阵容特征；`adjust.py` 把特征乘到市场 λ 上，按赔率是否早于首次正式首发选 `COEF_PRE` / `COEF_POST`（研究确认前都为 0，一场只叠一次）。只用于临场档 `lineup_t1` |
 | `model_elo/` `model_blend/` `model_lgbm/` | Elo；dc_xg + Elo 的 1X2 融合；LightGBM 残差修正 |
 | `calibration/platt.py` | Platt；2425 验证无增益，不进实盘主流程 |
-| `output/analysis.py` | 判断流程，纯函数、不读库，报告与 explain 共用：市场去水 → 市场隐含比分 → 自研分歧提示（8pp）→ 盘口变动（5pp 或亚盘线变化）→ 风险 → 倾向 / 双选 / 信心档 |
+| `output/analysis.py` | 判断流程，纯函数、不读库，报告与 explain 共用：市场去水 → 市场隐含比分 → 亚盘（市场线五种结算、赢盘信心档 `AH_TIERS`、初盘 → 最新 → 定价的盘口与水位、dc_xg 同线分歧 8pp）→ 自研分歧提示（8pp）→ 盘口变动（5pp 或亚盘线变化）→ 风险 → 倾向 / 双选 / 信心档 |
 | `output/pipeline.py` | `ModelCache` 按联赛懒加载并拟合模型，`analyse_match` 把库里的数据接到 `analysis`；`latest_odds` 给报告和 explain 选赔率（24 小时内 ≥3 家的多家中位数优先，否则赛程表快照；存档仍用赛程表） |
-| `output/derive.py` `output/report.py` | 比分矩阵 → 各盘口（含亚盘五种结算）；报告写到 `reports/预测_YYYY-MM-DD.csv` |
-| `review/store.py` | `predictions` 表的存档、赛后评分（`matches` 无赛果时先用 `fotmob_results`，`reconcile_results` 待 football-data 到达后核对重评）、实盘成绩单（同场对比 `market_avg`）、`promotion_check` |
+| `output/derive.py` `output/report.py` | 比分矩阵 → 各盘口（亚盘五种结算，`AH_LINES` −4…+4）；报告写到 `reports/预测_YYYY-MM-DD.csv`，亚盘四列紧跟对阵 |
+| `review/store.py` | `predictions` 表的存档、赛后评分（`matches` 无赛果时先用 `fotmob_results`，`reconcile_results` 待 football-data 到达后核对重评）；亚盘评分 `ah_settle` / `ah_scores`：同场所有模型都用存档时的市场亚盘线（本行 `odds.ah_line`，否则同场同档最早一行），旧行自动回填 |
+| `review/scorecard.py` | 实盘成绩单（同场对比 `market_avg`，含亚盘列，只作参考）、`promotion_check`（只看 1X2）、`horizon_report` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
 | `live.py` | 实盘入口。`services/` 建立后只保留命令行，编排规则见 [`docs/modules.md`](docs/modules.md) |
 | `explain.py` | 单场说明入口。同上 |

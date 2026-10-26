@@ -64,7 +64,9 @@ def test_build_report_market_based_and_future_only(league):
     from football_prediction.model_market.devig import shin
     ps = sorted(shin([1.5, 4.0, 5.5]), reverse=True)
     assert r["本场估计(首选/双选)"] == f"{ps[0]:.0%}/{ps[0] + ps[1]:.0%}"
-    assert r["最可能比分"] and r["大2.5球"] and r["亚盘"].startswith("主-1.00")
+    assert r["最可能比分"] and r["大2.5球"] and r["亚盘"].startswith("主-1.00 赢盘")
+    assert r["亚盘选择"][0] in "主客" and r["亚盘信心"]
+    assert list(df.columns).index("亚盘") == list(df.columns).index("客队") + 1   # 亚盘紧跟对阵
     assert "dc_xg" in r["自研 主/平/客"] and "blend" in r["自研 主/平/客"]
     assert r["开球(北京)"] == (now + timedelta(hours=3)).astimezone(
         ZoneInfo("Asia/Shanghai")).strftime("%m-%d %H:%M")

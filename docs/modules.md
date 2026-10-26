@@ -40,7 +40,7 @@ live.py / main.py  --------^
 | `model_*/` | 一种预测模型怎么拟合和出概率 | `features`；同族变体可继承同包里的模型 | `review`、`output`、`live`、`server` |
 | `calibration/` | 概率校准 | 已算好的概率 | 实盘主流程以外的新入口 |
 | `output/` | 比分矩阵和报告长什么样 | 矩阵和已落库的预测 | 拟合、下载 |
-| `review/` | 预测怎么落库、怎么赛后评分 | 已写入的概率 | 模型类 |
+| `review/` | 预测怎么落库、怎么赛后评分 | 已写入的概率 | 模型类、`output`（亚盘结算 `ah_settle` 在 `review/store.py` 自带一份，不引用 `output.derive`） |
 | `validation/` | 时间外回测和同场比较 | 模型、`output`、指标函数 | `save_prediction` |
 | `services/` | 用例怎么把上面几包串起来 | 领域包的公开函数 | FastAPI、页面 |
 
@@ -122,7 +122,7 @@ web/src/api/          未来 OpenAPI 生成物，禁止手改；本轮不建
 - 测试文件不受 80 行下限约束。
 - 前端路由、布局、配置、明确职责的小组件与类型可短；不为凑行数混合职责。
 
-现有文件保持原样。`validation/backtest.py` 约 310 行，仍在上限内。`data/loader.py`、`data/oddsportal.py` 已拆到 400 行以下（赛程快照在 `data/fixtures.py`，OddsPortal 解析在 `data/oddsportal_parse.py`）。不要为了贴合本规范专门去拆或去合并其他文件。下一次改动如果会让文件超过 400 行，先拆再加功能。
+现有文件保持原样。`validation/backtest.py` 约 310 行，仍在上限内。`data/loader.py`、`data/oddsportal.py` 已拆到 400 行以下（赛程快照在 `data/fixtures.py`，OddsPortal 解析在 `data/oddsportal_parse.py`；实盘成绩单在 `review/scorecard.py`，从 `review/store.py` 拆出）。不要为了贴合本规范专门去拆或去合并其他文件。下一次改动如果会让文件超过 400 行，先拆再加功能。
 
 禁止碎片化：
 

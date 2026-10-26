@@ -1,5 +1,5 @@
 """
-football_prediction/live.py  v1.9.0
+football_prediction/live.py  v1.10.0
 实盘预测闭环：更新数据（含赔率快照）→ 赛后评分 → 对未开赛场次存档预测 → 预测报告 → 实盘成绩单。
 每轮比赛前后各跑一次即可（开赛前多跑几次可记录盘口变动）：
     python -m football_prediction.live
@@ -29,6 +29,8 @@ v1.8.0: 更新数据时抓 FotMob 各联赛页的完赛比分（fotmob_results�
 v1.9.0: 实盘联赛加英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1（2122 起；模型按联赛分别拟合，
         原五联赛的预测不受影响）。understat 没有这六个联赛，跳过 load_xg，xG 只靠 FotMob 补，补不到时
         dc_xg 用进球兜底。
+v1.10.0: 成绩单加亚盘三列（review 1.6.0）：按存档时的市场亚盘线评五种结算 log loss 与赢盘命中（不含走盘）；
+        报告与 explain 改为亚盘优先（output 1.5.0）。
 """
 import argparse
 import shutil
@@ -56,9 +58,9 @@ from football_prediction.output.pipeline      import FIXTURE_ODDS, ModelCache, f
 from football_prediction.output.report        import (
     build_report, upcoming_fixtures, write_report, format_row,
 )
+from football_prediction.review.scorecard     import live_report, promotion_check, horizon_report
 from football_prediction.review.store         import (
-    has_prediction, save_prediction, score_predictions, live_report, promotion_check, horizon_report,
-    pending_fotmob, reconcile_results,
+    has_prediction, save_prediction, score_predictions, pending_fotmob, reconcile_results,
 )
 
 DB_PATH = "football.db"
@@ -350,18 +352,20 @@ def main(argv: list[str] | None = None):
         print("  概率是估计，足球结果随机性大：即使'高'信心档，历史上也约有 1/4 不中。")
 
     print("\n>>> [5] 实盘成绩单（同场对比市场，差值负=优于市场；|差值| < 2×SE 视为无显著差异；"
-          "大小2.5/比分为对应 log loss）...")
+          "大小2.5/比分/亚盘为对应 log loss，亚盘按存档时的市场线）...")
     rep = live_report(conn)
     if rep.empty:
         print("  暂无已评分的实盘预测，比赛结束、数据源更新后再运行即可。")
     else:
         print(f"  {'模型':<16}{'版本':<8}{'场数':>5}{'LogLoss':>9}{'Brier':>8}{'命中率':>7}"
-              f"{'同场':>6}{'差值':>9}{'SE':>8}{'大小2.5':>9}{'比分':>8}")
+              f"{'同场':>6}{'差值':>9}{'SE':>8}{'大小2.5':>9}{'比分':>8}"
+              f"{'亚盘场':>7}{'亚盘LL':>8}{'赢盘命中':>9}")
         for _, r in rep.iterrows():
             print(f"  {r['model_name']:<16}{r['model_ver']:<8}{r['matches']:>5}"
                   f"{r['log_loss']:>9.4f}{r['brier']:>8.4f}{r['hit_rate']:>7.1%}"
                   f"{r['paired_n']:>6}{r['diff_vs_base']:>+9.4f}{r['se']:>8.4f}"
-                  f"{r['ou25_ll']:>9.4f}{r['score_ll']:>8.4f}")
+                  f"{r['ou25_ll']:>9.4f}{r['score_ll']:>8.4f}"
+                  f"{r['ah_n']:>7}{r['ah_ll']:>8.4f}{r['ah_hit']:>9.1%}")
 
         print(f"\n>>> [6] 主模型替换检查（主模型 {p_name} {p_ver}；"
               f"规则：同场 ≥ {version.PROMOTE_MIN_N} 场且 差值+2×SE < 0）...")
