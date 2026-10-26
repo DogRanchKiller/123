@@ -115,7 +115,7 @@ npm run start     # 部署运行，前置 npm run build
 
 联赛列表 `LEAGUES` 定义在 `services/live_round.py`，`live.py`、`explain.py` 再导出。加联赛时同时登记 `fotmob_parse.LEAGUE_IDS` 与 `oddsportal_parse.LEAGUE_SLUGS`（`tests/test_fotmob.py::test_league_lists_agree` 检查四处一致），再用 `_diag/expand/add_live_leagues.py` 写入 2122 起的赛季；understat 只覆盖 `understat.US_LEAGUES`。模型统一用 `fit(conn, league, cutoff_date)`。
 
-`football.db` 每次实盘都会变，已纳入版本库；需要备份时由用户决定是否提交。不要为了"清理工作区"还原或覆盖它。`reports/`、`_cache/`、`_diag/`（诊断与研究脚本及输出）同样是运行产物，按惯例纳入版本库作备份。`research.db` 已 gitignore。
+`football.db` 每次实盘都会变，已纳入版本库；需要备份时由用户决定是否提交。不要为了"清理工作区"还原或覆盖它。`reports/`、`_cache/`、`_diag/` 的脚本与结果日志（`.log`、`result.txt`）同样是运行产物，按惯例纳入版本库作备份。`_diag/` 里脚本生成的逐场 CSV、探测 JSON 和进度行（`log_*.txt`）可重跑再生成，已 gitignore，不要提交；`research.db` 同样 gitignore。只提交有用的文件，可再生成的中间数据和临时文件不进版本库。
 
 ## 数据规则
 

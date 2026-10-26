@@ -2,8 +2,17 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# 其余文件（football.db 实盘记录、reports/ 预测报告、_diag/ 诊断、_cache/ understat 缓存、日志）
+# 其余文件（football.db 实盘记录、reports/ 预测报告、_diag/ 诊断脚本与结果日志、_cache/ 原始数据缓存、日志）
 # 均纳入版本库作备份。football.db 每次运行都会变化，需要备份时手动提交。
+
+# 诊断脚本的中间数据（逐场 CSV、探测 JSON、进度行），重跑对应脚本即可再生成；结论看同目录的 .log / result.txt
+_diag/**/*.csv
+_diag/**/*.json
+_diag/**/log_*.txt
+!_diag/explore/results.csv
+
+# 旧的服务器守护脚本日志，脚本已不在仓库
+server_watchdog.log
 
 # 虚拟环境（各人本机自建）
 .venv/
