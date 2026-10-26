@@ -69,11 +69,11 @@ def test_build_report_market_based_and_future_only(league):
     assert r["最可能比分"] and r["大2.5球"] and r["亚盘"].startswith("主-1.00 赢盘")
     assert r["亚盘选择"][0] in "主客" and r["亚盘信心"]
     assert list(df.columns).index("亚盘") == list(df.columns).index("客队") + 1   # 亚盘紧跟对阵
-    assert "dc_xg" in r["自研 主/平/客"] and "blend" in r["自研 主/平/客"]
+    assert "dc_market" in r["自研 主/平/客"] and "blend" in r["自研 主/平/客"]
     assert r["开球(北京)"] == (now + timedelta(hours=3)).astimezone(
         ZoneInfo("Asia/Shanghai")).strftime("%m-%d %H:%M")
     n = df.iloc[2]                                        # 无赔率：回退自研，并提示
-    assert n["概率来源"] == "blend" and n["比分来源"].startswith("dc_xg")
+    assert n["概率来源"] == "dc_market" and n["比分来源"].startswith("dc_market")
     assert "缺胜平负赔率" in n["提示"]
 
 
@@ -218,6 +218,26 @@ def test_predict_near_needs_window_fresh_odds_and_books(league):
     assert ex["horizon"] == "t1" and ex["n_books"] == 3 and ex["hours_to_ko"] == 1.0
     assert ex["odds"]["avg_h"] == 1.6 and "fetched_at" not in ex["odds"]
     assert len(ex["score_matrix"]) == 81
+
+
+def test_predict_near_t2_only_close_to_kickoff_with_this_rounds_odds(league):
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
+    _fixture(conn, "close", (now + timedelta(minutes=30)).isoformat())
+    _fixture(conn, "old", (now + timedelta(minutes=30)).isoformat(), "B", "E")
+    _books(conn, "close", now - timedelta(minutes=10))
+    _books(conn, "old", now - timedelta(minutes=40))   # 上一轮的赔率：只够 _t1
+    cache = services.ModelCache(conn, cutoff)
+
+    assert services.predict_near(conn, now, cache) == 3 + 3 + 3
+    assert services.predict_near(conn, now, cache) == 0
+    rows = {(m, n) for m, n in conn.execute("SELECT match_id, model_name FROM predictions")}
+    assert {n for m, n in rows if m == "close"} == {
+        f"market_{k}_{h}" for k in ("avg", "implied", "shin") for h in ("t1", "t2")}
+    assert {n for m, n in rows if m == "old"} == {"market_avg_t1", "market_implied_t1", "market_shin_t1"}
+    ex = json.loads(conn.execute("SELECT extra_markets FROM predictions "
+                                 "WHERE model_name='market_implied_t2'").fetchone()[0])
+    assert ex["horizon"] == "t2" and ex["hours_to_ko"] == 0.5
 
 
 def test_predict_near_archives_lineup_pair_only_for_standard_xi(league, monkeypatch):

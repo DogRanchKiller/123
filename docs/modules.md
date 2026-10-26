@@ -58,11 +58,11 @@ live.py / main.py  --------^
 | 文件 | 用例 |
 |---|---|
 | `services/live_round.py` | 实盘一轮：更新数据、赛后评分、未开赛预测存档、主模型报告、成绩单、替换检查；每轮写快照 `reports/latest_round.json`；读函数 `read_current` / `read_match` / `read_scorecard` |
-| `services/near_round.py` | 临场档：开球前 1.5 小时内抓阵容和多家赔率，存 `*_t1` 并给最终看法 |
+| `services/near_round.py` | 临场档：开球前 1.5 小时内抓阵容和多家赔率，存 `*_t1`（0.6 小时内另存 `*_t2`）并给最终看法 |
 | `services/match_analysis.py` | 单场判断的取数与拟合：`ModelCache`、`latest_odds`、`analyse_match`，以及报告（`build_report`）和 explain（`explain_inputs`）共用的串联 |
 | `services/backtest_run.py` | 回测演示：原 `main.py` 里的串联 |
 
-读接口只送出这一轮已经算好的结果，不按请求拟合模型：实盘一轮把每场看法（亚盘在前）和成绩单原子写进快照，`read_current` 剔除快照后已开球的场次，`read_match` 把快照里的本轮看法、`predictions` 里主模型的首次存档（没有时用兜底 dc_xg）和赛果拼在一起。快照字段改名或删字段时升 `live_round.SNAPSHOT_SCHEMA`，并同时改路由和测试。`live_round.py` 超过下面的行数上限，或出现第二种读法时，把读函数拆到新的用例文件。
+读接口只送出这一轮已经算好的结果，不按请求拟合模型：实盘一轮把每场看法（亚盘在前）和成绩单原子写进快照，`read_current` 剔除快照后已开球的场次，`read_match` 把快照里的本轮看法、`predictions` 里主模型的首次存档（没有时用兜底 dc_market）和赛果拼在一起。快照字段改名或删字段时升 `live_round.SNAPSHOT_SCHEMA`，并同时改路由和测试。`live_round.py` 超过下面的行数上限，或出现第二种读法时，把读函数拆到新的用例文件。
 
 `services/__init__.py` 只做再导出。路由和命令行从 `football_prediction.services` 引用用例函数，不从领域包里自己拼流程。
 
@@ -96,9 +96,9 @@ web/src/api/          OpenAPI 生成物 schema.d.ts（npm run api:types），禁
 
 ### 演示契约与状态
 
-每场含 ID、联赛/球队、UTC 开球时间、状态、推荐标记、档名、历史命中率、模型及来源、赔率来源、当前预测、首次预测存档、来源/获取/预测三种时间、可空比分、inplay 状态。无赔率来源可为 blend 或 dc_xg，前端只显示字段，不重新兜底。高信心推荐由契约提供，不重算概率阈值。
+每场含 ID、联赛/球队、UTC 开球时间、状态、推荐标记、档名、历史命中率、模型及来源、赔率来源、当前预测、首次预测存档、来源/获取/预测三种时间、可空比分、inplay 状态。无赔率来源为兜底 dc_market，前端只显示字段，不重新兜底。高信心推荐由契约提供，不重算概率阈值。
 
-预测里的亚盘块对应 `output/analysis.py` 的 `asian()`：主队方向数字线、市场线 / 公平线、五种结算概率、选择方与等效赢盘概率、亚盘信心档与历史命中（公平线不分档）、dc_xg 同线主队赢盘、盘口变动说明。页面先显示亚盘，再显示胜平负；前端只按 Python `ah_text` / `ah_pick_text` 的写法格式化，不换算中文盘口名，不重算概率。联赛代码与名称在 `features/match/leagues.ts`，顺序与 `live.LEAGUES` 一致。成绩单行对应 `review/scorecard.live_report()`，数值由页面格式化。
+预测里的亚盘块对应 `output/analysis.py` 的 `asian()`：主队方向数字线、市场线 / 公平线、五种结算概率、选择方与等效赢盘概率、亚盘信心档与历史命中（公平线不分档）、dc_market 同线主队赢盘、盘口变动说明。页面先显示亚盘，再显示胜平负；前端只按 Python `ah_text` / `ah_pick_text` 的写法格式化，不换算中文盘口名，不重算概率。联赛代码与名称在 `features/match/leagues.ts`，顺序与 `live.LEAGUES` 一致。成绩单行对应 `review/scorecard.live_report()`，数值由页面格式化。
 
 筛选不进入 URL，通过 sessionStorage 保存筛选与滚动；关注用 localStorage，客户端 effect 读取，读完前不写空默认值。服务端与客户端首次渲染一致，存储被禁用时保留内存交互并提示无法保存。数据刷新不得重置交互状态。
 

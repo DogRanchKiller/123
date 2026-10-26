@@ -19,15 +19,6 @@
 
 ## 未解决
 
-### 新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版
-
-- 状态：未解决
-- 日期：2026-10-25
-- 现象：英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1 的 2122–2526 在 `match_xg` 里是 0 场。
-- 原因：understat 只有英超、德甲、西甲、意甲、法甲（`understat.US_LEAGUES`）。FotMob 只补抓了 2627（每日 `data.fotmob` 抓当前赛季），`backfill_xg` 只补已抓的场次。xg_dc 缺 xG 时用进球代替。
-- 处理：主模型是 `market_implied`，这些联赛 football-data 的赔率齐全（只有 T1 2223 缺 29 场），报告不受影响；受影响的是无赔率时的兜底和并行存档的 dc_xg。可选两条路：`python -m football_prediction.data.fotmob --leagues E1,N1,P1,SC0,B1,T1 --history 2425,2526` 补历史（每季约 2000 页，两季按 3.5 秒间隔约 4 小时）；或读 football-data 2627 起新增的 `HxG` / `AxG` 列（11 个联赛 2627 都有，2526 及以前没有）。
-- 位置：`football_prediction/data/understat.py`、`football_prediction/data/fotmob.py`、`football_prediction/model_dc/xg_dc.py`
-
 ### 联赛增加后每日任务和临场档的抓取时间变长
 
 - 状态：未解决
@@ -40,10 +31,10 @@
 ### 临场档依赖电脑开机，且可能与每日任务争 SQLite 锁
 
 - 状态：未解决
-- 日期：2026-10-24（2026-10-25 更新）
+- 日期：2026-10-24（2026-10-25、2026-10-26 更新）
 - 现象：`*_t1`（market_*_t1、lineup_t1 / lineup_base_t1）只有在开球前 1.5 小时内跑过 `live --near` 才会存档。
 - 原因：OddsPortal 多家赔率和 FotMob 正式首发都要临场抓；开赛集中在北京时间 19:30–05:00，电脑关机或睡眠时没有存档。`run_near.bat` 与 `run_daily.bat` 都写 `football.db` / `fotmob.db`，同一时刻运行可能报 `database is locked`。
-- 处理：2026-10-25 建了计划任务 `FootballPredictNear`（每天 18:13 起每 30 分钟一次，到 05:43；单次上限 40 分钟，上一轮未完则跳过）。`init_db` 连接加 `timeout=BUSY_TIMEOUT`（120 秒），遇锁先等待而不是立即报错。仍要求开赛时段电脑开机、不睡眠；失败的一轮只会少存档，不会写错数据（存档只认首次，下一轮会补）。
+- 处理：2026-10-25 建了计划任务 `FootballPredictNear`（每天 18:13 起每 30 分钟一次，到 05:43；单次上限 40 分钟，上一轮未完则跳过）。`init_db` 连接加 `timeout=BUSY_TIMEOUT`（120 秒），遇锁先等待而不是立即报错。仍要求开赛时段电脑开机、不睡眠；失败的一轮只会少存档，不会写错数据（存档只认首次，下一轮会补）。2026-10-26 核对：三个任务都 `WakeToRun=False`，电池供电时 10 分钟无操作就睡眠，睡眠期间的轮次不会跑；`FootballPredictDaily_2337` 10-25 那次结果 0xC000013A（进程被中断，控制台关闭或 Ctrl+C 一类），已手动补跑，10-26 18:07 每日任务与临场档结果都是 0。要提高覆盖，需接电源并关闭睡眠，或给任务打开「唤醒计算机运行」（未改，属于用户的电源设置）。
 - 位置：`run_near.bat`、`football_prediction/live.py`（`_run_near` / `_predict_near`）、`football_prediction/data/loader.py`（`BUSY_TIMEOUT`）
 
 ### understat robots.txt 为 `Disallow: /`，FotMob 使用条款未核验
@@ -56,6 +47,15 @@
 - 位置：`football_prediction/data/understat.py`、`football_prediction/data/fotmob.py`
 
 ## 已解决
+
+### 新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版
+
+- 状态：已解决（output 1.7.0 / 系统 1.12.0）
+- 日期：2026-10-25
+- 现象：英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1 的 2122–2526 在 `match_xg` 里是 0 场。
+- 原因：understat 只有英超、德甲、西甲、意甲、法甲（`understat.US_LEAGUES`）。FotMob 只补抓了 2627（每日 `data.fotmob` 抓当前赛季），`backfill_xg` 只补已抓的场次。xg_dc 缺 xG 时用进球代替。
+- 处理：主模型是 `market_implied`，这些联赛 football-data 的赔率齐全（只有 T1 2223 缺 29 场），报告不受影响；受影响的是无赔率时的兜底和并行存档的 dc_xg。可选两条路：`python -m football_prediction.data.fotmob --leagues E1,N1,P1,SC0,B1,T1 --history 2425,2526` 补历史（每季约 2000 页，两季按 3.5 秒间隔约 4 小时）；或读 football-data 2627 起新增的 `HxG` / `AxG` 列（11 个联赛 2627 都有，2526 及以前没有）。2026-10-26：无赔率时的兜底改为 `dc_market`（进球 + 历史赔率估强度，不用 xG；11 联赛 2324–2627 对 blend −0.0060±0.0010，新六联赛 −0.0092±0.0015），兜底不再受缺 xG 影响；2627 的 xG 已由 FotMob 补齐，HxG 没有历史赛季，不接入。dc_xg 只剩并行存档，在这六个联赛 2122–2526 仍近似进球版。
+- 位置：`football_prediction/data/understat.py`、`football_prediction/data/fotmob.py`、`football_prediction/model_dc/xg_dc.py`
 
 ### football-data 2526 起部分场次的赛前平均亚盘客队水位错误
 

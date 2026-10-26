@@ -1,7 +1,7 @@
 {
  "schema": 1,
- "generated_at": "2026-10-26T04:48:44.639801+00:00",
- "system_version": "1.10.0",
+ "generated_at": "2026-10-26T14:43:07.439524+00:00",
+ "system_version": "1.12.0",
  "primary_model": {
   "name": "market_implied",
   "version": "1.0.0"
@@ -30,31 +30,33 @@
    "match_date": "2026-10-26",
    "model_name": "market_implied",
    "model_version": "1.0.0",
-   "recommended": false,
-   "recommendation_note": null,
-   "odds_source": "多家中位数（4 家，北京 10-26 09:53 抓取）",
+   "recommended": true,
+   "recommendation_note": "胜平负高把握 · 主胜 70% · 亚盘稳妥 客+2.00 67%",
+   "odds_source": "多家中位数（4 家，北京 10-26 22:45 抓取）",
    "asian": {
     "line": -1.5,
     "line_source": "市场线",
     "outcome": {
-     "win": 0.4781,
+     "win": 0.4682,
      "half_win": 0.0,
      "push": 0.0,
      "half_lose": 0.0,
-     "lose": 0.5219
+     "lose": 0.5318
     },
     "side": "客",
-    "p_cover": 0.5219,
+    "p_cover": 0.5318,
     "tier": "低",
     "historical_hit": 0.517,
-    "self_home_cover": 0.3077,
-    "market_home_cover": 0.4851,
-    "movement": "初盘 主-1.50（1.90/1.80） → 定价 主-1.50（1.90/1.79）；盘口未变，只有水位变化"
+    "safe_line": -2.0,
+    "safe_cover": 0.6652,
+    "self_home_cover": 0.3412,
+    "market_home_cover": 0.4737,
+    "movement": "初盘 主-1.50（1.90/1.80） → 定价 主-1.50（1.95/1.75）；盘口未变，只有水位变化"
    },
    "probabilities": [
-    0.6894,
-    0.1757,
-    0.1349
+    0.6811,
+    0.1827,
+    0.1362
    ],
    "probability_source": "市场",
    "score_source": "市场隐含",
@@ -63,37 +65,42 @@
    "confidence": "高",
    "historical_first_hit": 0.722,
    "historical_double_hit": 0.892,
-   "estimated_first_hit": 0.7049,
-   "estimated_double_hit": 0.8737,
+   "estimated_first_hit": 0.6986,
+   "estimated_double_hit": 0.8736,
    "expected_goals": [
-    2.48,
-    1.0
+    2.45,
+    1.01
    ],
    "likely_scores": [
     {
-     "score": "2-0",
-     "prob": 0.0949
+     "score": "2-1",
+     "prob": 0.0953
     },
     {
-     "score": "2-1",
-     "prob": 0.0948
+     "score": "2-0",
+     "prob": 0.094
     },
     {
      "score": "1-1",
-     "prob": 0.0805
-    },
-    {
-     "score": "3-0",
-     "prob": 0.0786
+     "prob": 0.082
     },
     {
      "score": "3-1",
-     "prob": 0.0785
+     "prob": 0.0779
+    },
+    {
+     "score": "3-0",
+     "prob": 0.0769
     }
    ],
-   "over25": 0.6755,
-   "btts": 0.583,
+   "over25": 0.6725,
+   "btts": 0.5865,
    "self_models": {
+    "dc_market": [
+     0.5669,
+     0.223,
+     0.2101
+    ],
     "dc_xg": [
      0.5341,
      0.2384,
@@ -112,10 +119,11 @@
    },
    "movement": null,
    "hints": [
-    "dc_xg 在主-1.50 的主队赢盘 31%，市场 48%，差 -17pp（仅提示，历史上市场更准）",
-    "dc_xg 与市场分歧：主胜 -16pp（仅提示，历史上市场更准）",
-    "elo 与市场分歧：主胜 -19pp（仅提示，历史上市场更准）",
-    "blend 与市场分歧：主胜 -16pp（仅提示，历史上市场更准）"
+    "dc_market 在主-1.50 的主队赢盘 34%，市场 47%，差 -13pp（仅提示，历史上市场更准）",
+    "dc_market 与市场分歧：主胜 -11pp（仅提示，历史上市场更准）",
+    "dc_xg 与市场分歧：主胜 -15pp（仅提示，历史上市场更准）",
+    "elo 与市场分歧：主胜 -18pp（仅提示，历史上市场更准）",
+    "blend 与市场分歧：主胜 -15pp（仅提示，历史上市场更准）"
    ],
    "risks": []
   },
@@ -131,29 +139,31 @@
    "model_version": "1.0.0",
    "recommended": false,
    "recommendation_note": null,
-   "odds_source": "多家中位数（4 家，北京 10-26 09:53 抓取）",
+   "odds_source": "多家中位数（4 家，北京 10-26 22:47 抓取）",
    "asian": {
     "line": 0.5,
     "line_source": "市场线",
     "outcome": {
-     "win": 0.5108,
+     "win": 0.4862,
      "half_win": 0.0,
      "push": 0.0,
      "half_lose": 0.0,
-     "lose": 0.4892
+     "lose": 0.5138
     },
-    "side": "主",
-    "p_cover": 0.5108,
+    "side": "客",
+    "p_cover": 0.5138,
     "tier": "低",
     "historical_hit": 0.517,
-    "self_home_cover": 0.5563,
-    "market_home_cover": 0.5067,
-    "movement": "初盘 主+0.50（1.81/1.90） → 定价 主+0.50（1.83/1.88）；盘口未变，只有水位变化"
+    "safe_line": 0.0,
+    "safe_cover": 0.672,
+    "self_home_cover": 0.5701,
+    "market_home_cover": 0.4837,
+    "movement": "初盘 主+0.50（1.81/1.90） → 定价 主+0.50（1.90/1.78）；盘口未变，只有水位变化"
    },
    "probabilities": [
-    0.2688,
-    0.2458,
-    0.4853
+    0.2493,
+    0.2397,
+    0.5109
    ],
    "probability_source": "市场",
    "score_source": "市场隐含",
@@ -162,37 +172,42 @@
    "confidence": "中",
    "historical_first_hit": 0.523,
    "historical_double_hit": 0.79,
-   "estimated_first_hit": 0.4932,
-   "estimated_double_hit": 0.7587,
+   "estimated_first_hit": 0.5201,
+   "estimated_double_hit": 0.7651,
    "expected_goals": [
-    1.3,
-    1.81
+    1.27,
+    1.89
    ],
    "likely_scores": [
     {
      "score": "1-1",
-     "prob": 0.1108
+     "prob": 0.1073
     },
     {
      "score": "1-2",
-     "prob": 0.0951
-    },
-    {
-     "score": "0-1",
-     "prob": 0.0754
+     "prob": 0.0963
     },
     {
      "score": "0-2",
-     "prob": 0.0734
+     "prob": 0.0758
+    },
+    {
+     "score": "0-1",
+     "prob": 0.0746
     },
     {
      "score": "2-1",
-     "prob": 0.0681
+     "prob": 0.0646
     }
    ],
-   "over25": 0.5998,
-   "btts": 0.6131,
+   "over25": 0.6119,
+   "btts": 0.6162,
    "self_models": {
+    "dc_market": [
+     0.315,
+     0.2551,
+     0.4299
+    ],
     "dc_xg": [
      0.3045,
      0.2518,
@@ -210,7 +225,10 @@
     ]
    },
    "movement": null,
-   "hints": [],
+   "hints": [
+    "dc_market 在主+0.50 的主队赢盘 57%，市场 49%，差 +8pp（仅提示，历史上市场更准）",
+    "dc_market 与市场分歧：客胜 -8pp（仅提示，历史上市场更准）"
+   ],
    "risks": []
   },
   {
@@ -225,29 +243,31 @@
    "model_version": "1.0.0",
    "recommended": false,
    "recommendation_note": null,
-   "odds_source": "多家中位数（4 家，北京 10-26 09:53 抓取）",
+   "odds_source": "多家中位数（4 家，北京 10-26 18:17 抓取）",
    "asian": {
-    "line": -0.25,
+    "line": -0.5,
     "line_source": "市场线",
     "outcome": {
-     "win": 0.4611,
+     "win": 0.4701,
      "half_win": 0.0,
      "push": 0.0,
-     "half_lose": 0.238,
-     "lose": 0.3009
+     "half_lose": 0.0,
+     "lose": 0.5299
     },
-    "side": "主",
-    "p_cover": 0.5234,
+    "side": "客",
+    "p_cover": 0.5299,
     "tier": "低",
     "historical_hit": 0.517,
-    "self_home_cover": 0.5806,
-    "market_home_cover": 0.526,
-    "movement": "初盘 主-0.25（1.86/1.86） → 定价 主-0.25（1.78/1.98）；盘口未变，只有水位变化"
+    "safe_line": -1.0,
+    "safe_cover": 0.6686,
+    "self_home_cover": 0.4602,
+    "market_home_cover": 0.4712,
+    "movement": "初盘 主-0.25（1.86/1.86） → 定价 主-0.50（1.98/1.76）；升盘（主队让更多）"
    },
    "probabilities": [
-    0.4584,
-    0.2409,
-    0.3007
+    0.4682,
+    0.24,
+    0.2917
    ],
    "probability_source": "市场",
    "score_source": "市场隐含",
@@ -256,37 +276,42 @@
    "confidence": "中",
    "historical_first_hit": 0.523,
    "historical_double_hit": 0.79,
-   "estimated_first_hit": 0.4643,
-   "estimated_double_hit": 0.7634,
+   "estimated_first_hit": 0.4737,
+   "estimated_double_hit": 0.7637,
    "expected_goals": [
-    1.83,
-    1.45
+    1.85,
+    1.43
    ],
    "likely_scores": [
     {
      "score": "1-1",
-     "prob": 0.1056
+     "prob": 0.1052
     },
     {
      "score": "2-1",
-     "prob": 0.0915
+     "prob": 0.0922
     },
     {
      "score": "1-2",
-     "prob": 0.0724
+     "prob": 0.0711
     },
     {
      "score": "2-2",
-     "prob": 0.0661
+     "prob": 0.0657
     },
     {
-     "score": "1-0",
-     "prob": 0.0638
+     "score": "2-0",
+     "prob": 0.0647
     }
    ],
    "over25": 0.6351,
-   "btts": 0.6469,
+   "btts": 0.6453,
    "self_models": {
+    "dc_market": [
+     0.4602,
+     0.2365,
+     0.3033
+    ],
     "dc_xg": [
      0.5186,
      0.2135,
@@ -317,31 +342,33 @@
    "match_date": "2026-10-26",
    "model_name": "market_implied",
    "model_version": "1.0.0",
-   "recommended": false,
-   "recommendation_note": null,
-   "odds_source": "多家中位数（4 家，北京 10-26 09:53 抓取）",
+   "recommended": true,
+   "recommendation_note": "胜平负高把握 · 客胜 73% · 亚盘稳妥 主+2.00 68%",
+   "odds_source": "多家中位数（4 家，北京 10-26 18:13 抓取）",
    "asian": {
-    "line": 1.25,
+    "line": 1.5,
     "line_source": "市场线",
     "outcome": {
-     "win": 0.3011,
-     "half_win": 0.2581,
+     "win": 0.5311,
+     "half_win": 0.0,
      "push": 0.0,
      "half_lose": 0.0,
-     "lose": 0.4409
+     "lose": 0.4689
     },
-    "side": "客",
-    "p_cover": 0.5062,
+    "side": "主",
+    "p_cover": 0.5311,
     "tier": "低",
     "historical_hit": 0.517,
-    "self_home_cover": 0.6529,
-    "market_home_cover": 0.4868,
-    "movement": "初盘 主+1.25（1.92/1.82） → 定价 主+1.25（1.94/1.84）；盘口未变，只有水位变化"
+    "safe_line": 2.0,
+    "safe_cover": 0.6767,
+    "self_home_cover": 0.6379,
+    "market_home_cover": 0.5236,
+    "movement": "初盘 主+1.25（1.92/1.82） → 定价 主+1.50（1.76/1.94）；升盘（客队让更多）"
    },
    "probabilities": [
-    0.1106,
-    0.198,
-    0.6914
+    0.1071,
+    0.1829,
+    0.71
    ],
    "probability_source": "市场",
    "score_source": "市场隐含",
@@ -350,37 +377,42 @@
    "confidence": "高",
    "historical_first_hit": 0.722,
    "historical_double_hit": 0.892,
-   "estimated_first_hit": 0.7083,
-   "estimated_double_hit": 0.8997,
+   "estimated_first_hit": 0.7287,
+   "estimated_double_hit": 0.9039,
    "expected_goals": [
-    0.67,
-    2.03
+    0.7,
+    2.17
    ],
    "likely_scores": [
     {
-     "score": "0-1",
-     "prob": 0.1418
+     "score": "0-2",
+     "prob": 0.1329
     },
     {
-     "score": "0-2",
-     "prob": 0.1387
+     "score": "0-1",
+     "prob": 0.1271
     },
     {
      "score": "0-3",
-     "prob": 0.0939
+     "prob": 0.0964
     },
     {
      "score": "1-2",
-     "prob": 0.0927
+     "prob": 0.0936
     },
     {
      "score": "1-1",
-     "prob": 0.086
+     "prob": 0.0811
     }
    ],
-   "over25": 0.5063,
-   "btts": 0.4183,
+   "over25": 0.5493,
+   "btts": 0.4432,
    "self_models": {
+    "dc_market": [
+     0.1642,
+     0.2124,
+     0.6233
+    ],
     "dc_xg": [
      0.1974,
      0.2363,
@@ -399,9 +431,10 @@
    },
    "movement": null,
    "hints": [
-    "dc_xg 在主+1.25 的主队赢盘 65%，市场 49%，差 +16pp（仅提示，历史上市场更准）",
-    "dc_xg 与市场分歧：客胜 -13pp（仅提示，历史上市场更准）",
-    "blend 与市场分歧：客胜 -9pp（仅提示，历史上市场更准）"
+    "dc_market 在主+1.50 的主队赢盘 64%，市场 53%，差 +11pp（仅提示，历史上市场更准）",
+    "dc_market 与市场分歧：客胜 -9pp（仅提示，历史上市场更准）",
+    "dc_xg 与市场分歧：客胜 -14pp（仅提示，历史上市场更准）",
+    "blend 与市场分歧：客胜 -11pp（仅提示，历史上市场更准）"
    ],
    "risks": []
   },
@@ -415,31 +448,33 @@
    "match_date": "2026-10-26",
    "model_name": "market_implied",
    "model_version": "1.0.0",
-   "recommended": false,
-   "recommendation_note": null,
-   "odds_source": "多家中位数（5 家，北京 10-26 09:53 抓取）",
+   "recommended": true,
+   "recommendation_note": "胜平负高把握 · 主胜 73% · 亚盘稳妥 主-0.75 68%",
+   "odds_source": "多家中位数（5 家，北京 10-26 18:11 抓取）",
    "asian": {
     "line": -1.5,
     "line_source": "市场线",
     "outcome": {
-     "win": 0.4883,
+     "win": 0.5018,
      "half_win": 0.0,
      "push": 0.0,
      "half_lose": 0.0,
-     "lose": 0.5117
+     "lose": 0.4982
     },
-    "side": "客",
-    "p_cover": 0.5117,
+    "side": "主",
+    "p_cover": 0.5018,
     "tier": "低",
     "historical_hit": 0.517,
-    "self_home_cover": 0.3853,
-    "market_home_cover": 0.4946,
-    "movement": "初盘 主-1.25（1.86/1.88） → 定价 主-1.50（1.86/1.82）；升盘（主队让更多）"
+    "safe_line": -0.75,
+    "safe_cover": 0.6797,
+    "self_home_cover": 0.4134,
+    "market_home_cover": 0.5075,
+    "movement": "初盘 主-1.25（1.86/1.88） → 定价 主-1.50（1.81/1.86）；升盘（主队让更多）"
    },
    "probabilities": [
-    0.6989,
-    0.1653,
-    0.1358
+    0.7099,
+    0.1642,
+    0.1259
    ],
    "probability_source": "市场",
    "score_source": "市场隐含",
@@ -448,37 +483,42 @@
    "confidence": "高",
    "historical_first_hit": 0.722,
    "historical_double_hit": 0.892,
-   "estimated_first_hit": 0.7131,
-   "estimated_double_hit": 0.8718,
+   "estimated_first_hit": 0.7265,
+   "estimated_double_hit": 0.8831,
    "expected_goals": [
-    2.54,
-    1.02
+    2.58,
+    1.0
    ],
    "likely_scores": [
     {
-     "score": "2-1",
-     "prob": 0.0935
-    },
-    {
      "score": "2-0",
-     "prob": 0.0919
+     "prob": 0.0926
     },
     {
-     "score": "3-1",
-     "prob": 0.0795
+     "score": "2-1",
+     "prob": 0.0926
     },
     {
      "score": "3-0",
-     "prob": 0.0781
+     "prob": 0.0801
+    },
+    {
+     "score": "3-1",
+     "prob": 0.0801
     },
     {
      "score": "1-1",
-     "prob": 0.0755
+     "prob": 0.0735
     }
    ],
-   "over25": 0.6909,
-   "btts": 0.5908,
+   "over25": 0.6959,
+   "btts": 0.587,
    "self_models": {
+    "dc_market": [
+     0.6394,
+     0.2002,
+     0.1604
+    ],
     "dc_xg": [
      0.6174,
      0.2095,
@@ -497,8 +537,9 @@
    },
    "movement": null,
    "hints": [
-    "dc_xg 在主-1.50 的主队赢盘 39%，市场 49%，差 -10pp（仅提示，历史上市场更准）",
-    "dc_xg 与市场分歧：主胜 -8pp（仅提示，历史上市场更准）"
+    "dc_market 在主-1.50 的主队赢盘 41%，市场 50%，差 -9pp（仅提示，历史上市场更准）",
+    "dc_xg 与市场分歧：主胜 -9pp（仅提示，历史上市场更准）",
+    "blend 与市场分歧：主胜 -8pp（仅提示，历史上市场更准）"
    ],
    "risks": []
   },
@@ -514,29 +555,31 @@
    "model_version": "1.0.0",
    "recommended": false,
    "recommendation_note": null,
-   "odds_source": "多家中位数（5 家，北京 10-26 09:53 抓取）",
+   "odds_source": "多家中位数（5 家，北京 10-26 18:14 抓取）",
    "asian": {
     "line": -0.5,
     "line_source": "市场线",
     "outcome": {
-     "win": 0.4979,
+     "win": 0.5066,
      "half_win": 0.0,
      "push": 0.0,
      "half_lose": 0.0,
-     "lose": 0.5021
+     "lose": 0.4934
     },
-    "side": "客",
-    "p_cover": 0.5021,
+    "side": "主",
+    "p_cover": 0.5066,
     "tier": "低",
     "historical_hit": 0.517,
-    "self_home_cover": 0.446,
-    "market_home_cover": 0.5007,
-    "movement": "初盘 主-0.50（1.86/1.85） → 定价 主-0.50（1.85/1.86）；盘口未变，只有水位变化"
+    "safe_line": 0.0,
+    "safe_cover": 0.7034,
+    "self_home_cover": 0.4731,
+    "market_home_cover": 0.5114,
+    "movement": "初盘 主-0.50（1.86/1.85） → 定价 主-0.50（1.81/1.90）；盘口未变，只有水位变化"
    },
    "probabilities": [
-    0.4972,
-    0.2779,
-    0.2249
+    0.5046,
+    0.2775,
+    0.2179
    ],
    "probability_source": "市场",
    "score_source": "市场隐含",
@@ -545,37 +588,42 @@
    "confidence": "中",
    "historical_first_hit": 0.523,
    "historical_double_hit": 0.79,
-   "estimated_first_hit": 0.5043,
-   "estimated_double_hit": 0.7798,
+   "estimated_first_hit": 0.5122,
+   "estimated_double_hit": 0.7872,
    "expected_goals": [
     1.5,
-    0.92
+    0.89
    ],
    "likely_scores": [
     {
      "score": "1-1",
-     "prob": 0.1323
+     "prob": 0.1316
     },
     {
      "score": "1-0",
-     "prob": 0.1243
+     "prob": 0.1275
     },
     {
      "score": "2-0",
-     "prob": 0.1002
+     "prob": 0.1031
     },
     {
      "score": "0-0",
-     "prob": 0.0989
+     "prob": 0.1005
     },
     {
      "score": "2-1",
      "prob": 0.0919
     }
    ],
-   "over25": 0.4342,
-   "btts": 0.4758,
+   "over25": 0.4294,
+   "btts": 0.4684,
    "self_models": {
+    "dc_market": [
+     0.4731,
+     0.2719,
+     0.255
+    ],
     "dc_xg": [
      0.446,
      0.2827,
@@ -809,34 +857,34 @@
   {
    "model_name": "lineup_base_t1",
    "model_ver": "1.1.0",
-   "matches": 15,
-   "log_loss": 1.1058,
-   "brier": 0.6628,
-   "hit_rate": 0.4,
-   "ou25_ll": 0.6343,
-   "score_ll": 3.0471,
-   "ah_n": 15,
-   "ah_ll": 1.0847,
+   "matches": 14,
+   "log_loss": 1.1511,
+   "brier": 0.6949,
+   "hit_rate": 0.3571,
+   "ou25_ll": 0.6535,
+   "score_ll": 3.0964,
+   "ah_n": 14,
+   "ah_ll": 1.0499,
    "ah_hit": 0.5833,
-   "paired_n": 15,
-   "diff_vs_base": 0.0044,
-   "se": 0.016
+   "paired_n": 14,
+   "diff_vs_base": 0.0045,
+   "se": 0.0172
   },
   {
    "model_name": "lineup_t1",
    "model_ver": "1.1.0",
-   "matches": 15,
-   "log_loss": 1.1058,
-   "brier": 0.6628,
-   "hit_rate": 0.4,
-   "ou25_ll": 0.6343,
-   "score_ll": 3.0471,
-   "ah_n": 15,
-   "ah_ll": 1.0847,
+   "matches": 14,
+   "log_loss": 1.1511,
+   "brier": 0.6949,
+   "hit_rate": 0.3571,
+   "ou25_ll": 0.6535,
+   "score_ll": 3.0964,
+   "ah_n": 14,
+   "ah_ll": 1.0499,
    "ah_hit": 0.5833,
-   "paired_n": 15,
-   "diff_vs_base": 0.0044,
-   "se": 0.016
+   "paired_n": 14,
+   "diff_vs_base": 0.0045,
+   "se": 0.0172
   }
  ]
 }

@@ -6,6 +6,7 @@ output/report.build_report 挪到这里，行为不变：
 - latest_odds：报告与 explain 优先用 OddsPortal 多家中位数（≥3 家、24 小时内、有 1X2 与大小 2.5），
   否则用赛程表快照；存档（live_round.predict_upcoming）仍用赛程表赔率。
 - analyse_match 另取赛程表首条快照作亚盘初盘（只有一条快照时也有），给亚盘轨迹用。
+- 自研兜底（无赔率 / 缺大小球盘时的比分与胜平负、亚盘同线对照）为 dc_market（output 1.7.0）。
 """
 import sqlite3
 from datetime import datetime, timedelta
@@ -47,13 +48,15 @@ class LeagueModels:
         return team in self.xg.attack
 
     def inputs(self, home: str, away: str) -> dict:
-        """dc_xg 比分矩阵、rho 与自研 1X2（dc_xg / Elo / blend）"""
-        m = self.xg.score_matrix(home, away)
+        """自研兜底 dc_market 的比分矩阵、rho（仍取 dc_xg 的，市场隐含用它，主模型不变）
+        与自研 1X2（dc_market / dc_xg / Elo / blend，只作分歧提示与存档）"""
+        m = self.market.score_matrix(home, away)
         e = self.elo.predict(home, away)
-        p_xg = matrix_1x2(m)
+        p_xg = matrix_1x2(self.xg.score_matrix(home, away))
         p_elo = (e["home_win"], e["draw"], e["away_win"])
-        return {"xg_matrix": m, "rho": float(self.xg.rho),
-                "models": {"dc_xg": p_xg, "elo": p_elo, "blend": blend_1x2(p_xg, p_elo)}}
+        return {"self_matrix": m, "rho": float(self.xg.rho),
+                "models": {"dc_market": matrix_1x2(m), "dc_xg": p_xg, "elo": p_elo,
+                           "blend": blend_1x2(p_xg, p_elo)}}
 
 
 class ModelCache:
@@ -126,7 +129,7 @@ def analyse_match(conn: sqlite3.Connection, cache: ModelCache, league: str,
         if mv:
             first, last = mv[0], mv[-1]
         ah_open = first or _first_snapshot(conn, match_id)
-    return analyse(odds_row, inp["xg_matrix"], inp["rho"], inp["models"], first,
+    return analyse(odds_row, inp["self_matrix"], inp["rho"], inp["models"], first,
                    team_risks(conn, league, home, away, cache.cutoff), last, ah_open)
 
 

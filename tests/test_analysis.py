@@ -60,7 +60,7 @@ def test_asian_market_line_and_divergence():
     assert ah["line"] == -1.0 and ah["line_src"] == "市场线" and ah["tier"] != "-"
     assert ah["side"] == ("主" if ah["fair"] >= 0.5 else "客") and ah["p_cover"] >= 0.5
     assert ah["market_fair"] == pytest.approx(1 / 1.9 / (1 / 1.9 + 1 / 1.95))
-    assert hints and "dc_xg 在主-1.00" in hints[0]
+    assert hints and "dc_market 在主-1.00" in hints[0]
     _, quiet = asian(m, od, dc_matrix(1.2, 1.2), False)   # 比分矩阵不是市场的，不提示
     assert quiet == []
 
@@ -115,5 +115,5 @@ def test_analyse_highlight_only_market_high():
     assert analyse(hot, xg, -0.05)["highlight"] is True
     assert analyse(even, xg, -0.05)["highlight"] is False
     big = dc_matrix(3.0, 0.4)                                                   # 无赔率：自研档高也不标重点
-    a = analyse(None, big, -0.05, {"blend": (0.8, 0.12, 0.08)})
+    a = analyse(None, big, -0.05)
     assert a["tier"] == "高" and a["highlight"] is False

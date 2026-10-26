@@ -202,7 +202,7 @@ def test_open_readonly_attaches_fotmob(tmp_path):
     assert not (tmp_path / "none.db").exists()
 
 
-def test_read_match_falls_back_to_dc_xg(league, tmp_path):
+def test_read_match_falls_back_to_dc_market(league, tmp_path):
     conn, cutoff = league
     now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
     _fixture(conn, "noodds", (now + timedelta(hours=5)).isoformat(), "B", "E",

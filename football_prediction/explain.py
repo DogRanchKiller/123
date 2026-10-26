@@ -1,5 +1,5 @@
 """
-football_prediction/explain.py  v1.6.0（输出层的一部分）
+football_prediction/explain.py  v1.7.0（输出层的一部分）
 单场判断说明：按判断流程逐步列出依据。
     python -m football_prediction.explain 英超 Arsenal Chelsea
     python -m football_prediction.explain E0 Arsenal Chelsea --odds 1.9 3.6 4.2 --ou 1.85 2.0 --ah -0.5 1.95 1.95
@@ -11,6 +11,7 @@ v1.4.0: 赔率来源改用 latest_odds（多家中位数优先），[1] 写明�
 v1.5.0: 亚盘为主：[2] 亚盘（数字线、五种结算、等效赢盘、该线水位去水、dc_xg 同线、线与水位轨迹），
         结论先写亚盘选择与亚盘信心，再写胜平负。
 v1.6.0: 结论加亚盘稳妥线（赢盘 ≥ 65% 的最近一条线）与重点标记（胜平负市场档为高）。
+v1.7.0: 自研兜底与亚盘同线对照改为 dc_market（analysis.SELF_NAME）。
 """
 import argparse
 import difflib
@@ -19,10 +20,10 @@ import sys
 from datetime import datetime, timezone
 
 from football_prediction.data.loader import init_db
-from football_prediction.output.analysis import SAFE_TARGET, ah_pick_text, ah_text, safe_text
+from football_prediction.output.analysis import SAFE_TARGET, SELF_NAME, ah_pick_text, ah_text, safe_text
 from football_prediction.services import DB_PATH, LEAGUES, explain_inputs
 
-LAYER_VERSION = "1.6.0"
+LAYER_VERSION = "1.7.0"
 
 
 def _league(s: str) -> str:
@@ -68,7 +69,7 @@ def explain(conn, league, home, away, manual: dict | None = None,
              f"输半 {out['half_lose']:.1%}  输 {out['lose']:.1%}")
     L.append(f"    等效赢盘（不计走盘）主 {ah['fair']:.1%} / 客 {1 - ah['fair']:.1%}" +
              (f"；该线水位去水后主 {ah['market_fair']:.1%}" if ah["market_fair"] is not None else "") +
-             f"；dc_xg 同线主 {ah['self_fair']:.1%}")
+             f"；{SELF_NAME} 同线主 {ah['self_fair']:.1%}")
     L.append(f"    亚盘变动：{a['ah_move'] or '暂无（只有一个阶段的亚盘）'}")
     p = a["p1x2"]
     L.append(f"\n[3] 胜平负（{a['p_src']}）：主 {p[0]:.1%}  平 {p[1]:.1%}  客 {p[2]:.1%}")

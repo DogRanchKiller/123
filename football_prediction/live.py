@@ -1,5 +1,5 @@
 """
-football_prediction/live.py  v1.11.0
+football_prediction/live.py  v1.12.0
 实盘预测闭环：更新数据（含赔率快照）→ 赛后评分 → 对未开赛场次存档预测 → 预测报告 → 实盘成绩单。
 每轮比赛前后各跑一次即可（开赛前多跑几次可记录盘口变动）：
     python -m football_prediction.live
@@ -38,6 +38,10 @@ v1.10.1: 一轮用 round_clock 计时，存档前（拟合之后）再取时刻�
         抓回时已开球的不入库（data 1.8.0）；成绩单不计开球后才存的旧行（review 1.7.0）。概率算法不变。
 v1.11.0: 每场一个结论 + 把握程度（output 1.6.0）：快照亚盘加稳妥线 safe_line / safe_cover；页面「推荐」
         recommended 改为胜平负市场档为高（Shin 最大概率 ≥ 0.60），不再用亚盘信心高 / 中。概率与存档不变。
+v1.12.0: 无赔率时的兜底改为 dc_market（output 1.7.0，此前比分 dc_xg、胜平负 blend；11 联赛月度回测
+        对 blend −0.0060±0.0010）。--near 加第二临场档 *_t2：存档时离开球 T2_HOURS（0.6）小时内、
+        且用本轮抓到的多家赔率（T2_FRESH_MIN 30 分钟内），只存三个市场模型；horizon_report 对赛前档与 _t1
+        各配对一次（review 1.8.0）。有赔率场次的主模型概率不变。
 """
 import argparse
 from datetime import datetime, timezone
@@ -66,7 +70,7 @@ def _print_scorecard(rep) -> None:
 def main(argv: list[str] | None = None):
     ap = argparse.ArgumentParser(description="实盘预测闭环")
     ap.add_argument("--near", action="store_true",
-                    help=f"只跑临场档：开球前 {T1_HOURS} 小时内的多家赔率 + 阵容 → *_t1 存档")
+                    help=f"只跑临场档：开球前 {T1_HOURS} 小时内的多家赔率 + 阵容 → *_t1 存档（更近开球时另存 *_t2）")
     ns = ap.parse_args(argv)
     now = datetime.now(timezone.utc)
     print(f"系统版本: {version.SYSTEM_VERSION}  当前时间(UTC): {now:%Y-%m-%d %H:%M}")

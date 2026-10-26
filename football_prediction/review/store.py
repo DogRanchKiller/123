@@ -1,5 +1,5 @@
 """
-review/store.py  v1.7.0
+review/store.py  v1.8.0
 复盘层：保存预测记录、赛后评分、跨版本对比。
 预测记录永不覆盖，旧版本预测保留，确保公平比较。
 v1.1.0: has_prediction 去重（每场每模型版本只留开赛前首次预测）；live_report 实盘同场对比市场。
@@ -13,11 +13,14 @@ v1.5.0: matches 还没有赛果时用 fotmob_results 的比分先评分（predic
 v1.6.0: 亚盘评分（只作参考，不进 promotion_check）：在存档时的市场亚盘线上，用 extra 里的
         ah_{线} 五种结算概率算 log loss（ah_log_loss），赢盘概率较高一方为选择方算命中（ah_hit，
         赢 / 赢半 = 1，输 / 输半 = 0，走盘为空）；评分用的线记入 ah_line。线取本行 extra.odds.ah_line，
-        没有时取同场同档（赛前 / 临场 _t1）最早一条带亚盘线的存档，各模型同场同线、可配对。
+        没有时取同场同档（赛前 / 临场）最早一条带亚盘线的存档，各模型同场同线、可配对。
         已评分的旧行由 score_predictions 补算；成绩单增加 ah_n / ah_ll / ah_hit 三列。
         文件超过 400 行，成绩单 / 替换检查 / 临场对照拆到 review/scorecard.py（同为 review 层）。
 v1.7.0: save_prediction 收生成时刻 at，extra 的开球时间不晚于 at 时不存（一轮里抓数据、拟合耗时长，
         轮开头的 now 会过期）；成绩单 / 替换检查 / 临场对照不计 generated_at 不早于开球的旧行（不删不改）。
+v1.8.0: 临场档分两档：_t1（开球前 1.5 小时内）与 _t2（开球前 0.6 小时内，live 1.12.0）。HORIZON_SUFFIXES
+        列出两者，horizon_of 返回模型名的档；亚盘评分的参照线按（场次, 档）分组，_t2 与 _t1 各用自己最早的线。
+        两档都不参加 promotion_check；horizon_report 里 _t2 同时对赛前档与 _t1 配对。
 修改此文件后请同步更新 version.py 中 "review" 的版本号。
 """
 import sqlite3
@@ -27,8 +30,9 @@ from math import log
 
 import pandas as pd
 
-LAYER_VERSION = "1.7.0"
+LAYER_VERSION = "1.8.0"
 HORIZON_SUFFIX = "_t1"                          # 临场档模型名后缀（live --near 存档）
+HORIZON_SUFFIXES = ("_t1", "_t2")              # 临场各档后缀，越往后越接近开球
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
@@ -118,14 +122,19 @@ def ah_scores(extra: dict, hg: int, ag: int, line) -> tuple[float | None, float 
     return ll, float((k in ("win", "half_win")) == home)
 
 
-def _ah_ref_lines(conn: sqlite3.Connection) -> dict[tuple[str, bool], float]:
-    """{(match_id, 是否临场档): 亚盘线}：同场同档最早一条在 extra.odds 里带亚盘线的存档。"""
+def horizon_of(model_name: str) -> str:
+    """模型名所属的档："" 为赛前档，否则为临场档后缀（"_t1" / "_t2"）。"""
+    return next((s for s in HORIZON_SUFFIXES if model_name.endswith(s)), "")
+
+
+def _ah_ref_lines(conn: sqlite3.Connection) -> dict[tuple[str, str], float]:
+    """{(match_id, 档): 亚盘线}：同场同档最早一条在 extra.odds 里带亚盘线的存档。"""
     out = {}
     for mid, name, ex in conn.execute(
             "SELECT match_id, model_name, extra_markets FROM predictions "
             "WHERE extra_markets LIKE '%\"ah_line\"%' ORDER BY generated_at"):
         line = _own_ah_line(json.loads(ex))
-        key = (mid, name.endswith(HORIZON_SUFFIX))
+        key = (mid, horizon_of(name))
         if line is not None and key not in out:
             out[key] = line
     return out
@@ -139,7 +148,7 @@ def _own_ah_line(extra: dict):
 def _ah_line_for(row, extra: dict, ref: dict):
     line = _own_ah_line(extra)
     if line is None:
-        line = ref.get((row["match_id"], row["model_name"].endswith(HORIZON_SUFFIX)))
+        line = ref.get((row["match_id"], horizon_of(row["model_name"])))
     return line
 
 

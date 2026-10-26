@@ -1,5 +1,5 @@
 """
-output/report.py  v1.6.0（输出层的一部分）
+output/report.py  v1.7.0（输出层的一部分）
 预测报告：对未开赛场次，按判断流程（output/analysis.py）用【最新】赔率现算，
 给出胜平负概率（市场为底）、倾向与双选、信心档（附历史命中率）、预期进球、最可能比分、
 大 2.5 / 双方进球 / 亚盘、自研模型对照、盘口变动、风险提示。
@@ -11,6 +11,7 @@ v1.4.0: 赔率改由 pipeline.latest_odds 选（多家中位数优先），新�
 v1.5.0: 亚盘为主：主客队之后依次为「亚盘」（数字线 + 赢 / 赢半 / 走 / 输半 / 输）、「亚盘选择」、
         「亚盘信心」（档[历史命中]）、「亚盘变动」（线与水位轨迹）；控制台第一行是亚盘。
 v1.6.0: 新增列「亚盘稳妥」（选择方赢盘 ≥ 65% 的最近一条线）与「重点」（胜平负市场档为高时写「★」）。
+v1.7.0: 「自研 主/平/客」列改为 dc_market 与 blend（自研兜底改为 dc_market）。
 拟合与取赔率的编排（原 build_report、pipeline）在 services/match_analysis.py；本文件只管行格式与写文件。
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 """
@@ -26,7 +27,7 @@ from football_prediction.output.analysis import (   # noqa: F401  confidence_tie
     ah_pick_text, ah_text, safe_text,
 )
 
-LAYER_VERSION = "1.6.0"
+LAYER_VERSION = "1.7.0"
 
 REPORT_DIR = "reports"
 _BJ = ZoneInfo("Asia/Shanghai")
@@ -89,7 +90,7 @@ def report_row(r: dict, a: dict, league_names: dict[str, str]) -> dict:
         "大2.5球": _pct(mk["over_2.5"]),
         "双方进球": _pct(mk["btts_yes"]),
         "自研 主/平/客": "  ".join(f"{k} " + "/".join(f"{x:.0%}" for x in md[k])
-                                for k in ("dc_xg", "blend") if k in md),
+                                for k in ("dc_market", "blend") if k in md),
         "盘口变动": a["move"],
         "提示": "；".join(a["hints"] + a["risks"]),
         "比分来源": a["source"],

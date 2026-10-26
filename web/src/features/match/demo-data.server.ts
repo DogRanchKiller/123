@@ -142,9 +142,9 @@ export const demoMatches: readonly MatchRecord[] = [
     recommendationNote: null,
     current: {
       ...market,
-      modelName: "blend_xg_elo",
-      probabilitySource: "blend",
-      scoreSource: "dc_xg（无赔率）",
+      modelName: "dc_market",
+      probabilitySource: "dc_market",
+      scoreSource: "dc_market（无赔率）",
       oddsSource: null,
       asian: {
         line: -0.5,
@@ -158,7 +158,7 @@ export const demoMatches: readonly MatchRecord[] = [
         movement: null,
       },
       confidence: "中",
-      sourceNote: "缺胜平负赔率：概率来自 blend 自研模型；比分来自 dc_xg。",
+      sourceNote: "缺胜平负赔率：概率与比分都来自自研的进球 + 赔率强度模型。",
       probabilities: [0.53, 0.27, 0.2],
       historicalFirstHit: 0.52,
       historicalDoubleHit: 0.76,

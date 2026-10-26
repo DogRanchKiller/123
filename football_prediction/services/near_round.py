@@ -2,6 +2,7 @@
 services/near_round.py  临场档一轮（中间层）
 开球前 T1_HOURS 小时内：先抓阵容再抓多家赔率 → 存 *_t1 临场档（market_avg / market_implied / market_shin），
 已公布正式首发时另存 lineup_t1 与配对基准 lineup_base_t1；每场输出临场最终看法（只输出，不另存档）。
+开球前 T2_HOURS 小时内、且赔率在 T2_FRESH_MIN 分钟内抓到时，另存更接近开球的 *_t2（只有三个市场模型）。
 窗口内有场次时，按最新赔率重写给接口读的快照（refresh_snapshot），网站看到开球前的多家赔率。
 命令行入口是 `live.py --near`；行为与版本说明见 live.py 的文件头。
 一轮的时刻用 live_round.round_clock：抓取与拟合之后、存档之前再取，已开球的场次不存。
@@ -31,6 +32,8 @@ from football_prediction.services.match_analysis import ModelCache
 T1_HOURS = 1.5         # 临场档：开球前 1.5 小时内
 T1_FRESH_MIN = 90      # 临场档只用 90 分钟内抓到的多家赔率
 T1_MIN_BOOKS = 3       # 且至少 3 家公司
+T2_HOURS = 0.6         # 第二临场档：存档时离开球 0.6 小时内（每 30 分钟一轮，存档约在开球前 0.3–0.6 小时）
+T2_FRESH_MIN = 30      # 第二临场档只用本轮抓到的多家赔率（上一轮的已超过 30 分钟）
 
 
 def _lineup_view(conn, r: dict, odds: dict, rho: float, models: dict, cutoff: str) -> dict | None:
@@ -98,7 +101,8 @@ def _final_view(r: dict, odds: dict, rho: float, view: dict | None) -> str:
 
 def predict_near(conn: sqlite3.Connection, now: datetime, cache: ModelCache, log: Log = print,
                  clock: Clock | None = None) -> int:
-    """开球前 T1_HOURS 小时内、且有 T1_FRESH_MIN 分钟内抓到的多家赔率的场次：存 *_t1 临场档。
+    """开球前 T1_HOURS 小时内、且有 T1_FRESH_MIN 分钟内抓到的多家赔率的场次：存 *_t1 临场档；
+    同时在 T2_HOURS 小时内、赔率在 T2_FRESH_MIN 分钟内的再存 *_t2（各档每场只存首次）。
     clock 是本轮时钟（默认从 now 起算）；每场在拟合之后取存档时刻，已开球的不存。"""
     clock = clock or round_clock(now)
     saved, lineup_models = 0, {}
@@ -122,6 +126,9 @@ def predict_near(conn: sqlite3.Connection, now: datetime, cache: ModelCache, log
                 "odds_fetched_at": cons["fetched_at"], "hours_to_ko": round(hours, 2), **match_ident(r)}
         saved += save_market(conn, r["match_id"], cons, rho, r["kickoff_utc"],
                              version.get("features"), "_t1", info, at=at)
+        if hours <= T2_HOURS and at - datetime.fromisoformat(cons["fetched_at"]) <= timedelta(minutes=T2_FRESH_MIN):
+            saved += save_market(conn, r["match_id"], cons, rho, r["kickoff_utc"],
+                                 version.get("features"), "_t2", info | {"horizon": "t2"}, at=at)
         view = _lineup_view(conn, r, cons, rho, lineup_models, cache.cutoff)
         # 阵容模型首次拟合也耗时：存之前再取一次时刻，已开球时 save_prediction 不存
         saved += _save_lineup(conn, r, view, rho, info, clock())

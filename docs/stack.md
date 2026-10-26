@@ -54,7 +54,7 @@ Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `f
 
 训练语言是 Python，和后端同一个解释器。2026 年工业界的训练默认仍是 Python：PyTorch 做神经网络，梯度提升树做表格数据。TypeScript 只出现在前端。
 
-本仓库的预测输入是每场比赛的数值特征，不是文本。默认方式按输入分开，主模型保持 `version.PRIMARY_MODEL`（现为市场隐含 `market_implied` / `model_market`，无赔率时回退 `dc_xg` / `model_xg`）。
+本仓库的预测输入是每场比赛的数值特征，不是文本。默认方式按输入分开，主模型保持 `version.PRIMARY_MODEL`（现为市场隐含 `market_implied` / `model_market`，无赔率时回退 `dc_market` / `model_dc_market`）。
 
 | 输入 | 方式 | 库 |
 |---|---|---|

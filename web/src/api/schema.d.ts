@@ -80,7 +80,7 @@ export interface components {
         };
         /**
          * ArchivedPrediction
-         * @description 主模型（没有时兜底 dc_xg）开赛前的首次存档与赛后评分；临场档同形状（horizon=t1）。
+         * @description 主模型（没有时兜底 dc_market）开赛前的首次存档与赛后评分；临场档同形状（horizon=t1）。
          */
         ArchivedPrediction: {
             /** Actual Outcome */

@@ -15,13 +15,19 @@ const LABELS: Readonly<Record<string, string>> = {
   lineup_base: "阵容对照",
 };
 
-/** 中文模型名；`_t1` 结尾的是临场档。表里没有时原样返回。 */
+/** 临场档后缀：`_t1` 开球前 1.5 小时内，`_t2` 开球前 0.6 小时内。 */
+const HORIZONS: Readonly<Record<string, string>> = {
+  _t1: "（临场）",
+  _t2: "（临场，近开球）",
+};
+
+/** 中文模型名；`_t1` / `_t2` 结尾的是临场档。表里没有时原样返回。 */
 export function modelLabel(name: string): string {
-  const near = name.endsWith("_t1");
-  const base = near ? name.slice(0, -3) : name;
+  const suffix = Object.keys(HORIZONS).find((s) => name.endsWith(s));
+  const base = suffix ? name.slice(0, -suffix.length) : name;
   const label = LABELS[base];
   if (!label) return name;
-  return near ? label + "（临场）" : label;
+  return suffix ? label + HORIZONS[suffix] : label;
 }
 
 const TOKEN = new RegExp(
@@ -29,7 +35,7 @@ const TOKEN = new RegExp(
     Object.keys(LABELS)
       .sort((a, b) => b.length - a.length)
       .join("|") +
-    ")(_t1)?\\b(?: (?=[\\u4e00-\\u9fff]))?",
+    ")(_t[12])?\\b(?: (?=[\\u4e00-\\u9fff]))?",
   "g",
 );
 

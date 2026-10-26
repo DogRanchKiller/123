@@ -69,7 +69,7 @@ export function currentOf(
 ): Prediction {
   const note = view.odds_source
     ? "由赛前市场赔率反推，亚盘按市场线五种结算；来自最近一次实盘运行。"
-    : "本场暂无赔率，回退到自研的预期进球模型；亚盘为公平线，不分信心档。";
+    : "本场暂无赔率，回退到自研的进球 + 赔率强度模型；亚盘为公平线，不分信心档。";
   return {
     modelName: view.model_name,
     modelVersion: view.model_version,

@@ -255,7 +255,7 @@ def _num(x, nd: int = 4):
 
 
 def view_model(a: dict) -> tuple[str, str]:
-    """本轮看法的比分来源对应的模型（名, 版本）：市场隐含 → 主模型，否则兜底 dc_xg。"""
+    """本轮看法的比分来源对应的模型（名, 版本）：市场隐含 → 主模型，否则兜底 version.FALLBACK_MODEL。"""
     name, key = version.PRIMARY_MODEL if a["source"] == "市场隐含" else version.FALLBACK_MODEL
     return name, version.get(key)
 

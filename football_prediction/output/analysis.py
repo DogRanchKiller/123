@@ -1,9 +1,9 @@
 """
-output/analysis.py  v1.6.0（输出层的一部分）
+output/analysis.py  v1.7.0（输出层的一部分）
 单场判断流程（预测报告与 explain 共用，纯函数，不读库）：
   1 赔率快照（最新一次）
-  2 胜平负 = 市场去水概率（无赔率时回退 blend / dc_xg）
-  3 比分分布 = 市场隐含（1X2 + 大小2.5 + 亚盘 反推 λ）；缺大小球盘时回退 dc_xg
+  2 胜平负 = 市场去水概率（无赔率时回退 dc_market）
+  3 比分分布 = 市场隐含（1X2 + 大小2.5 + 亚盘 反推 λ）；缺大小球盘时回退 dc_market
   4 自研模型对照：与市场任一结果差 > 8pp 时提示（仅提示，历史上市场更准）
   5 盘口变动：首条 vs 最新快照，主胜变动 ≥ 5pp 或亚盘线变化视为新信息，按变动方向理解，不反向
   6 风险：升班马 / 历史数据少 / 缺赔率 / 盘口之间不一致
@@ -25,6 +25,11 @@ v1.6.0: 每场一个结论 + 把握程度。亚盘块加「稳妥线」safe_line
         标定 0.722 / 留出 0.725，约 27% 的场次）。不再用亚盘信心档做重点：亚盘高档 2526 留出未确认。
         剔除亚盘坏行复核后：稳妥线留出 0.677、重点留出 0.728；亚盘中档标签 0.562 → 0.60（近年 11 联赛）。
         重点场次在市场线上的亚盘选择方命中只有 0.52–0.55，与全体相当：重点只表示胜平负把握高。
+v1.7.0: 自研兜底改为 dc_market（SELF_NAME，与 version.FALLBACK_MODEL 一致）：缺赔率 / 缺大小球盘时
+        比分矩阵用它，缺胜平负赔率时胜平负也直接用它（不再用 blend）；亚盘同线对照也换成它。
+        11 联赛 2324–2627 月度回测 n=12224（_diag/fallback/result.txt）：对 dc_xg −0.0092±0.0011、
+        对 blend −0.0060±0.0010，四个赛季都显著；再融合 Elo 无增益（−0.0004±0.0003）。
+        MODEL_TIERS 按 dc_market 在 2324–2526 重标定，2627 留出同向（_diag/fallback/tiers.txt）。
 """
 import numpy as np
 
@@ -32,12 +37,13 @@ from football_prediction.model_market.devig import shin
 from football_prediction.model_market.implied import implied_matrix, fair_probs
 from football_prediction.output.derive import derive_markets, margin_pmf, ah_outcome, ah_fair_prob
 
-LAYER_VERSION = "1.6.0"
+LAYER_VERSION = "1.7.0"
 
+SELF_NAME = "dc_market"  # 自研兜底与对照模型（= version.FALLBACK_MODEL 的名字）
 DIVERGE_PP = 0.08      # 自研与市场分歧提示阈值
 SAFE_TARGET = 0.65     # 稳妥线：选择方等效赢盘概率达到这个值的最近一条线
 SAFE_MAX_STEPS = 12    # 稳妥线最多退 3 球（研究里 T=0.65 最多退 4 步）
-AH_DIVERGE_PP = 0.08   # 同一亚盘线上自研 dc_xg 与市场赢盘概率的分歧提示阈值
+AH_DIVERGE_PP = 0.08   # 同一亚盘线上自研兜底与市场赢盘概率的分歧提示阈值
 MOVE_PP = 0.05         # 盘口变动阈值（主胜概率）
 FIT_RMSE_WARN = 0.02   # 市场隐含拟合误差提示阈值（回测中约 4% 的场次超过）
 
@@ -52,11 +58,12 @@ MARKET_TIERS = [
     (0.45, "中", 0.523, 0.790),
     (0.00, "低", 0.406, 0.712),
 ]
-# 自研档（无赔率时用）：xG 版 DC 月度回测，2324–2526 共 3198 场。
+# 自研档（无赔率时用）：dc_market 月度回测，11 联赛 2324–2526 n=11395 标定
+# （2627 留出 n=829：高 0.753/0.929，中 0.540/0.804，低 0.378/0.711）。
 MODEL_TIERS = [
-    (0.60, "高", 0.73, 0.90),
-    (0.45, "中", 0.52, 0.76),
-    (0.00, "低", 0.41, 0.71),
+    (0.60, "高", 0.74, 0.90),
+    (0.45, "中", 0.52, 0.78),
+    (0.00, "低", 0.40, 0.71),
 ]
 # 亚盘信心档：(赢盘概率下限, 档名, 历史选择方命中率（不含走盘）)；赢盘概率 = 市场隐含比分在市场线上的
 # 等效赢盘概率，取较高一方。隐含赢盘与该线去水水位平均只差 0.003，分档实际看的是水位偏离五五开的程度
@@ -214,9 +221,9 @@ def movement(first: dict | None, last: dict | None) -> str:
     return "；".join(parts) + f" → {side}（新信息，已含在最新赔率里，不反向理解）"
 
 
-def asian(matrix: np.ndarray, od: dict, xg_matrix: np.ndarray, priced: bool) -> tuple[dict, list[str]]:
+def asian(matrix: np.ndarray, od: dict, self_matrix: np.ndarray, priced: bool) -> tuple[dict, list[str]]:
     """亚盘块与提示。有市场线用市场线，否则用比分矩阵的公平线（赢盘约五五开，不分档）。
-    priced：比分矩阵来自市场（市场隐含）时才和自研比分歧。"""
+    self_matrix：自研兜底（SELF_NAME）的比分矩阵；priced：比分矩阵来自市场（市场隐含）时才和自研比分歧。"""
     pmf, hints = margin_pmf(matrix), []
     line, src = od.get("ah_line"), "市场线"
     if line is None:
@@ -227,9 +234,9 @@ def asian(matrix: np.ndarray, od: dict, xg_matrix: np.ndarray, priced: bool) -> 
     side, p_cover = ("主", fair) if fair >= 0.5 else ("客", 1 - fair)
     tier, hit = ah_tier(p_cover) if src == "市场线" else ("-", None)
     mkt_ah = fair_probs(od).get("ah")
-    self_fair = ah_fair_prob(ah_outcome(margin_pmf(xg_matrix), line))
+    self_fair = ah_fair_prob(ah_outcome(margin_pmf(self_matrix), line))
     if priced and abs(self_fair - fair) > AH_DIVERGE_PP:
-        hints.append(f"dc_xg 在主{line + 0.0:+.2f} 的主队赢盘 {self_fair:.0%}，市场 {fair:.0%}，"
+        hints.append(f"{SELF_NAME} 在主{line + 0.0:+.2f} 的主队赢盘 {self_fair:.0%}，市场 {fair:.0%}，"
                      f"差 {(self_fair - fair) * 100:+.0f}pp（仅提示，历史上市场更准）")
     safe = safe_line(lambda x: ah_fair_prob(ah_outcome(pmf, x)), line, side)
     return {"line": line, "line_src": src, "outcome": out, "fair": fair, "side": side,
@@ -238,7 +245,7 @@ def asian(matrix: np.ndarray, od: dict, xg_matrix: np.ndarray, priced: bool) -> 
             "market_fair": mkt_ah[1] if mkt_ah else None}, hints
 
 
-def analyse(odds_row: dict | None, xg_matrix: np.ndarray, rho: float,
+def analyse(odds_row: dict | None, self_matrix: np.ndarray, rho: float,
             models: dict[str, tuple] | None = None, first_row: dict | None = None,
             risks: list[str] | tuple = (), last_row: dict | None = None,
             ah_open: dict | None = None) -> dict:
@@ -246,19 +253,19 @@ def analyse(odds_row: dict | None, xg_matrix: np.ndarray, rho: float,
     单场判断。odds_row：定价用的最新赔率（fixtures 列名，可为多家中位数）；
     first_row/last_row：同一来源的首条/最新快照，算盘口变动（last_row 缺省为 odds_row）；
     ah_open：亚盘初盘（赛程表首条快照，只有一条快照时也有；缺省为 first_row）；
-    xg_matrix、rho：dc_xg 比分矩阵与联赛 rho；models：自研 1X2 {名称: (主,平,客)}；
-    risks：调用方已知的风险（升班马、数据少）。
+    self_matrix：自研兜底 SELF_NAME 的比分矩阵；rho：联赛 rho（市场隐含用）；
+    models：自研 1X2 {名称: (主,平,客)}，只作分歧提示；risks：调用方已知的风险（升班马、数据少）。
     """
     models, risks, hints = dict(models or {}), list(risks), []
     od = odds_dict(odds_row)
     mkt = devig(od.get("h"), od.get("d"), od.get("a"))
-    matrix, source, fit = xg_matrix, "dc_xg", None
+    matrix, source, fit = self_matrix, SELF_NAME, None
     if mkt is None:
         risks.append("缺胜平负赔率：概率来自自研模型，可靠性低于市场")
-        source = "dc_xg（无赔率）"
+        source = f"{SELF_NAME}（无赔率）"
     elif devig(od.get("over"), od.get("under")) is None:
-        risks.append("缺大小球盘：比分/大小球用 dc_xg")
-        source = "dc_xg（缺大小球盘）"
+        risks.append(f"缺大小球盘：比分/大小球用 {SELF_NAME}")
+        source = f"{SELF_NAME}（缺大小球盘）"
     else:
         matrix, fit = implied_matrix(od, rho)
         source = "市场隐含"
@@ -268,10 +275,8 @@ def analyse(odds_row: dict | None, xg_matrix: np.ndarray, rho: float,
     mk = derive_markets(matrix)
     if mkt is not None:
         p, p_src, tiers = tuple(mkt), "市场", MARKET_TIERS
-    elif "blend" in models:
-        p, p_src, tiers = tuple(models["blend"]), "blend", MODEL_TIERS
     else:
-        p, p_src, tiers = matrix_1x2(matrix), "dc_xg", MODEL_TIERS
+        p, p_src, tiers = matrix_1x2(matrix), SELF_NAME, MODEL_TIERS
 
     if mkt is not None:
         for name, q in models.items():
@@ -281,7 +286,7 @@ def analyse(odds_row: dict | None, xg_matrix: np.ndarray, rho: float,
                 hints.append(f"{name} 与市场分歧：{LABEL[_KEYS[i]]} {d[i]*100:+.0f}pp"
                              "（仅提示，历史上市场更准）")
 
-    ah, ah_hints = asian(matrix, od, xg_matrix, source == "市场隐含")
+    ah, ah_hints = asian(matrix, od, self_matrix, source == "市场隐含")
     hints = ah_hints + hints                     # 亚盘为主：亚盘提示排在前
 
     probs = dict(zip(_KEYS, p))

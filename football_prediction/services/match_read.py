@@ -117,7 +117,7 @@ _PRE_KO = ("NOT (json_extract(extra_markets, '$.kickoff_utc') IS NOT NULL "
 
 
 def _first_archive(conn: sqlite3.Connection, match_id: str, near: bool = False) -> dict | None:
-    """该场主模型（当前版本优先）的首次存档；没有主模型存档时用兜底模型 dc_xg。
+    """该场主模型（当前版本优先）的首次存档；没有主模型存档时用兜底模型 version.FALLBACK_MODEL。
     near=True 时取主模型的临场档（{主模型}_t1，开球前 1.5 小时内多家中位数），没有兜底。"""
     (p_name, p_key), (f_name, f_key) = version.PRIMARY_MODEL, version.FALLBACK_MODEL
     if near:
@@ -228,7 +228,7 @@ ARCHIVE_LEAD_DAYS = 8  # 存档最早在开球前约一周（fixtures.csv 的范
 
 
 def read_recent(conn: sqlite3.Connection, now: datetime, days: int = RECENT_DAYS) -> list[dict]:
-    """最近 days 天内已开球、有主模型（或 dc_xg）首次存档的场次：对阵与比分 + 首次存档 + 临场档，开球时间倒序。
+    """最近 days 天内已开球、有主模型（或兜底模型）首次存档的场次：对阵与比分 + 首次存档 + 临场档，开球时间倒序。
     对阵取 matches / fixtures / 存档里记下的对阵；三处都没有的（记对阵之前的旧存档、且已被赛程表换掉）跳过。"""
     names = (version.PRIMARY_MODEL[0], version.FALLBACK_MODEL[0])
     since = (now - timedelta(days=days + ARCHIVE_LEAD_DAYS)).isoformat()
