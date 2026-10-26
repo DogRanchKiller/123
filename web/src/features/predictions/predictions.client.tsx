@@ -1,15 +1,27 @@
 "use client";
 
-import { MatchCard, type MatchRecord } from "@/features/match";
+import {
+  LEAGUES,
+  LEAGUE_SUMMARY,
+  MatchCard,
+  type MatchRecord,
+} from "@/features/match";
 import { FollowButton } from "@/features/following";
 import {
-  DemoNotice,
+  DataNotice,
   EmptyState,
   SectionHeading,
 } from "@/components/presentation";
+import type { DataSource } from "@/lib/display";
 import { useListState } from "./list-state.client";
 
-export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
+export function Predictions({
+  matches,
+  source,
+}: {
+  matches: readonly MatchRecord[];
+  source: DataSource;
+}) {
   const { filters, changeFilters, warning } = useListState();
   const recommendations = matches.filter((match) => match.recommended);
   const visible = matches.filter(
@@ -25,20 +37,20 @@ export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">MATCHDAY / 比赛观察</p>
+          <p className="eyebrow">比赛日 / 比赛观察</p>
           <h1>每一场比赛，都有迹可循。</h1>
           <p>从赛前概率到赛后验证，清楚了解每一次判断。</p>
         </div>
-        <span className="pill">英超 · 德甲 · 西甲</span>
+        <span className="pill">{LEAGUE_SUMMARY}</span>
       </div>
-      <DemoNotice />
-      <section aria-label="高信心推荐">
+      <DataNotice source={source} />
+      <section aria-label="重点比赛">
         <SectionHeading
-          title="值得关注的比赛"
-          description="模型高信心推荐 · 仅展示符合条件的赛前结果"
+          title="重点比赛"
+          description="胜平负市场最大概率 ≥ 60% 的赛前场次；其余场次在下方照常给出结论和把握程度"
           aside={
             <span className="pill pill-accent">
-              {recommendations.length} 场推荐
+              {recommendations.length} 场重点
             </span>
           }
         />
@@ -55,12 +67,14 @@ export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
           </div>
         ) : (
           <EmptyState
-            title="暂无推荐"
-            description="目前没有符合高信心条件的赛前比赛。"
+            title="暂无重点"
+            description="目前没有胜平负高把握的赛前比赛。"
           />
         )}
         <p className="fine-print mt-3">
-          高信心档历史上仍约有四分之一未命中。请结合概率来源和数据时间阅读。
+          这一档胜平负首选历史上约 72% 命中（2526 留出赛季 72.8%），仍约有四分之一未中。
+          {"重点只表示胜平负把握高：这类场次在市场亚盘线上的命中约 52–55%，和其他场次差不多。"}
+          {"亚盘看卡片里的「稳妥」，即选择方赢盘 ≥ 65% 的最近一条线（历史命中约 67%）。"}
         </p>
       </section>
       <div className="dashboard-columns">
@@ -81,9 +95,11 @@ export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
                 }
               >
                 <option value="all">全部联赛</option>
-                <option value="E0">英超</option>
-                <option value="D1">德甲</option>
-                <option value="SP1">西甲</option>
+                {LEAGUES.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
@@ -126,10 +142,10 @@ export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
         </section>
         <aside className="sidebar">
           <section className="panel side-panel">
-            <p className="eyebrow">MODEL NOTES</p>
+            <p className="eyebrow">模型说明</p>
             <h3>让预测有据可查</h3>
             <p>
-              胜平负概率、比分与模型来源一起呈现。预测会变化，首次判断会被保留。
+              亚盘为主，胜平负、比分与大小球为辅，模型来源一起呈现。预测会变化，首次判断会被保留。
             </p>
             <dl>
               <div className="definition">
@@ -142,7 +158,7 @@ export function Predictions({ matches }: { matches: readonly MatchRecord[] }) {
               </div>
               <div className="definition">
                 <dt>当前数据</dt>
-                <dd>固定演示样本</dd>
+                <dd>{source.mode === "demo" ? "固定演示样本" : "本机实盘快照"}</dd>
               </div>
             </dl>
           </section>

@@ -1,14 +1,22 @@
-import { percentage } from "@/lib/display";
+import { beijingTime, percentage, type DataSource } from "@/lib/display";
 import { Icon } from "./icon";
 
-export function DemoNotice() {
+export function DataNotice({ source }: { source: DataSource }) {
   return (
     <div className="demo-notice">
       <Icon name="info" />
-      <p>
-        <strong>演示数据</strong> ·
-        当前展示固定样本，尚未接入真实赛程、赔率或实时比分。所有时间均为北京时间。
-      </p>
+      {source.mode === "demo" ? (
+        <p>
+          <strong>演示数据</strong> ·
+          当前展示固定样本，尚未接入真实赛程、赔率或实时比分。所有时间均为北京时间。
+        </p>
+      ) : (
+        <p>
+          <strong>本机实盘数据</strong> · 本轮生成于{" "}
+          {beijingTime(source.generatedAt)}
+          。来自最近一次实盘运行的快照，不是实时行情；所有时间均为北京时间。
+        </p>
+      )}
     </div>
   );
 }

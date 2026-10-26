@@ -141,7 +141,8 @@ def test_collect_with_fake_runner_and_consensus(conn):
         return [REC]
 
     now = datetime(2026, 10, 24, 13, 0, tzinfo=timezone.utc)
-    n = op.collect(conn, ["E0"], now, hours=48, runner=runner, log=lambda *_: None)
+    n = op.collect(conn, ["E0"], now, hours=48, runner=runner, log=lambda *_: None,
+                   timer=lambda: 0.0)
     assert n == len(op.parse_record(REC))
     scrape = calls[1]
     assert "asian_handicap_-0_25" in scrape[1] and "asian_handicap_-0_5" in scrape[1]
@@ -154,11 +155,47 @@ def test_collect_with_fake_runner_and_consensus(conn):
     o = op.book_consensus(conn, "m1", opening=True)
     assert (o["avg_h"], o["avg_d"], o["avg_a"]) == (1.865, 3.675, 3.775)
 
-    # 窗外不抓；同一时刻重跑不重复写
+    # 窗外不抓；同一时刻重跑不重复写（计时固定，fetched_at 相同）
     assert op.collect(conn, ["E0"], datetime(2026, 11, 1, tzinfo=timezone.utc),
                       runner=runner, log=lambda *_: None) == 0
-    op.collect(conn, ["E0"], now, runner=runner, log=lambda *_: None)
+    op.collect(conn, ["E0"], now, runner=runner, log=lambda *_: None, timer=lambda: 0.0)
     assert conn.execute("SELECT COUNT(*) FROM book_odds").fetchone()[0] == n
+
+
+def test_consensus_skips_impossible_medians(conn):
+    """中位数隐含概率之和 < 1 的胜平负当作缺失；亚盘不选这样的线。"""
+    rows = [("1x2", 0.0, 2.1, 3.8, 3.2), ("ah", -0.25, 2.1, 2.05, None),   # 最均衡但和 < 1
+            ("ah", -0.5, 2.3, 1.6, None), ("1x2", 0.0, 3.0, 4.0, 5.0)]
+    op.init_book_odds(conn)
+    for i, (mk, line, a, b, c) in enumerate(rows):
+        bk = "B1" if i < 3 else "B2"
+        conn.execute("INSERT INTO book_odds (match_id, fetched_at, bookmaker, market, line, o1, o2, o3,"
+                     " source, layer_ver) VALUES ('m1', 't1', ?, ?, ?, ?, ?, ?, 'oddsportal', 'x')",
+                     (bk if mk == "1x2" else "B1", mk, line, a, b, c))
+    c = op.book_consensus(conn, "m1")
+    assert (c["avg_h"], c["avg_d"], c["avg_a"]) == (None, None, None)   # 中位 2.55/3.9/4.1
+    assert (c["ah_line"], c["avg_ahh"], c["avg_aha"]) == (-0.5, 2.3, 1.6)
+
+
+def test_collect_records_return_time_and_drops_started(conn):
+    """fetched_at 是抓回时刻（now + 已过秒数）；抓回时已开球的不入库。"""
+    def runner(args, timeout):
+        if "--links-only" in args:
+            return [{"match_link": REC["match_link"], "league": "england-premier-league",
+                     "kickoff_utc": "2026-10-25 16:00:00 UTC"}]
+        ticks.append(elapsed)                    # 抓一组要 elapsed 秒
+        return [REC]
+
+    now = datetime(2026, 10, 25, 13, 0, tzinfo=timezone.utc)   # 开球 14:00
+    ticks, elapsed = [], 1800.0
+    timer = lambda: sum(ticks)
+    assert op.collect(conn, ["E0"], now, runner=runner, log=lambda *_: None, timer=timer) > 0
+    got = conn.execute("SELECT DISTINCT fetched_at FROM book_odds").fetchall()
+    assert got == [("2026-10-25T13:30:00+00:00",)]
+
+    ticks, elapsed = [], 3600.0                  # 抓回时 14:00 已开球
+    assert op.collect(conn, ["E0"], now, runner=runner, log=lambda *_: None, timer=timer) == 0
+    assert conn.execute("SELECT COUNT(DISTINCT fetched_at) FROM book_odds").fetchone()[0] == 1
 
 
 def test_collect_skips_swapped_home_away(conn):

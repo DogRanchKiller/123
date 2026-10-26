@@ -30,7 +30,6 @@ MODULES = {
     "football_prediction.output.derive":         "output",
     "football_prediction.output.report":         "output",
     "football_prediction.output.analysis":       "output",
-    "football_prediction.output.pipeline":       "output",
     "football_prediction.explain":               "output",
     "football_prediction.validation.backtest":   "validation",
     "football_prediction.review.store":          "review",
@@ -65,5 +64,8 @@ def test_primary_model_is_registered():
     assert key in version.LAYER_VERSIONS
     assert name in ("dixon_coles", "dc_sot", "dc_xg", "elo", "market_implied")
     fb_name, fb_key = version.FALLBACK_MODEL
-    assert fb_key in version.LAYER_VERSIONS and fb_name == "dc_xg"
+    assert fb_key in version.LAYER_VERSIONS and fb_name == "dc_market"
+    from football_prediction.model_dc.market_dc import MODEL_NAME as DC_MARKET_NAME
+    from football_prediction.output.analysis import SELF_NAME
+    assert fb_name == DC_MARKET_NAME == SELF_NAME
     assert version.PROMOTE_MIN_N >= 100

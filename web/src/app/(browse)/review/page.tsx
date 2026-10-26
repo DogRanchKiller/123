@@ -1,13 +1,16 @@
 import { Review } from "@/features/review/review";
-import { demoReview } from "@/features/review/demo-review.server";
+import { readReview } from "@/features/review/read.server";
 import { pageMetadata } from "@/lib/site.server";
 
 export const metadata = pageMetadata(
   "赛后成绩单",
-  "查看预测模型的样本数、版本、Log Loss、Brier 和命中率。当前指标均为演示样本。",
+  "查看预测模型的亚盘与胜平负成绩：样本数、版本、对数损失、布里尔分数、命中率与同场对比。",
   "/review",
 );
 
-export default function ReviewPage() {
-  return <Review rows={demoReview} />;
+export const dynamic = "force-dynamic";
+
+export default async function ReviewPage() {
+  const { rows, source } = await readReview();
+  return <Review rows={rows} source={source} />;
 }

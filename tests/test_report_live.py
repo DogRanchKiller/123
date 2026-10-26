@@ -6,7 +6,9 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from football_prediction import version
-from football_prediction.output.report import confidence_tier, _double_label, build_report
+from football_prediction import services
+from football_prediction.output.report import confidence_tier, _double_label
+from football_prediction.services import build_report
 
 
 @pytest.mark.parametrize("p,tier", [(0.80, "高"), (0.60, "高"), (0.5999, "中"),
@@ -67,11 +69,11 @@ def test_build_report_market_based_and_future_only(league):
     assert r["最可能比分"] and r["大2.5球"] and r["亚盘"].startswith("主-1.00 赢盘")
     assert r["亚盘选择"][0] in "主客" and r["亚盘信心"]
     assert list(df.columns).index("亚盘") == list(df.columns).index("客队") + 1   # 亚盘紧跟对阵
-    assert "dc_xg" in r["自研 主/平/客"] and "blend" in r["自研 主/平/客"]
+    assert "dc_market" in r["自研 主/平/客"] and "blend" in r["自研 主/平/客"]
     assert r["开球(北京)"] == (now + timedelta(hours=3)).astimezone(
         ZoneInfo("Asia/Shanghai")).strftime("%m-%d %H:%M")
     n = df.iloc[2]                                        # 无赔率：回退自研，并提示
-    assert n["概率来源"] == "blend" and n["比分来源"].startswith("dc_xg")
+    assert n["概率来源"] == "dc_market" and n["比分来源"].startswith("dc_market")
     assert "缺胜平负赔率" in n["提示"]
 
 
@@ -81,8 +83,7 @@ def test_build_report_empty(conn):
 
 def test_report_prefers_fresh_book_consensus(league):
     """报告用 24 小时内 ≥3 家的多家中位数；家数不够或过期回退赛程表；存档仍用赛程表赔率。"""
-    import football_prediction.live as live
-    from football_prediction.output.pipeline import latest_odds
+    from football_prediction.services import latest_odds
     conn, cutoff = league
     now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
     for mid, home, away in (("fresh", "A", "F"), ("few", "B", "E"), ("stale", "C", "D")):
@@ -103,14 +104,14 @@ def test_report_prefers_fresh_book_consensus(league):
     row = {"match_id": "nobook", **ODDS}
     assert latest_odds(conn, row, now) == ({k: row[k] for k in ODDS}, "赛程表快照（football-data）")
 
-    live._predict_upcoming(conn, now)
+    services.predict_upcoming(conn, now)
     ex = json.loads(conn.execute("SELECT extra_markets FROM predictions WHERE match_id='fresh' "
                                  "AND model_name='market_avg'").fetchone()[0])
     assert ex["odds"] == [1.5, 4.0, 5.5]                 # 存档不受报告赔率来源影响
 
 
 def test_latest_odds_without_book_table(conn):
-    from football_prediction.output.pipeline import latest_odds
+    from football_prediction.services import latest_odds
     row = {"match_id": "x", **ODDS}
     assert latest_odds(conn, row, datetime.now(timezone.utc))[1].startswith("赛程表")
 
@@ -127,15 +128,14 @@ def test_movement_compares_same_source_snapshots():
 
 
 def test_predict_upcoming_saves_once(league, monkeypatch):
-    import football_prediction.live as live
     conn, cutoff = league
     now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
     _fixture(conn, "f1", (now + timedelta(hours=5)).isoformat())
     _fixture(conn, "f0", (now - timedelta(hours=5)).isoformat(), "B", "E")   # 已开球
 
-    first = live._predict_upcoming(conn, now)
+    first = services.predict_upcoming(conn, now)
     assert first == 9          # DC / 射正 / xG / 市场版 DC / Elo / blend / 市场 / 市场隐含 / Shin 市场隐含
-    assert live._predict_upcoming(conn, now) == 0
+    assert services.predict_upcoming(conn, now) == 0
     names = {r[0] for r in conn.execute("SELECT DISTINCT model_name FROM predictions")}
     assert version.PRIMARY_MODEL[0] in names and "blend_xg_elo" in names
     assert conn.execute("SELECT COUNT(*) FROM predictions WHERE match_id='f0'").fetchone()[0] == 0
@@ -143,16 +143,41 @@ def test_predict_upcoming_saves_once(league, monkeypatch):
                                  "AND model_name='market_implied'").fetchone()[0])
     assert len(ex["score_matrix"]) == 81 and abs(sum(ex["score_matrix"]) - 1) < 1e-3
 
-    df = build_report(conn, live.LEAGUES, now)
+    df = build_report(conn, services.LEAGUES, now)
     assert len(df) == 1 and df.iloc[0]["最可能比分"] and df.iloc[0]["大2.5球"]
 
 
+def _jump_clock(start, later):
+    """第一次（取赛程）返回 start，之后返回 later：模拟本轮跑到一半时已开球。"""
+    ts = iter([start])
+    return lambda: next(ts, later)
+
+
+def test_rounds_skip_matches_started_mid_round(league):
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
+    _fixture(conn, "f1", (now + timedelta(minutes=30)).isoformat())
+    _books(conn, "f1", now - timedelta(minutes=10))
+    late = now + timedelta(minutes=40)
+    cache = services.ModelCache(conn, cutoff)
+    assert services.predict_upcoming(conn, now, cache, log=lambda *_: None,
+                                     clock=_jump_clock(now, late)) == 0
+    assert services.predict_near(conn, now, cache, log=lambda *_: None,
+                                 clock=_jump_clock(now, late)) == 0
+    assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name='predictions'").fetchone()
+    # 存档时间取本轮时钟：未开球时照常存，generated_at 是存档那一刻
+    mid = now + timedelta(minutes=5)
+    assert services.predict_upcoming(conn, now, cache, log=lambda *_: None,
+                                     clock=_jump_clock(now, mid)) == 9
+    got = {r[0] for r in conn.execute("SELECT DISTINCT generated_at FROM predictions")}
+    assert got == {mid.isoformat()}
+
+
 def test_predict_upcoming_no_ou_skips_implied(league):
-    import football_prediction.live as live
     conn, cutoff = league
     now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
     _fixture(conn, "f1", (now + timedelta(hours=5)).isoformat(), avg_over25=None, avg_under25=None)
-    assert live._predict_upcoming(conn, now) == 7
+    assert services.predict_upcoming(conn, now) == 7
     assert not conn.execute("SELECT 1 FROM predictions WHERE model_name LIKE 'market_%' "
                             "AND model_name != 'market_avg'").fetchone()
 
@@ -171,7 +196,6 @@ def _books(conn, mid, fetched_at, n=3, h=1.6):
 
 
 def test_predict_near_needs_window_fresh_odds_and_books(league):
-    import football_prediction.live as live
     conn, cutoff = league
     now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
     _fixture(conn, "near", (now + timedelta(hours=1)).isoformat())
@@ -182,10 +206,10 @@ def test_predict_near_needs_window_fresh_odds_and_books(league):
     _books(conn, "far", now - timedelta(minutes=10))
     _books(conn, "stale", now - timedelta(hours=3))
     _books(conn, "few", now - timedelta(minutes=10), n=2)
-    cache = live.ModelCache(conn, cutoff)
+    cache = services.ModelCache(conn, cutoff)
 
-    assert live._predict_near(conn, now, cache) == 3    # market_avg / implied / shin，各带 _t1
-    assert live._predict_near(conn, now, cache) == 0
+    assert services.predict_near(conn, now, cache) == 3    # market_avg / implied / shin，各带 _t1
+    assert services.predict_near(conn, now, cache) == 0
     rows = conn.execute("SELECT match_id, model_name FROM predictions").fetchall()
     assert {r[0] for r in rows} == {"near"}
     assert {r[1] for r in rows} == {"market_avg_t1", "market_implied_t1", "market_shin_t1"}
@@ -196,8 +220,27 @@ def test_predict_near_needs_window_fresh_odds_and_books(league):
     assert len(ex["score_matrix"]) == 81
 
 
+def test_predict_near_t2_only_close_to_kickoff_with_this_rounds_odds(league):
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
+    _fixture(conn, "close", (now + timedelta(minutes=30)).isoformat())
+    _fixture(conn, "old", (now + timedelta(minutes=30)).isoformat(), "B", "E")
+    _books(conn, "close", now - timedelta(minutes=10))
+    _books(conn, "old", now - timedelta(minutes=40))   # 上一轮的赔率：只够 _t1
+    cache = services.ModelCache(conn, cutoff)
+
+    assert services.predict_near(conn, now, cache) == 3 + 3 + 3
+    assert services.predict_near(conn, now, cache) == 0
+    rows = {(m, n) for m, n in conn.execute("SELECT match_id, model_name FROM predictions")}
+    assert {n for m, n in rows if m == "close"} == {
+        f"market_{k}_{h}" for k in ("avg", "implied", "shin") for h in ("t1", "t2")}
+    assert {n for m, n in rows if m == "old"} == {"market_avg_t1", "market_implied_t1", "market_shin_t1"}
+    ex = json.loads(conn.execute("SELECT extra_markets FROM predictions "
+                                 "WHERE model_name='market_implied_t2'").fetchone()[0])
+    assert ex["horizon"] == "t2" and ex["hours_to_ko"] == 0.5
+
+
 def test_predict_near_archives_lineup_pair_only_for_standard_xi(league, monkeypatch):
-    import football_prediction.live as live
     import football_prediction.model_lineup.adjust as adjust
     from tests.test_lineup import POS, _lineups, _pid
     conn, cutoff = league
@@ -217,7 +260,7 @@ def test_predict_near_archives_lineup_pair_only_for_standard_xi(league, monkeypa
     # 阵容批次名 "t1" 按字符串排在 ISO 时间之后：赔率算作早于首发 → 走 COEF_PRE
     monkeypatch.setattr(adjust, "COEF_PRE", {"d_att": 1.0, "rot": 0.0, "opp_rot_def": 0.0, "opp_rot": 0.0})
 
-    assert live._predict_near(conn, now, live.ModelCache(conn, cutoff)) == 3 + 3 + 2
+    assert services.predict_near(conn, now, services.ModelCache(conn, cutoff)) == 3 + 3 + 2
     rows = {(m, n): (ph, json.loads(ex)) for m, n, ph, ex in conn.execute(
         "SELECT match_id, model_name, p_home_win, extra_markets FROM predictions")}
     assert ("pred", "lineup_t1") not in rows            # 预测阵容不存
@@ -227,12 +270,11 @@ def test_predict_near_archives_lineup_pair_only_for_standard_xi(league, monkeypa
     assert adj[1]["lineup"]["home"]["rot"] == pytest.approx(2 / 11)
     assert adj[1]["lam"][0] < base[1]["lam"][0] and adj[1]["lam"][1] == base[1]["lam"][1]
     assert adj[1]["horizon"] == "t1" and adj[1]["odds_vs_lineup"] == "pre"
-    assert live._predict_near(conn, now, live.ModelCache(conn, cutoff)) == 0
+    assert services.predict_near(conn, now, services.ModelCache(conn, cutoff)) == 0
 
 
 def test_lineup_after_odds_uses_post_coef(league, monkeypatch):
     """赔率晚于首次看到正式首发：用 COEF_POST（此处为 0），lineup_t1 与 lineup_base_t1 相同。"""
-    import football_prediction.live as live
     import football_prediction.model_lineup.adjust as adjust
     from tests.test_lineup import POS, _lineups, _pid
     conn, cutoff = league
@@ -247,7 +289,7 @@ def test_lineup_after_odds_uses_post_coef(league, monkeypatch):
                          ("near", seen, "standard", side, _pid(t, k), None, "starter", POS[k], None, None))
     conn.commit()
     monkeypatch.setattr(adjust, "COEF_PRE", {"d_att": 1.0, "rot": 0.0, "opp_rot_def": 0.0, "opp_rot": 0.0})
-    assert live._predict_near(conn, now, live.ModelCache(conn, cutoff)) == 3 + 2
+    assert services.predict_near(conn, now, services.ModelCache(conn, cutoff)) == 3 + 2
     rows = {n: (ph, json.loads(ex)) for n, ph, ex in conn.execute(
         "SELECT model_name, p_home_win, extra_markets FROM predictions")}
     assert rows["lineup_t1"][0] == pytest.approx(rows["lineup_base_t1"][0])
@@ -256,7 +298,6 @@ def test_lineup_after_odds_uses_post_coef(league, monkeypatch):
 
 
 def test_run_near_uses_injected_collectors(league):
-    import football_prediction.live as live
     conn, cutoff = league
     now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
     _fixture(conn, "near", (now + timedelta(hours=1)).isoformat())
@@ -271,5 +312,5 @@ def test_run_near_uses_injected_collectors(league):
         calls.append(("lineups", hours))
         raise RuntimeError("网络断开")     # 阵容失败不影响赔率存档
 
-    assert live._run_near(conn, now, fake_odds, fake_lineups) == 3
-    assert calls == [("lineups", live.T1_HOURS), ("odds", live.T1_HOURS)]   # 先阵容后赔率
+    assert services.run_near(conn, now, fake_odds, fake_lineups, snapshot_path=None) == 3
+    assert calls == [("lineups", services.T1_HOURS), ("odds", services.T1_HOURS)]   # 先阵容后赔率

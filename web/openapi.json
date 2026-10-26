@@ -1,0 +1,1485 @@
+{
+  "components": {
+    "schemas": {
+      "ArchivedOdds": {
+        "properties": {
+          "ah_line": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ah Line"
+          },
+          "avg_a": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg A"
+          },
+          "avg_aha": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Aha"
+          },
+          "avg_ahh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Ahh"
+          },
+          "avg_d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg D"
+          },
+          "avg_h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg H"
+          },
+          "avg_over25": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Over25"
+          },
+          "avg_under25": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Under25"
+          }
+        },
+        "title": "ArchivedOdds",
+        "type": "object"
+      },
+      "ArchivedPrediction": {
+        "description": "主模型（没有时兜底 dc_market）开赛前的首次存档与赛后评分；临场档同形状（horizon=t1）。",
+        "properties": {
+          "actual_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "home_win",
+                  "draw",
+                  "away_win"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Outcome"
+          },
+          "ah_hit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ah Hit"
+          },
+          "ah_log_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ah Log Loss"
+          },
+          "asian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AsianBase"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "brier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brier"
+          },
+          "confidence": {
+            "enum": [
+              "高",
+              "中",
+              "低"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "double": {
+            "title": "Double",
+            "type": "string"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "historical_double_hit": {
+            "title": "Historical Double Hit",
+            "type": "number"
+          },
+          "historical_first_hit": {
+            "title": "Historical First Hit",
+            "type": "number"
+          },
+          "horizon": {
+            "default": "pre",
+            "enum": [
+              "pre",
+              "t1"
+            ],
+            "title": "Horizon",
+            "type": "string"
+          },
+          "hours_to_ko": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours To Ko"
+          },
+          "kickoff_utc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kickoff Utc"
+          },
+          "lean": {
+            "title": "Lean",
+            "type": "string"
+          },
+          "likely_scores": {
+            "items": {
+              "$ref": "#/components/schemas/LikelyScore"
+            },
+            "title": "Likely Scores",
+            "type": "array"
+          },
+          "log_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Loss"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "n_books": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Books"
+          },
+          "odds": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArchivedOdds"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ou25_log_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ou25 Log Loss"
+          },
+          "over25": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Over25"
+          },
+          "probabilities": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Probabilities",
+            "type": "array"
+          },
+          "result_src": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Src"
+          },
+          "score_log_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Log Loss"
+          },
+          "scored": {
+            "title": "Scored",
+            "type": "boolean"
+          },
+          "scored_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scored At"
+          }
+        },
+        "required": [
+          "model_name",
+          "model_version",
+          "generated_at",
+          "kickoff_utc",
+          "probabilities",
+          "lean",
+          "double",
+          "confidence",
+          "historical_first_hit",
+          "historical_double_hit",
+          "asian",
+          "likely_scores",
+          "over25",
+          "odds",
+          "scored",
+          "actual_outcome",
+          "log_loss",
+          "brier",
+          "ou25_log_loss",
+          "score_log_loss",
+          "ah_log_loss",
+          "ah_hit",
+          "result_src",
+          "scored_at"
+        ],
+        "title": "ArchivedPrediction",
+        "type": "object"
+      },
+      "AsianBase": {
+        "properties": {
+          "historical_hit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Historical Hit"
+          },
+          "line": {
+            "title": "Line",
+            "type": "number"
+          },
+          "line_source": {
+            "enum": [
+              "市场线",
+              "公平线"
+            ],
+            "title": "Line Source",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/AsianOutcome"
+          },
+          "p_cover": {
+            "title": "P Cover",
+            "type": "number"
+          },
+          "safe_cover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Cover"
+          },
+          "safe_line": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Line"
+          },
+          "side": {
+            "enum": [
+              "主",
+              "客"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "tier": {
+            "enum": [
+              "高",
+              "中",
+              "低",
+              "-"
+            ],
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line",
+          "line_source",
+          "outcome",
+          "side",
+          "p_cover",
+          "tier",
+          "historical_hit"
+        ],
+        "title": "AsianBase",
+        "type": "object"
+      },
+      "AsianCurrent": {
+        "properties": {
+          "historical_hit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Historical Hit"
+          },
+          "line": {
+            "title": "Line",
+            "type": "number"
+          },
+          "line_source": {
+            "enum": [
+              "市场线",
+              "公平线"
+            ],
+            "title": "Line Source",
+            "type": "string"
+          },
+          "market_home_cover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Home Cover"
+          },
+          "movement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movement"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/AsianOutcome"
+          },
+          "p_cover": {
+            "title": "P Cover",
+            "type": "number"
+          },
+          "safe_cover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Cover"
+          },
+          "safe_line": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Line"
+          },
+          "self_home_cover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Self Home Cover"
+          },
+          "side": {
+            "enum": [
+              "主",
+              "客"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "tier": {
+            "enum": [
+              "高",
+              "中",
+              "低",
+              "-"
+            ],
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line",
+          "line_source",
+          "outcome",
+          "side",
+          "p_cover",
+          "tier",
+          "historical_hit",
+          "self_home_cover",
+          "market_home_cover",
+          "movement"
+        ],
+        "title": "AsianCurrent",
+        "type": "object"
+      },
+      "AsianOutcome": {
+        "description": "亚盘五种结算的概率（主队方向），五项之和为 1。",
+        "properties": {
+          "half_lose": {
+            "title": "Half Lose",
+            "type": "number"
+          },
+          "half_win": {
+            "title": "Half Win",
+            "type": "number"
+          },
+          "lose": {
+            "title": "Lose",
+            "type": "number"
+          },
+          "push": {
+            "title": "Push",
+            "type": "number"
+          },
+          "win": {
+            "title": "Win",
+            "type": "number"
+          }
+        },
+        "required": [
+          "win",
+          "half_win",
+          "push",
+          "half_lose",
+          "lose"
+        ],
+        "title": "AsianOutcome",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "LikelyScore": {
+        "properties": {
+          "prob": {
+            "title": "Prob",
+            "type": "number"
+          },
+          "score": {
+            "title": "Score",
+            "type": "string"
+          }
+        },
+        "required": [
+          "score",
+          "prob"
+        ],
+        "title": "LikelyScore",
+        "type": "object"
+      },
+      "MatchDetail": {
+        "properties": {
+          "archived": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArchivedPrediction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "match": {
+            "$ref": "#/components/schemas/MatchInfo"
+          },
+          "near_archived": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArchivedPrediction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "match",
+          "current",
+          "archived",
+          "generated_at"
+        ],
+        "title": "MatchDetail",
+        "type": "object"
+      },
+      "MatchInfo": {
+        "properties": {
+          "away": {
+            "title": "Away",
+            "type": "string"
+          },
+          "home": {
+            "title": "Home",
+            "type": "string"
+          },
+          "kickoff_utc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kickoff Utc"
+          },
+          "league": {
+            "title": "League",
+            "type": "string"
+          },
+          "league_name": {
+            "title": "League Name",
+            "type": "string"
+          },
+          "match_date": {
+            "title": "Match Date",
+            "type": "string"
+          },
+          "match_id": {
+            "title": "Match Id",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Score"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "score_fetched_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Fetched At"
+          },
+          "score_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "football-data",
+                  "fotmob"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Source"
+          }
+        },
+        "required": [
+          "match_id",
+          "league",
+          "league_name",
+          "home",
+          "away",
+          "match_date",
+          "kickoff_utc",
+          "score"
+        ],
+        "title": "MatchInfo",
+        "type": "object"
+      },
+      "MatchList": {
+        "properties": {
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/MatchView"
+            },
+            "title": "Matches",
+            "type": "array"
+          },
+          "primary_model": {
+            "$ref": "#/components/schemas/PrimaryModel"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/RecentMatch"
+            },
+            "title": "Recent",
+            "type": "array"
+          },
+          "system_version": {
+            "title": "System Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generated_at",
+          "system_version",
+          "primary_model",
+          "matches",
+          "recent"
+        ],
+        "title": "MatchList",
+        "type": "object"
+      },
+      "MatchView": {
+        "description": "一场的本轮看法：实盘一轮按最新赔率算好写进快照。",
+        "properties": {
+          "asian": {
+            "$ref": "#/components/schemas/AsianCurrent"
+          },
+          "away": {
+            "title": "Away",
+            "type": "string"
+          },
+          "btts": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Btts"
+          },
+          "confidence": {
+            "enum": [
+              "高",
+              "中",
+              "低"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "double": {
+            "title": "Double",
+            "type": "string"
+          },
+          "estimated_double_hit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Double Hit"
+          },
+          "estimated_first_hit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated First Hit"
+          },
+          "expected_goals": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Expected Goals",
+            "type": "array"
+          },
+          "hints": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hints",
+            "type": "array"
+          },
+          "historical_double_hit": {
+            "title": "Historical Double Hit",
+            "type": "number"
+          },
+          "historical_first_hit": {
+            "title": "Historical First Hit",
+            "type": "number"
+          },
+          "home": {
+            "title": "Home",
+            "type": "string"
+          },
+          "kickoff_utc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kickoff Utc"
+          },
+          "league": {
+            "title": "League",
+            "type": "string"
+          },
+          "league_name": {
+            "title": "League Name",
+            "type": "string"
+          },
+          "lean": {
+            "title": "Lean",
+            "type": "string"
+          },
+          "likely_scores": {
+            "items": {
+              "$ref": "#/components/schemas/LikelyScore"
+            },
+            "title": "Likely Scores",
+            "type": "array"
+          },
+          "match_date": {
+            "title": "Match Date",
+            "type": "string"
+          },
+          "match_id": {
+            "title": "Match Id",
+            "type": "string"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "movement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movement"
+          },
+          "odds_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Odds Source"
+          },
+          "over25": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Over25"
+          },
+          "probabilities": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Probabilities",
+            "type": "array"
+          },
+          "probability_source": {
+            "title": "Probability Source",
+            "type": "string"
+          },
+          "recommendation_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation Note"
+          },
+          "recommended": {
+            "title": "Recommended",
+            "type": "boolean"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "score_source": {
+            "title": "Score Source",
+            "type": "string"
+          },
+          "self_models": {
+            "additionalProperties": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Self Models",
+            "type": "object"
+          }
+        },
+        "required": [
+          "match_id",
+          "league",
+          "league_name",
+          "home",
+          "away",
+          "kickoff_utc",
+          "match_date",
+          "model_name",
+          "model_version",
+          "recommended",
+          "recommendation_note",
+          "odds_source",
+          "asian",
+          "probabilities",
+          "probability_source",
+          "score_source",
+          "lean",
+          "double",
+          "confidence",
+          "historical_first_hit",
+          "historical_double_hit",
+          "estimated_first_hit",
+          "estimated_double_hit",
+          "expected_goals",
+          "likely_scores",
+          "over25",
+          "btts",
+          "self_models",
+          "movement",
+          "hints",
+          "risks"
+        ],
+        "title": "MatchView",
+        "type": "object"
+      },
+      "PrimaryModel": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ],
+        "title": "PrimaryModel",
+        "type": "object"
+      },
+      "RecentMatch": {
+        "description": "最近已开球的一场：对阵与比分 + 首次存档 + 临场档（不是本轮看法）。",
+        "properties": {
+          "archived": {
+            "$ref": "#/components/schemas/ArchivedPrediction"
+          },
+          "match": {
+            "$ref": "#/components/schemas/MatchInfo"
+          },
+          "near_archived": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArchivedPrediction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "match",
+          "archived"
+        ],
+        "title": "RecentMatch",
+        "type": "object"
+      },
+      "Review": {
+        "properties": {
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "primary_model": {
+            "$ref": "#/components/schemas/PrimaryModel"
+          },
+          "scorecard": {
+            "items": {
+              "$ref": "#/components/schemas/ScorecardRow"
+            },
+            "title": "Scorecard",
+            "type": "array"
+          },
+          "system_version": {
+            "title": "System Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generated_at",
+          "system_version",
+          "primary_model",
+          "scorecard"
+        ],
+        "title": "Review",
+        "type": "object"
+      },
+      "Score": {
+        "properties": {
+          "away": {
+            "title": "Away",
+            "type": "integer"
+          },
+          "home": {
+            "title": "Home",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "home",
+          "away"
+        ],
+        "title": "Score",
+        "type": "object"
+      },
+      "ScorecardRow": {
+        "description": "实盘成绩单一行（review/scorecard.live_report），按 log_loss 升序；同场对比 market_avg。",
+        "properties": {
+          "ah_hit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ah Hit"
+          },
+          "ah_ll": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ah Ll"
+          },
+          "ah_n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ah N"
+          },
+          "brier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brier"
+          },
+          "diff_vs_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff Vs Base"
+          },
+          "hit_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hit Rate"
+          },
+          "log_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Loss"
+          },
+          "matches": {
+            "title": "Matches",
+            "type": "integer"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_ver": {
+            "title": "Model Ver",
+            "type": "string"
+          },
+          "ou25_ll": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ou25 Ll"
+          },
+          "paired_n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paired N"
+          },
+          "score_ll": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Ll"
+          },
+          "se": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Se"
+          }
+        },
+        "required": [
+          "model_name",
+          "model_ver",
+          "matches",
+          "log_loss",
+          "brier",
+          "hit_rate"
+        ],
+        "title": "ScorecardRow",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "实盘一轮的本轮看法（亚盘为主）、首次存档与成绩单。只读，无鉴权，仅限本机 / 局域网。",
+    "title": "足球预测只读接口",
+    "version": "1.12.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/matches": {
+      "get": {
+        "operationId": "list_matches_api_matches_get",
+        "parameters": [
+          {
+            "description": "附带开球在最近几天内的已开球场次；0 为不附带",
+            "in": "query",
+            "name": "recent_days",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "description": "附带开球在最近几天内的已开球场次；0 为不附带",
+              "maximum": 14,
+              "minimum": 0,
+              "title": "Recent Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "本轮未开赛场次 + 最近已开球场次",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/api/matches/{match_id}": {
+      "get": {
+        "operationId": "get_match_api_matches__match_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "title": "Match Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "快照和库里都没有这场"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "单场详情",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/api/review": {
+      "get": {
+        "operationId": "get_review_api_review_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Review"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "实盘成绩单",
+        "tags": [
+          "review"
+        ]
+      }
+    }
+  }
+}

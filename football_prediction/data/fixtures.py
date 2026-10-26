@@ -1,7 +1,8 @@
 """
-data/fixtures.py  v1.7.0
+data/fixtures.py  v1.9.0
 未开赛赛程与赔率快照：football-data fixtures.csv → fixtures 表；每次刷新追加 odds_snapshots。
 从 data/loader.py 拆出（行为不变）；表结构仍在 loader.DB_SCHEMA。
+v1.9.0: 赛程赔率先过 loader.clean_odds：隐含概率之和 < 1 的一组当作缺失（亚盘连线一起）。
 修改此文件后请同步更新 version.py 中 "data" 的版本号。
 """
 import sqlite3
@@ -10,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from football_prediction.data.loader import (
     LAYER_VERSION, _download_csv, _float_or_none, _make_match_id, _normalize, _parse_date,
-    season_of)
+    clean_odds, season_of)
 
 _FIXTURES_URL = "https://football-data.co.uk/fixtures.csv"
 _UK_TZ = ZoneInfo("Europe/London")   # football-data 的开球时间为英国本地时间
@@ -43,7 +44,8 @@ def load_fixtures(conn: sqlite3.Connection, leagues: list[str]) -> int:
         away = _normalize(str(row["AwayTeam"]))
         league = str(row["Div"])
         season = season_of(match_date)
-        odds = tuple(_float_or_none(row.get(c)) for c in _FIX_ODDS_COLS)
+        odds = clean_odds({col: _float_or_none(row.get(c)) for c, col in _FIX_ODDS_COLS.items()})
+        odds = tuple(odds[col] for col in _FIX_ODDS_COLS.values())
 
         kickoff_utc = None
         raw_time = str(row.get("Time", "")).strip()

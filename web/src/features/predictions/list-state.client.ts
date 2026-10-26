@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { LEAGUE_CODES } from "@/features/match";
 
 export const LIST_STATE_KEY = "football.predictions.view.v1";
 type Filters = { league: string; status: string };
@@ -21,7 +22,7 @@ export function useListState() {
       );
       if (
         saved &&
-        ["all", "E0", "D1", "SP1"].includes(saved.league) &&
+        (saved.league === "all" || LEAGUE_CODES.includes(saved.league)) &&
         ["all", "upcoming", "inplay", "finished"].includes(saved.status)
       ) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- restore browser storage after hydration
@@ -62,8 +63,11 @@ export function useListState() {
         setWarning("无法保存筛选位置，刷新后将恢复默认筛选。");
       }
     };
+    // 进入详情时，路由先切换并滚到顶部，列表的监听要等卸载才移除；
+    // 这期间的滚动属于新页面，不能覆盖列表的位置。
+    const listPath = window.location.pathname;
     const onScroll = () => {
-      if (restoring) return;
+      if (restoring || window.location.pathname !== listPath) return;
       lastY.current = window.scrollY;
       save();
     };

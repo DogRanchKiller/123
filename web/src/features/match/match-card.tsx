@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import { Icon } from "@/components/icon";
 import { ProbabilityBar } from "@/components/presentation";
 import { beijingTime } from "@/lib/display";
+import { modelLabel } from "@/lib/models";
+import { AsianSummary } from "./asian-section";
+import { TeamCrest } from "./team-crest";
 import type { MatchRecord } from "./types";
 
 export function MatchCard({
@@ -14,7 +17,15 @@ export function MatchCard({
   featured?: boolean;
   action?: ReactNode;
 }) {
-  const prediction = match.current;
+  // 未开赛看本轮看法；开球后看存档：临场档（更接近开球）优先，没有时用首次存档。
+  const prediction = match.current ?? match.nearArchived ?? match.archived;
+  const archiveLabel = match.current
+    ? null
+    : match.nearArchived
+      ? "临场存档"
+      : match.archived
+        ? "首次存档"
+        : null;
   return (
     <article
       className={"match-card" + (featured ? " featured" : "")}
@@ -24,6 +35,11 @@ export function MatchCard({
         <div className="card-meta">
           <span className="pill">{match.leagueName}</span>
           <span>{beijingTime(match.kickoffUtc)}</span>
+          {match.recommended && match.current && (
+            <span className="pill pill-accent" title={match.recommendationNote ?? undefined}>
+              ★ 重点
+            </span>
+          )}
           <span
             className={
               match.status === "inplay" ? "pill pill-accent" : "fine-print"
@@ -34,7 +50,12 @@ export function MatchCard({
         </div>
         <div className="card-teams">
           <div>
-            <span className="team-badge">{match.homeShort}</span>
+            <TeamCrest
+              crest={match.homeCrest}
+              short={match.homeShort}
+              name={match.home}
+              decorative
+            />
             <p className="team-name">{match.home}</p>
           </div>
           {match.score ? (
@@ -42,15 +63,21 @@ export function MatchCard({
               {match.score.home} : {match.score.away}
             </span>
           ) : (
-            <span className="versus">VS</span>
+            <span className="versus">对</span>
           )}
           <div>
-            <span className="team-badge">{match.awayShort}</span>
+            <TeamCrest
+              crest={match.awayCrest}
+              short={match.awayShort}
+              name={match.away}
+              decorative
+            />
             <p className="team-name">{match.away}</p>
           </div>
         </div>
         {prediction ? (
           <>
+            <AsianSummary asian={prediction.asian} />
             <ProbabilityBar values={prediction.probabilities} />
             <div className="card-summary">
               <span>
@@ -60,7 +87,7 @@ export function MatchCard({
                     prediction.confidence === "高" ? "pill pill-accent" : "pill"
                   }
                 >
-                  {prediction.confidence}信心
+                  胜平负{prediction.confidence}
                 </span>
               </span>
               <span>
@@ -69,7 +96,12 @@ export function MatchCard({
               </span>
             </div>
             <p className="fine-print mt-3">
-              概率来源：{prediction.probabilitySource} · {prediction.modelName}
+              {archiveLabel && archiveLabel + " · "}
+              概率来源：{prediction.probabilitySource} ·{" "}
+              <span title={prediction.modelName}>
+                {modelLabel(prediction.modelName)}
+              </span>
+              {prediction.oddsSource && " · 赔率：" + prediction.oddsSource}
             </p>
           </>
         ) : (
@@ -77,7 +109,7 @@ export function MatchCard({
             <span>
               {match.status === "upcoming"
                 ? "预测结果暂无数据"
-                : "赛前预测已存档"}
+                : "赛前预测暂无存档"}
             </span>
             <span>{match.inplay.label}</span>
           </div>

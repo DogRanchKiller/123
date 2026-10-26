@@ -3,6 +3,8 @@ review/scorecard.py  （review 层的一部分，版本跟 review/store.py 的 L
 实盘成绩单与对照：版本对比 compare_versions、成绩单 live_report（同场对比 market_avg）、
 主模型替换检查 promotion_check、临场档对赛前档 horizon_report。只读 predictions 表里已评分的行。
 v1.6.0: 从 store.py 拆出（行为不变）；成绩单增加亚盘列 ah_n / ah_ll / ah_hit（只作参考，不进替换检查）。
+v1.7.0: _scored_first 剔除 generated_at 不早于 extra.kickoff_utc 的行（开球后才存，不算赛前预测）。
+v1.8.0: 临场档 _t2 也不进 promotion_check；horizon_report 里 _t2 分别对赛前档与 _t1 配对。
 修改此文件后请同步更新 version.py 中 "review" 的版本号。
 """
 import sqlite3
@@ -10,7 +12,7 @@ import sqlite3
 import numpy as np
 import pandas as pd
 
-from football_prediction.review.store import HORIZON_SUFFIX, _init_review_db
+from football_prediction.review.store import HORIZON_SUFFIXES, _init_review_db, horizon_of
 
 HORIZON_BASE = {"lineup_t1": "lineup_base_t1"}  # 临场档的默认对照是去掉后缀的赛前档，例外在此登记
 
@@ -42,7 +44,8 @@ def _scored_first(conn: sqlite3.Connection) -> pd.DataFrame:
     df = pd.read_sql_query(
         """SELECT p.match_id, p.model_name, p.model_ver, p.log_loss, p.brier,
                   p.ou25_log_loss, p.score_log_loss, p.ah_log_loss, p.ah_hit,
-                  p.p_home_win, p.p_draw, p.p_away_win, p.actual_outcome
+                  p.p_home_win, p.p_draw, p.p_away_win, p.actual_outcome,
+                  p.generated_at, json_extract(p.extra_markets, '$.kickoff_utc') AS kickoff_utc
            FROM predictions p
            WHERE p.actual_outcome IS NOT NULL
            ORDER BY p.generated_at""",
@@ -50,6 +53,10 @@ def _scored_first(conn: sqlite3.Connection) -> pd.DataFrame:
     )
     if df.empty:
         return df
+    # 开球后才存的行（v1.7.0 之前一轮耗时过长时会出现）不算赛前预测；不删库里的行，只在这里不计
+    gen = pd.to_datetime(df["generated_at"], utc=True, format="ISO8601")
+    ko = pd.to_datetime(df["kickoff_utc"], utc=True, format="ISO8601")
+    df = df[~(ko.notna() & (gen >= ko))]
     df = df.drop_duplicates(["match_id", "model_name", "model_ver"]).reset_index(drop=True)
     pick = np.array(["home_win", "draw", "away_win"])[
         df[["p_home_win", "p_draw", "p_away_win"]].to_numpy().argmax(axis=1)]
@@ -115,7 +122,7 @@ def promotion_check(conn: sqlite3.Connection, primary: tuple[str, str],
     prim = df[(df["model_name"] == primary[0]) & (df["model_ver"] == primary[1])]
     rows = []
     for (name, ver), g in df.groupby(["model_name", "model_ver"]):
-        if (name, ver) == tuple(primary) or name == "market_avg" or name.endswith(HORIZON_SUFFIX):
+        if (name, ver) == tuple(primary) or name == "market_avg" or horizon_of(name):
             continue   # 临场档只覆盖部分场次、信息时点不同，不与赛前主模型争替换（见 horizon_report）
         n, diff, se = _paired(g, prim)
         if n < min_n:
@@ -131,20 +138,23 @@ def promotion_check(conn: sqlite3.Connection, primary: tuple[str, str],
 
 def horizon_report(conn: sqlite3.Connection) -> pd.DataFrame:
     """
-    临场档对赛前档：每个 X_t1（各版本）与赛前档 X 在同一批已评分比赛上配对（差值负=临场更好）。
-    赛前档有多个版本时每场取最早一条；没有配对场次的不列出。
+    临场档对更早的档：每个 X_t1（各版本）与赛前档 X 配对；X_t2 与赛前档 X、X_t1 各配对一次。
+    同一批已评分比赛上同场配对（差值负=临场更好）。对照档有多个版本时每场取最早一条；没有配对场次的不列出。
     """
     df = _scored_first(conn)
     if df.empty:
         return df
     rows = []
     for (name, ver), g in df.groupby(["model_name", "model_ver"]):
-        if not name.endswith(HORIZON_SUFFIX):
+        h = horizon_of(name)
+        if not h:
             continue
-        base_name = HORIZON_BASE.get(name, name[: -len(HORIZON_SUFFIX)])
-        base = df[df["model_name"] == base_name].drop_duplicates("match_id")
-        n, diff, se = _paired(g, base)
-        if n:
-            rows.append({"model_name": name, "model_ver": ver, "base": base_name,
-                         "paired_n": n, "diff": diff, "se": se})
+        stem = name[: -len(h)]
+        bases = [HORIZON_BASE.get(name, stem)] + [stem + s for s in HORIZON_SUFFIXES[:HORIZON_SUFFIXES.index(h)]]
+        for base_name in bases:
+            base = df[df["model_name"] == base_name].drop_duplicates("match_id")
+            n, diff, se = _paired(g, base)
+            if n:
+                rows.append({"model_name": name, "model_ver": ver, "base": base_name,
+                             "paired_n": n, "diff": diff, "se": se})
     return pd.DataFrame(rows)

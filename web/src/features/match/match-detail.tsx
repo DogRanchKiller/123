@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { DemoNotice } from "@/components/presentation";
+import { DataNotice } from "@/components/presentation";
 import { beijingTime } from "@/lib/display";
 import { PredictionSection } from "./prediction-section";
+import { TeamCrest } from "./team-crest";
 import type { MatchRead } from "./types";
 
 export function MatchDetail({
@@ -12,13 +13,13 @@ export function MatchDetail({
   data: MatchRead;
   action: ReactNode;
 }) {
-  const { match, delayed } = data;
+  const { match, delayed, source } = data;
   return (
     <>
       <Link href="/predictions" scroll={false} className="text-link mb-4">
         ← 返回比赛列表
       </Link>
-      <DemoNotice />
+      <DataNotice source={source} />
       {delayed && (
         <p className="status-notice" role="status">
           更新延迟：当前显示上次有效结果，以下数据时间保持原值。
@@ -29,13 +30,23 @@ export function MatchDetail({
           {match.leagueName} · {match.statusLabel}
         </span>
         <h1 className="mt-4">
-          {match.home} vs {match.away}
+          {match.home} 对 {match.away}
         </h1>
         <p className="muted mt-2">
           {beijingTime(match.kickoffUtc)} 开球 · 北京时间
         </p>
+        {match.recommended && match.recommendationNote && (
+          <p className="mt-2">
+            <span className="pill pill-accent">★ 重点</span> {match.recommendationNote}
+          </p>
+        )}
         <div className="card-teams">
-          <span className="team-badge mx-auto">{match.homeShort}</span>
+          <TeamCrest
+            crest={match.homeCrest}
+            short={match.homeShort}
+            name={match.home}
+            className="mx-auto"
+          />
           <div>
             <p className="score">
               {match.score
@@ -48,13 +59,21 @@ export function MatchDetail({
                 : "比分暂无数据"}
             </p>
           </div>
-          <span className="team-badge mx-auto">{match.awayShort}</span>
+          <TeamCrest
+            crest={match.awayCrest}
+            short={match.awayShort}
+            name={match.away}
+            className="mx-auto"
+          />
         </div>
         {action}
       </div>
       <div className="detail-grid">
         <div>
           <PredictionSection title="当前预测" prediction={match.current} />
+          {match.nearArchived && (
+            <PredictionSection title="临场存档" prediction={match.nearArchived} />
+          )}
           <PredictionSection title="首次预测存档" prediction={match.archived} />
         </div>
         <aside>
@@ -68,7 +87,10 @@ export function MatchDetail({
           <section className="panel side-panel">
             <h2>阅读这份预测</h2>
             <p className="mt-3">
-              高信心档历史上仍约有四分之一未命中。命中率是历史表现，不是本场承诺。
+              每场都给结论和把握程度。胜平负市场档为高（市场最大概率 ≥ 60%）时标为重点，这一档历史上约
+              72% 命中，仍约有四分之一未中。
+              {"重点只表示胜平负把握高，这类场次在市场亚盘线上仍接近五五开，亚盘请看稳妥线。"}
+              命中率是历史表现，不是本场承诺。
             </p>
             <ul className="mt-4 space-y-3 text-sm text-muted">
               {match.risks.map((risk) => (
@@ -79,7 +101,8 @@ export function MatchDetail({
           <section className="panel side-panel">
             <h3>结果与存档</h3>
             <p>
-              当前预测随数据变化；首次预测用于赛后评价，后续刷新不会覆盖历史记录。
+              当前预测随数据变化；首次预测用于赛后评价，后续刷新不会覆盖历史记录。临场存档是开球前
+              1.5 小时内按多家赔率另存的一份，亚盘线与首次存档不同时在盘口变动里标出。
             </p>
             <p className="mt-3 break-all">比赛 ID：{match.id}</p>
           </section>

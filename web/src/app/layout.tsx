@@ -6,7 +6,7 @@ import "@/styles/globals.css";
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: { default: "绿茵观察 · 足球预测", template: "%s · 绿茵观察" },
-  description: "查看足球比赛预测、模型来源和赛后成绩单。当前为演示网站。",
+  description: "查看足球比赛预测、模型来源和赛后成绩单。未配置只读接口时显示演示数据。",
   robots: { index: false, follow: false },
 };
 

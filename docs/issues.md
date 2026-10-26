@@ -19,15 +19,6 @@
 
 ## 未解决
 
-### 新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版
-
-- 状态：未解决
-- 日期：2026-10-25
-- 现象：英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1 的 2122–2526 在 `match_xg` 里是 0 场。
-- 原因：understat 只有英超、德甲、西甲、意甲、法甲（`understat.US_LEAGUES`）。FotMob 只补抓了 2627（每日 `data.fotmob` 抓当前赛季），`backfill_xg` 只补已抓的场次。xg_dc 缺 xG 时用进球代替。
-- 处理：主模型是 `market_implied`，这些联赛 football-data 的赔率齐全（只有 T1 2223 缺 29 场），报告不受影响；受影响的是无赔率时的兜底和并行存档的 dc_xg。可选两条路：`python -m football_prediction.data.fotmob --leagues E1,N1,P1,SC0,B1,T1 --history 2425,2526` 补历史（每季约 2000 页，两季按 3.5 秒间隔约 4 小时）；或读 football-data 2627 起新增的 `HxG` / `AxG` 列（11 个联赛 2627 都有，2526 及以前没有）。
-- 位置：`football_prediction/data/understat.py`、`football_prediction/data/fotmob.py`、`football_prediction/model_dc/xg_dc.py`
-
 ### 联赛增加后每日任务和临场档的抓取时间变长
 
 - 状态：未解决
@@ -40,10 +31,10 @@
 ### 临场档依赖电脑开机，且可能与每日任务争 SQLite 锁
 
 - 状态：未解决
-- 日期：2026-10-24（2026-10-25 更新）
+- 日期：2026-10-24（2026-10-25、2026-10-26 更新）
 - 现象：`*_t1`（market_*_t1、lineup_t1 / lineup_base_t1）只有在开球前 1.5 小时内跑过 `live --near` 才会存档。
 - 原因：OddsPortal 多家赔率和 FotMob 正式首发都要临场抓；开赛集中在北京时间 19:30–05:00，电脑关机或睡眠时没有存档。`run_near.bat` 与 `run_daily.bat` 都写 `football.db` / `fotmob.db`，同一时刻运行可能报 `database is locked`。
-- 处理：2026-10-25 建了计划任务 `FootballPredictNear`（每天 18:13 起每 30 分钟一次，到 05:43；单次上限 40 分钟，上一轮未完则跳过）。`init_db` 连接加 `timeout=BUSY_TIMEOUT`（120 秒），遇锁先等待而不是立即报错。仍要求开赛时段电脑开机、不睡眠；失败的一轮只会少存档，不会写错数据（存档只认首次，下一轮会补）。
+- 处理：2026-10-25 建了计划任务 `FootballPredictNear`（每天 18:13 起每 30 分钟一次，到 05:43；单次上限 40 分钟，上一轮未完则跳过）。`init_db` 连接加 `timeout=BUSY_TIMEOUT`（120 秒），遇锁先等待而不是立即报错。仍要求开赛时段电脑开机、不睡眠；失败的一轮只会少存档，不会写错数据（存档只认首次，下一轮会补）。2026-10-26 核对：三个任务都 `WakeToRun=False`，电池供电时 10 分钟无操作就睡眠，睡眠期间的轮次不会跑；`FootballPredictDaily_2337` 10-25 那次结果 0xC000013A（进程被中断，控制台关闭或 Ctrl+C 一类），已手动补跑，10-26 18:07 每日任务与临场档结果都是 0。要提高覆盖，需接电源并关闭睡眠，或给任务打开「唤醒计算机运行」（未改，属于用户的电源设置）。
 - 位置：`run_near.bat`、`football_prediction/live.py`（`_run_near` / `_predict_near`）、`football_prediction/data/loader.py`（`BUSY_TIMEOUT`）
 
 ### understat robots.txt 为 `Disallow: /`，FotMob 使用条款未核验
@@ -56,6 +47,34 @@
 - 位置：`football_prediction/data/understat.py`、`football_prediction/data/fotmob.py`
 
 ## 已解决
+
+### 新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版
+
+- 状态：已解决（output 1.7.0 / 系统 1.12.0）
+- 日期：2026-10-25
+- 现象：英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1 的 2122–2526 在 `match_xg` 里是 0 场。
+- 原因：understat 只有英超、德甲、西甲、意甲、法甲（`understat.US_LEAGUES`）。FotMob 只补抓了 2627（每日 `data.fotmob` 抓当前赛季），`backfill_xg` 只补已抓的场次。xg_dc 缺 xG 时用进球代替。
+- 处理：主模型是 `market_implied`，这些联赛 football-data 的赔率齐全（只有 T1 2223 缺 29 场），报告不受影响；受影响的是无赔率时的兜底和并行存档的 dc_xg。可选两条路：`python -m football_prediction.data.fotmob --leagues E1,N1,P1,SC0,B1,T1 --history 2425,2526` 补历史（每季约 2000 页，两季按 3.5 秒间隔约 4 小时）；或读 football-data 2627 起新增的 `HxG` / `AxG` 列（11 个联赛 2627 都有，2526 及以前没有）。2026-10-26：无赔率时的兜底改为 `dc_market`（进球 + 历史赔率估强度，不用 xG；11 联赛 2324–2627 对 blend −0.0060±0.0010，新六联赛 −0.0092±0.0015），兜底不再受缺 xG 影响；2627 的 xG 已由 FotMob 补齐，HxG 没有历史赛季，不接入。dc_xg 只剩并行存档，在这六个联赛 2122–2526 仍近似进球版。
+- 位置：`football_prediction/data/understat.py`、`football_prediction/data/fotmob.py`、`football_prediction/model_dc/xg_dc.py`
+
+### football-data 2526 起部分场次的赛前平均亚盘客队水位错误
+
+- 状态：已解决（data 1.9.0）
+- 日期：2026-10-26
+- 现象：`football.db` 的 `match_odds` 里有 78 场（2526 有 77 场，2627 有 1 场，比赛日期从 2025-11-28 到 2026-10-18）`avg_aha` 约为 4.4，主队水位却正常（约 1.9），两边隐含概率加起来不到 1。`research.db` 2526 有 38 场同样的问题。2122–2425 没有这种行，收盘列（`avgc_ahh` / `avgc_aha`）也没有。用这些行反推，选择方赢盘概率会偏到 0.56 以上：2526 留出季亚盘「高」档的 37 场里有 36 场是坏行（命中 0.444）。`AH_TIERS` 注释里「高 0.457（n=35），未确认」那一项因此不能作为高档失效的证据。实盘存档用的是赛程表和多家赔率，赛程表 102 行里没有这种行。
+- 原因：源数据本身有误。`_cache/fd_research/E0_2526.csv` 里 Brentford–Burnley 一行 `AvgAHA` = 4.32，`MaxAHA` = 22.0，而 B365、Pinnacle、Betfair 交易所的客队水位都在 1.83–1.87。推断是某一家公司挂了异常赔率，把平均值拉高了。入库时没有检查两边水位是否合理。
+- 处理：data 1.9.0 起入库前检查每组赔率（`loader.clean_odds` / `bad_market`）：胜平负、大小 2.5、亚盘（赛前 / 收盘 / Pinnacle / B365）各项隐含概率之和 < 1 时整组当作缺失，亚盘连盘口线一起；`fixtures.csv` 赛程赔率同样处理，多家中位数 `book_consensus` 的胜平负 / 大小 2.5 也这样处理，亚盘不选这样的线（`book_odds` 逐家原始赔率照存）。用本地 `_cache/fd_raw` 的 2526 / 2627 CSV 核对，新规则剔除的正好是库里已有的坏行：亚盘 78、胜平负 1、收盘胜平负 2、大小 2.5 1、收盘大小 2.5 2、Pinnacle 收盘 1，别的行不动。库里已有的这些行按「只补不改」不改写；它们只被研究脚本读（实盘存档用赛程表和多家赔率，两者当前都没有坏行），研究脚本继续用 `1/avg_ahh + 1/avg_aha >= 1` 过滤，或用 `loader.bad_market` 判断。`research.db` 用 `load_season` 重建时会自动剔除。
+- 原先的可选做法与复核：入库或反推时把两边隐含概率和小于 1 的亚盘水位当作缺失（data 层行为变化，要升版本）；研究脚本先用 `1/avg_ahh + 1/avg_aha >= 1` 过滤。剔除坏行后，football.db 2122–2627 里亚盘「高」档只有 8 场，「中」档命中 0.599（2122–2425，n=601）和 0.586（2526–2627，n=174）。稳妥线基本不受影响（`_diag/explore/ah_clean_recheck.py`）：research.db 留出 2526 命中 0.674 → 剔除后 0.677，football.db 2526–2627 0.671 → 0.672。同类「两边隐含概率和 < 1」在胜平负 2526 各库有 1 行、大小 2.5 research.db 1819 有 1 行，影响可忽略。
+- 位置：`football_prediction/data/loader.py`（`clean_odds`）、`football_prediction/data/fixtures.py`、`football_prediction/data/oddsportal.py`（`book_consensus`）、`football_prediction/output/analysis.py`（`AH_TIERS` 注释）、`_diag/algo_sweep/`、`_diag/explore/ah_clean_recheck.py`
+
+### 临场档在开球后才存档，多家赔率的抓取时间记早了
+
+- 状态：已解决（data 1.8.0 / review 1.7.0 / live 1.10.1）
+- 日期：2026-10-26
+- 现象：Sparta Rotterdam – Ajax（`d6878bf5e28f44ec`，开球 2026-10-25 15:45 UTC）的 `lineup_t1` / `lineup_base_t1` 在 16:08 存档，已开球 23 分钟。库里开球后才存的只有这 2 行；`book_odds` 没有记在开球后的行，但这一批的 `fetched_at` 比实际抓回时间早。
+- 原因：临场档 15:43 开始，`now` 在一轮开始时定下，窗口判断和"未开球"都按它算；OddsPortal 抓取约 25 分钟，阵容档在抓完后才存。`collect` 把整批的 `fetched_at` 都记成开始时刻，赔率新鲜度（90 分钟）因此偏宽。
+- 处理：`services.round_clock` 给每轮一个随真实时间走的时钟，`predict_upcoming` / `predict_near` 存档前按它重新判断，已开球就跳过；`save_prediction` 新增 `at`，`generated_at` 记真实存档时刻，`extra.kickoff_utc` 不晚于它时不存。`oddsportal.collect` 的 `fetched_at` 改为每组抓回时刻，抓回时已开球的场次不入库。旧行不删，成绩单与 `promotion_check` 的 `_scored_first` 排除 `generated_at ≥ kickoff_utc` 的行。
+- 位置：`football_prediction/services/live_round.py`（`round_clock`）、`football_prediction/services/near_round.py`、`football_prediction/review/store.py`（`started` / `save_prediction`）、`football_prediction/review/scorecard.py`、`football_prediction/data/oddsportal.py`
 
 ### football-data 赛果晚几天，实盘评分一直落后
 

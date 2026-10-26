@@ -1,4 +1,6 @@
 """评分、去重、实盘成绩单与主模型替换检查。"""
+import json
+from datetime import datetime, timezone
 from math import log
 
 import numpy as np
@@ -10,7 +12,7 @@ from football_prediction.review.scorecard import (
 )
 from football_prediction.review.store import (
     has_prediction, save_prediction, score_predictions, pending_fotmob, reconcile_results,
-    ah_scores, ah_settle,
+    ah_scores, ah_settle, horizon_of,
 )
 
 
@@ -143,6 +145,23 @@ def test_scored_first_keeps_earliest(conn):
     assert df.iloc[0]["hit"] == 1.0
 
 
+def test_no_archive_or_score_after_kickoff(conn):
+    """开球后不存档；旧库里开球后才存的行（generated_at ≥ kickoff_utc）不进成绩。"""
+    _match(conn, "m1", 0, 1)
+    ko = {"kickoff_utc": "2025-09-01T14:00:00+00:00"}
+    late = datetime(2025, 9, 1, 14, 5, tzinfo=timezone.utc)
+    assert save_prediction(conn, "m1", "x", "1", "1", 0.2, 0.2, 0.6, ko, at=late) is None
+    assert not has_prediction(conn, "m1", "x", "1")
+    early = datetime(2025, 9, 1, 13, 0, tzinfo=timezone.utc)
+    assert save_prediction(conn, "m1", "x", "1", "1", 0.2, 0.2, 0.6, ko, at=early)
+    conn.execute("""INSERT INTO predictions (pred_id, match_id, model_name, model_ver, feature_ver,
+                    layer_ver, p_home_win, p_draw, p_away_win, extra_markets, generated_at)
+                    VALUES ('old','m1','y','1','1','1',0.2,0.2,0.6,?,?)""",
+                 (json.dumps(ko), late.isoformat()))   # 修复前留下的开球后存档
+    score_predictions(conn)
+    assert set(_scored_first(conn)["model_name"]) == {"x"}
+
+
 def test_paired_diff_and_se():
     import pandas as pd
     a = pd.DataFrame({"match_id": ["1", "2", "3", "9"], "log_loss": [1.0, 1.2, 0.8, 5.0]})
@@ -216,3 +235,21 @@ def test_horizon_report_pairs_t1_with_pre_match(conn):
     # 临场档不参加主模型替换
     chk = promotion_check(conn, ("dc_xg", "1.0.0"), min_n=1)
     assert not chk["model_name"].str.endswith("_t1").any()
+
+
+def test_horizon_report_pairs_t2_with_pre_match_and_t1(conn):
+    _scored_set(conn, 10, 0.6, 0.5)
+    for i in range(6):
+        save_prediction(conn, f"m{i}", "market_avg_t1", "1.1.0", "1", 0.7, 0.15, 0.15)
+    for i in range(4):                          # 第二临场档覆盖其中 4 场
+        save_prediction(conn, f"m{i}", "market_avg_t2", "1.1.0", "1", 0.8, 0.1, 0.1)
+    score_predictions(conn)
+
+    hz = horizon_report(conn)
+    t2 = hz[hz["model_name"] == "market_avg_t2"].set_index("base")
+    assert set(t2.index) == {"market_avg", "market_avg_t1"}
+    assert t2.loc["market_avg", "paired_n"] == 4
+    assert t2.loc["market_avg_t1", "diff"] == pytest.approx(log(0.7) - log(0.8), abs=1e-6)
+    chk = promotion_check(conn, ("dc_xg", "1.0.0"), min_n=1)
+    assert not chk["model_name"].str.endswith("_t2").any()
+    assert [horizon_of(n) for n in ("market_avg", "lineup_t1", "market_avg_t2")] == ["", "_t1", "_t2"]
