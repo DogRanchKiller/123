@@ -47,7 +47,7 @@ set PYTHONIOENCODING=utf-8
 
 不要跑不带路径的 `pytest`（会收集 `大模型项目/` 里依赖 torch 的测试而失败）。lightgbm 缺 `libomp` 时相关测试会 skip，不影响实盘。
 
-实盘、接口和上面这套测试只用 `.venv`。Agent 和 `model_nn` 还不参与实盘，要在本机做这两块时再另建环境（体积大约 1.7 GB）。Windows 实盘机第一次拉到这份提交后先不要建 `.venv-ml`，按 [`agent-dev.md`](agent-dev.md) 第 3 节「Windows 实盘机拉取后自行核对」核对本机 Python 和现有 `.venv`。Python 3.12 / AMD64 目前是暂定值。
+实盘、接口和上面这套测试只用 `.venv`。Agent 和 `model_nn` 还不参与实盘，要在本机做这两块时再另建环境（体积大约 1.8 GB）。Windows 实盘机第一次拉到这份提交后先不要建 `.venv-ml`，按 [`agent-dev.md`](agent-dev.md) 第 3 节「Windows 实盘机拉取后自行核对」核对本机 Python 和现有 `.venv`。Python 3.12 / AMD64 目前是暂定值。
 
 ```bat
 python -m venv .venv-ml
@@ -138,7 +138,7 @@ python -m server
 - 后六个联赛（E1/N1/P1/SC0/B1/T1）没有 understat xG，`dc_xg` 在这些联赛基本等于进球版。
 - OddsPortal 在本机美国出口 IP 下只看到 5 家美国公司。
 - 阵容模型的 `COEF_PRE` / `COEF_POST` 还是 0，研究未确认前不生效。
-- Agent 模块完成了 P0（独立环境 `.venv-ml` 和规范）；P1（`agent/` 的只读工具层与 MCP，`python -m agent.mcp_server`）已写完，待验收。还不接大模型，`requirements.txt` 里也没有 torch。实盘定时任务继续只用 `.venv`。
+- Agent 模块完成了 P0（独立环境 `.venv-ml` 和规范）；P1（`agent/` 的只读工具层与 MCP，`python -m agent.mcp_server`）已验收；P1.5 定了编排框架 LangGraph，依赖已写进 `requirements-ml.txt`。还不接大模型，`requirements.txt` 里也没有 torch。实盘定时任务继续只用 `.venv`。
 - 未解决问题（抓取时间变长、临场档依赖开机和锁、understat / FotMob 条款未核验）见 [`issues.md`](issues.md)「未解决」。
 
 ## 其他文档

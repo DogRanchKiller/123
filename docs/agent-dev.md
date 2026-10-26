@@ -21,7 +21,7 @@
 |---|---|
 | `python -m pytest tests`（主环境基线）、`live`、`server` | `.venv/bin/python`（Windows `.venv\Scripts\python`） |
 | `agent`、MCP、知识库、`model_nn`、LoRA、ML 环境下的 `pytest tests` | `.venv-ml/bin/python` |
-| 阶段 1.5 的框架概念验证 | `.venv-poc/bin/python` |
+| 阶段 1.5 的框架概念验证（已结束，环境已删） | `.venv-poc/bin/python` |
 
 - 从仓库根目录运行。不跑不带路径的 `pytest`。
 - `.venv` 一个包都不加（方案 §5）。往 `.venv` 里装东西就算这个阶段失败。
@@ -67,7 +67,7 @@ P0 环境与规范 ──→ P1 工具层 + MCP ──→ P1.5 框架概念验�
 | 1 环境方案 | P0 | 你已经通过方案，按方案 §5 做 |
 | 4 Windows 实盘机的 Python 版本和机器架构 | P0 的 Windows wheel 检查 | 只做这一项时停下等你；其余 P0 项照做。**暂定 3.12 / AMD64**（用户 2026-10-27 告知，未在那台机器上核对），P0 按它解析；那台机器拉取后按下面「Windows 实盘机拉取后自行核对」处理 |
 | 6 中文队名表放哪 | P1 的 `resolve_team` | 先只用 `TEAM_ALIASES`，中文名留空，交接里注明 |
-| 2 默认云端模型和密钥 | P1.5、P3 | P1.5 不能开始 |
+| 2 默认云端模型和密钥 | P1.5、P3 | **已定**（2026-10-27）：OpenAI 兼容中转站 + `DeepSeek-v4.1-flash-1017`，密钥在本机 `.env` |
 | 8 下载 bge-m3 / 重排模型 / Qwen | P2、P5 | 对应阶段不能开始 |
 | 研究白名单里锚点不够的 4 条（方案 §7.2） | P2 | 这 4 条不收，其余照做 |
 | 7 G1 判据和登记哪些检验 | P4 写 `prereg.md` 之前 | 可以做选参，不能写 `prereg.md`，也不能跑 2526 |
@@ -173,6 +173,8 @@ P0 环境与规范 ──→ P1 工具层 + MCP ──→ P1.5 框架概念验�
 ## 6. P1.5 框架概念验证
 
 **目标**：在 LangGraph 和 OpenAI Agents SDK 之间选一个（方案 §3）。概念验证的代码不合并进 main。
+
+**结果（2026-10-27）**：用户直接选定 LangGraph，没有写 Agents SDK 的实现。概念验证在分支 `agent/p15-poc`；依赖已移进 `requirements-ml.txt`，`.venv-ml` 已重建。交接：`docs/handoff/2026-10-27-0352-…`（实测）和本阶段收尾那份。
 
 **先读**：方案 §3、§8.1、§8.2。
 

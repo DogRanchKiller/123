@@ -80,8 +80,9 @@ Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `f
 | `.venv` | `requirements.txt` | `live`、`server`、定时任务、`python -m pytest tests` |
 | `.venv-ml`（gitignore） | `requirements.txt` + `requirements-ml.txt`，受 `constraints-ml.txt` 约束 | `agent/`、MCP、知识库、`model_nn` 训练、LoRA 微调 |
 
-- `requirements-ml.txt` 只写直接依赖，都用 `==` 钉版本：chromadb、sentence-transformers、rank-bm25（知识库）；mcp、python-dotenv；torch、transformers、peft、trl、datasets（训练）。
+- `requirements-ml.txt` 只写直接依赖，都用 `==` 钉版本：langgraph、langgraph-checkpoint-sqlite、langchain-core、langchain-openai、langchain-anthropic（编排与模型接口）；chromadb、sentence-transformers、rank-bm25（知识库）；mcp、python-dotenv；torch、transformers、peft、trl、datasets（训练）。
 - `constraints-ml.txt` 钉与 `requirements.txt` 重叠的包，版本等于 `.venv` 里实际装的版本；解析冲突时改 ML 包的版本，不改 `requirements.txt`。另钉 tokenizers、safetensors 等关键间接依赖。不用整份 `pip freeze`。
-- 编排框架（LangGraph 或 OpenAI Agents SDK）还没定，P1.5 概念验证在单独的 `.venv-poc*` 里比较，定了之后才写进 `requirements-ml.txt` 并重建 `.venv-ml`。
+- 编排框架用 LangGraph（用户 2026-10-27 在 P1.5 概念验证后选定，不用 OpenAI Agents SDK；两者没有做对比实现）：图与状态用 `langgraph`，对话状态持久化用 `langgraph-checkpoint-sqlite`（存 `agent_data/`），模型接口用 `langchain-openai`（OpenAI 兼容接口：中转站、本地 Ollama）和 `langchain-anthropic`（Claude）。SDK 自带重试关掉，由我们自己的代码限次重试并逐个数 HTTP 请求。概念验证的代码在分支 `agent/p15-poc`，不合入 main；`.venv-poc` 已删。
+- 默认云端模型（决定 2）：OpenAI 兼容中转站上的 `DeepSeek-v4.1-flash-1017`，地址、模型名和密钥只写在本机 `.env`（`AGENT_PROVIDER` / `AGENT_MODEL` / `AGENT_BASE_URL` / `OPENAI_API_KEY`）。
 - 密钥只放仓库根目录 `.env`（gitignore），变量名见 `.env.example`；代码和日志里不出现密钥。Chroma 索引、对话状态、用量库放 `agent_data/`，权重放 `checkpoints/`，都不进版本库，也不写进 `football.db`。
 - 模型权重（bge-m3、重排模型、Qwen 等）下载前先说明仓库和体积，经用户同意再下。

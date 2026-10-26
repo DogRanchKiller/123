@@ -122,7 +122,7 @@ npm run start     # 部署运行，前置 npm run build
 | `review/scorecard.py` | 实盘成绩单（同场对比 `market_avg`，含亚盘列，只作参考）、`promotion_check`（只看 1X2）、`horizon_report` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
 | `services/team_read.py` | 按队名的读函数（Agent 工具层用）：`league_code`、`resolve_team_name`、`read_team_recent`、`read_next_fixture`、`read_lineups`、`read_grading` |
-| `agent/`（仓库根目录） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。现有 P1：`config.py`、`tools/`（7 个比赛工具 + `kb_search` 假实现，返回块）、`mcp_server.py`；知识库、编排和对话服务还没有代码。`football_prediction/model_nn/`（同样还没有代码）是 PyTorch 预测网络，过 G1 之前不进实盘（`docs/ml-stack.md`） |
+| `agent/`（仓库根目录） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。现有 P1：`config.py`、`tools/`（7 个比赛工具 + `kb_search` 假实现，返回块）、`mcp_server.py`；编排框架已定 LangGraph（P1.5），知识库、编排和对话服务还没有代码。`football_prediction/model_nn/`（同样还没有代码）是 PyTorch 预测网络，过 G1 之前不进实盘（`docs/ml-stack.md`） |
 | `server/`（仓库根目录） | FastAPI 只读接口 `/api/matches`（含最近已开球场次 `recent`）、`/api/matches/{id}`、`/api/review`；只调 `services`，不写 SQL；无鉴权，默认只听 127.0.0.1 |
 | `live.py` | 实盘入口，只有参数、打印和调用 `services`；编排规则见 [`docs/modules.md`](docs/modules.md) |
 | `explain.py` | 单场说明入口。同上 |

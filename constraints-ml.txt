@@ -39,3 +39,12 @@ onnxruntime==1.31.0
 pyarrow==26.0.0
 protobuf==7.36.2
 grpcio==1.85.0
+
+# 第二组：编排框架（LangGraph）的关键间接依赖（版本取 2026-10-27 P1.5 概念验证 .venv-poc 实测）
+langgraph-checkpoint==4.3.0
+langgraph-prebuilt==1.1.1
+langgraph-sdk==0.4.9
+langsmith==0.14.12
+openai==3.39.0
+anthropic==1.17.0
+tiktoken==0.14.0
