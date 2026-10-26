@@ -2,7 +2,8 @@
 services/live_round.py  实盘一轮（中间层）
 更新数据（含赔率快照）→ 赛后评分 → 对未开赛场次存档预测 → 预测报告 → 实盘成绩单 → 替换检查，
 并把这一轮算好的看法与成绩单写成快照（SNAPSHOT_PATH），给接口读，接口不再按请求拟合。
-快照的读函数（read_current / read_match / read_scorecard）在 services/match_read.py。
+快照的读函数（read_current / read_match / read_scorecard）在 services/match_read.py；
+临场档（near_round）有场次时用 refresh_snapshot 按开球前的多家赔率重写快照。
 命令行入口 live.py 只做参数和打印；行为与版本说明见 live.py 的文件头（版本号登记为 "live"）。
 规则：
 - 只对尚未开球的比赛预测，预测时间必定早于开球时间（无未来信息）。
@@ -110,6 +111,12 @@ def markets_extra(m, kickoff) -> dict:
     return extra
 
 
+def match_ident(r: dict) -> dict:
+    """存档里记下对阵：fixtures 每次刷新整表替换，football-data 赛果到之前被换掉的场次靠它查对阵。"""
+    return {"match": {"league": r["league"], "home": r["home_team"], "away": r["away_team"],
+                      "match_date": r["match_date"]}}
+
+
 def predict_upcoming(conn: sqlite3.Connection, now: datetime, cache: ModelCache | None = None,
                      log: Log = print) -> int:
     """对未开球的比赛存档 DC / 射正 DC / xG DC / Elo / blend / 市场 / 市场隐含，返回新保存条数。"""
@@ -129,7 +136,7 @@ def predict_upcoming(conn: sqlite3.Connection, now: datetime, cache: ModelCache 
     for r in upcoming_fixtures(conn, LEAGUES, now):
         mid, lg, home, away, kickoff = (r["match_id"], r["league"], r["home_team"],
                                         r["away_team"], r["kickoff_utc"])
-        lm = cache.get(lg)
+        lm, ident = cache.get(lg), match_ident(r)
         for t in (home, away):
             if not lm.known(t):
                 log(f"  ⚠ {t} 不在 {lg} 历史数据中，DC 用联赛均值兜底")
@@ -141,13 +148,13 @@ def predict_upcoming(conn: sqlite3.Connection, now: datetime, cache: ModelCache 
             m = model.score_matrix(home, away)
             mk = derive_markets(m)
             save(mid, name, vers[name], (mk["home_win"], mk["draw"], mk["away_win"]),
-                 markets_extra(m, kickoff))
+                 markets_extra(m, kickoff) | ident)
 
         inp = lm.inputs(home, away)
-        save(mid, "elo", vers["elo"], inp["models"]["elo"], {"kickoff_utc": kickoff})
-        save(mid, BLEND_NAME, vers[BLEND_NAME], inp["models"]["blend"], {"kickoff_utc": kickoff})
+        save(mid, "elo", vers["elo"], inp["models"]["elo"], {"kickoff_utc": kickoff, **ident})
+        save(mid, BLEND_NAME, vers[BLEND_NAME], inp["models"]["blend"], {"kickoff_utc": kickoff, **ident})
 
-        saved += save_market(conn, mid, fixture_odds(r), inp["rho"], kickoff, feat_ver)
+        saved += save_market(conn, mid, fixture_odds(r), inp["rho"], kickoff, feat_ver, info=ident)
     return saved
 
 
@@ -211,6 +218,16 @@ def run_round(conn: sqlite3.Connection, now: datetime, db_path: str = DB_PATH,
                    scorecard_rows(rep))
     out["snapshot_path"] = snapshot_path
     return out
+
+
+def refresh_snapshot(conn: sqlite3.Connection, now: datetime, cache: ModelCache | None = None,
+                     snapshot_path: str = SNAPSHOT_PATH) -> int:
+    """按最新赔率重算未开赛场次的本轮看法并重写快照（临场档用：开球前的多家赔率进网站）。
+    不存档、不写报告 CSV、不评分；成绩单按库里现有评分重算。返回快照里的场次数。"""
+    analysed = analyse_upcoming(conn, LEAGUES, now, cache)
+    write_snapshot(snapshot_path, now, [match_view(r, a, src) for r, a, src in analysed],
+                   scorecard_rows(live_report(conn)))
+    return len(analysed)
 
 
 def _num(x, nd: int = 4):

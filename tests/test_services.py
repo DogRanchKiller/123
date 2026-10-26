@@ -135,8 +135,42 @@ def test_read_recent_and_fotmob_score(league, tmp_path):
     later = now + timedelta(days=5)
     assert [r["match"]["match_id"] for r in services.read_recent(conn, later)] == ["late"]   # f1 超出 3 天
     assert len(services.read_recent(conn, later, days=7)) == 2
-    conn.execute("DELETE FROM fixtures WHERE match_id='f1'")          # 赛程表刷新后换掉、赛果未到
-    assert [r["match"]["match_id"] for r in services.read_recent(conn, later, days=7)] == ["late"]
+    conn.execute("DELETE FROM fixtures")                              # 赛程表刷新后换掉、赛果未到
+    rec = services.read_recent(conn, later, days=7)
+    assert [r["match"]["match_id"] for r in rec] == ["late", "f1"]   # 对阵改从存档里记下的取
+    assert (rec[1]["match"]["home"], rec[1]["match"]["away"], rec[1]["match"]["league"]) == ("A", "F", "E0")
+    assert rec[1]["match"]["kickoff_utc"] == (now + timedelta(hours=5)).isoformat()
+    assert services.read_match(conn, "f1", str(tmp_path / "none.json"))["match"]["home"] == "A"
+    conn.execute("UPDATE predictions SET extra_markets = json_remove(extra_markets, '$.match')")
+    assert services.read_recent(conn, later, days=7) == []           # 记对阵之前的旧存档：查不到，跳过
+
+
+def test_run_near_rewrites_snapshot_with_book_odds(league, tmp_path, monkeypatch):
+    """临场档窗口内有场次时按最新赔率（多家中位数）重写快照，含窗口外的未开赛场次；窗口内没场次时不动快照。"""
+    from tests.test_report_live import _books
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
+    _fixture(conn, "near", (now + timedelta(hours=1)).isoformat())
+    _fixture(conn, "late", (now + timedelta(days=1)).isoformat(), "C", "D")
+    _, snap = _round(conn, now, tmp_path, monkeypatch)
+    before = json.loads(pathlib.Path(snap).read_text(encoding="utf-8"))
+    assert before["matches"][0]["odds_source"].startswith("赛程表")
+
+    t1 = now + timedelta(minutes=20)
+    fake_odds = lambda c, leagues, t, hours: _books(c, "near", t) or 9
+    assert services.run_near(conn, t1, fake_odds, lambda c, t, h: [], log=lambda s: None,
+                             snapshot_path=snap) == 3
+    after = json.loads(pathlib.Path(snap).read_text(encoding="utf-8"))
+    assert after["generated_at"] == t1.isoformat()
+    assert [m["match_id"] for m in after["matches"]] == ["near", "late"]
+    assert after["matches"][0]["odds_source"].startswith("多家中位数（3 家")
+    assert after["matches"][1]["odds_source"].startswith("赛程表")
+    assert services.read_recent(conn, now + timedelta(hours=2))[0]["match"]["home"] == "A"
+
+    far = now + timedelta(hours=3)                                  # 1.5 小时内没有开球的场次
+    assert services.run_near(conn, far, fake_odds, lambda c, t, h: [], log=lambda s: None,
+                             snapshot_path=snap) == 0
+    assert json.loads(pathlib.Path(snap).read_text(encoding="utf-8"))["generated_at"] == t1.isoformat()
 
 
 def test_open_readonly_attaches_fotmob(tmp_path):

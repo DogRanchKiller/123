@@ -266,5 +266,5 @@ def test_run_near_uses_injected_collectors(league):
         calls.append(("lineups", hours))
         raise RuntimeError("网络断开")     # 阵容失败不影响赔率存档
 
-    assert services.run_near(conn, now, fake_odds, fake_lineups) == 3
+    assert services.run_near(conn, now, fake_odds, fake_lineups, snapshot_path=None) == 3
     assert calls == [("lineups", services.T1_HOURS), ("odds", services.T1_HOURS)]   # 先阵容后赔率

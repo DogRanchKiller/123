@@ -144,13 +144,25 @@ def _fotmob_score(conn: sqlite3.Connection, match_id: str) -> tuple | None:
         return None
 
 
+_INFO_SQL = (   # 对阵来源，按顺序取第一个查到的
+    ("matches", "SELECT league, match_date, home_team, away_team, home_goals, away_goals, fetched_at "
+                "FROM matches WHERE match_id=?"),
+    ("fixtures", "SELECT league, match_date, home_team, away_team, kickoff_utc FROM fixtures WHERE match_id=?"),
+    ("archive", "SELECT json_extract(extra_markets, '$.match.league'), json_extract(extra_markets, '$.match.match_date'), "
+                "json_extract(extra_markets, '$.match.home'), json_extract(extra_markets, '$.match.away'), "
+                "json_extract(extra_markets, '$.kickoff_utc') FROM predictions "
+                "WHERE match_id=? AND json_extract(extra_markets, '$.match.home') IS NOT NULL "
+                "ORDER BY generated_at DESC LIMIT 1"),
+)
+
+
 def _match_info(conn: sqlite3.Connection, match_id: str) -> dict | None:
-    """对阵与比分：完赛表 matches 优先，否则赛程表 fixtures（每次刷新整表替换，只有近期场次）。
+    """对阵与比分：完赛表 matches 优先，其次赛程表 fixtures（每次刷新整表替换，只有近期场次），
+    再次存档 extra 里记下的对阵（fixtures 换掉、football-data 赛果未到的场次；早于记对阵的旧存档没有）。
     football-data 赛果没到时用 FotMob 比分（与评分同一顺序，score_source 标明来源）。"""
-    for table, cols in (("matches", "league, match_date, home_team, away_team, home_goals, away_goals, fetched_at"),
-                        ("fixtures", "league, match_date, home_team, away_team, kickoff_utc")):
+    for table, sql in _INFO_SQL:
         try:
-            r = conn.execute(f"SELECT {cols} FROM {table} WHERE match_id=?", (match_id,)).fetchone()
+            r = conn.execute(sql, (match_id,)).fetchone()
         except sqlite3.OperationalError:
             continue
         if r is None:
@@ -162,7 +174,7 @@ def _match_info(conn: sqlite3.Connection, match_id: str) -> dict | None:
         if table == "matches" and rest[0] is not None:
             info |= {"score": {"home": rest[0], "away": rest[1]}, "score_source": "football-data",
                      "score_fetched_at": rest[2]}
-        if table == "fixtures":
+        if table != "matches":
             info["kickoff_utc"] = rest[0]
         if info["score"] is None and (fm := _fotmob_score(conn, match_id)):
             info |= {"score": {"home": fm[0], "away": fm[1]}, "score_source": "fotmob",
@@ -173,7 +185,7 @@ def _match_info(conn: sqlite3.Connection, match_id: str) -> dict | None:
 
 def read_match(conn: sqlite3.Connection, match_id: str, path: str = SNAPSHOT_PATH) -> dict | None:
     """单场详情：本轮看法（快照里有才给，开球后也保留最后一轮的看法）+ 主模型首次存档 + 赛果。
-    快照与 matches / fixtures 都没有这场（不知道对阵）时 None，即使 predictions 里有存档。只读。"""
+    快照、matches、fixtures、存档里记下的对阵都没有这场（不知道对阵）时 None。只读。"""
     snap = read_snapshot(path)
     current = next((m for m in (snap or {}).get("matches", []) if m["match_id"] == match_id), None)
     info = _match_info(conn, match_id)
@@ -195,7 +207,7 @@ ARCHIVE_LEAD_DAYS = 8  # 存档最早在开球前约一周（fixtures.csv 的范
 
 def read_recent(conn: sqlite3.Connection, now: datetime, days: int = RECENT_DAYS) -> list[dict]:
     """最近 days 天内已开球、有主模型（或 dc_xg）首次存档的场次：对阵与比分 + 首次存档，开球时间倒序。
-    对阵取 matches / fixtures；fixtures 每次刷新整表替换，football-data 赛果到之前就被换掉的场次查不到对阵，跳过。"""
+    对阵取 matches / fixtures / 存档里记下的对阵；三处都没有的（记对阵之前的旧存档、且已被赛程表换掉）跳过。"""
     names = (version.PRIMARY_MODEL[0], version.FALLBACK_MODEL[0])
     since = (now - timedelta(days=days + ARCHIVE_LEAD_DAYS)).isoformat()
     try:

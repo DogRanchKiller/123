@@ -27,8 +27,9 @@
 ### 只读接口与网站实盘数据（2026-10-26，预测版本不变）
 
 - `server/`：FastAPI 只读接口 `GET /api/matches`（快照里尚未开球的场次 + `recent`：最近 `recent_days` 天（默认 3，上限 14）已开球、有首次存档的场次和比分）、`/api/matches/{id}`（快照看法 + 首次存档与赛后评分）、`/api/review`（快照成绩单）。只调 `services`；库以只读方式打开，无快照 503，未知比赛 404。没有鉴权，默认 127.0.0.1。依赖 fastapi 0.149.0、pydantic 2.14.1、uvicorn 0.54.0，测试用 httpx 0.28.1。
-- `services/match_read.py`：读函数从 `live_round.py` 移出；`read_recent` 给列表附带最近已开球场次；`open_readonly` 在 `fotmob.db` 存在时只读挂上，football-data 赛果没到时用 `fotmob_results` 的比分（与评分同一顺序，`score_source` 标来源）。之前详情页只读 `football.db`，FotMob 先评分的场次比分为空。赛程表 `fixtures` 每次刷新整表替换，赛果到之前就被换掉的场次查不到对阵，列表里跳过。快照每场加 `model_name` / `model_version` / `recommended`（市场线且亚盘信心高或中）/ `recommendation_note`。
+- `services/match_read.py`：读函数从 `live_round.py` 移出；`read_recent` 给列表附带最近已开球场次；`open_readonly` 在 `fotmob.db` 存在时只读挂上，football-data 赛果没到时用 `fotmob_results` 的比分（与评分同一顺序，`score_source` 标来源）。之前详情页只读 `football.db`，FotMob 先评分的场次比分为空。赛程表 `fixtures` 每次刷新整表替换，所以赛前存档的 extra 里另记对阵 `match`（联赛、主客队、日期；只是元数据，概率不变），matches / fixtures 都查不到时从存档取；记对阵之前的旧存档若已被换掉仍查不到，列表里跳过。快照每场加 `model_name` / `model_version` / `recommended`（市场线且亚盘信心高或中）/ `recommendation_note`。
 - 网站：`web/openapi.json` → `src/api/schema.d.ts`（openapi-typescript）；`API_URL` 有值时各页经服务端读取接口并转成展示契约，标「本机实盘」与本轮生成时间，否则仍是演示样本（e2e 走演示模式）。关注页和「进行中 / 已完赛」筛选用 `recent`；关注里超出窗口的场次提示场数。`API_URL` 无效时报出地址错误；接口不可用时首页仍标「本机实盘」。快照替换在 Windows 上被读取占用时重试 5 次。TanStack Query 暂缓，见 `docs/stack.md`。
+- 临场档写快照：`live --near` 在 1.5 小时窗口内有场次时，存档之后用 `refresh_snapshot` 按最新赔率重算全部未开赛场次并重写快照（窗口内多为多家中位数，成绩单按现有评分重算；不存档、不写报告 CSV）。窗口内没场次时不动快照。真实库副本上 6 场约 10 秒。之前快照只在每日两次 `live` 时更新，网站看不到开球前的多家赔率。
 
 ### 中间层 services（2026-10-26，预测版本不变）
 
@@ -80,7 +81,7 @@
 - 兜底模型：建议把 `FALLBACK_MODEL` 换成 `dc_market`（回测在 4/5 联赛优于 dc_xg），由用户决定；按规则也可等实盘配对。
 - 临场档信心档：`MARKET_TIERS` 已按 Shin 赛前概率重标（output 1.3.0）；临场档（T1 多家中位数）有实盘样本后再核对档位命中率。
 - 多家中位数的准确度：报告已改用 OddsPortal 多家中位数（只有 5 家美国公司），它与 football-data 平均赔率哪个更准，等 `horizon_report` 和赛前存档有足够已评分场次后再比；赛前存档仍用赛程表赔率。
-- 网站数据刷新：接口只反映最近一次实盘运行（每天两次定时 + 手动）；首页每 60 秒重读。需要更快刷新或客户端轮询时再引入 TanStack Query。
+- 网站数据刷新：接口只反映最近一次写快照的运行（每天两次定时 `live`、窗口内有场次的临场档 `--near`、手动）；首页每 60 秒重读。需要更快刷新或客户端轮询时再引入 TanStack Query。
 - 账号与短信：顶栏已有登录/注册表单（邮箱密码、确认密码、手机验证码）和校验。提交、验证码和找回密码只提示服务未接入。账号服务、短信和登录会话尚未实现。
 - 数据更新：先评估免费 API 的覆盖、授权与额度，再实现赛前赔率持续更新；目标 1–5 分钟，以数据源实际能力为准。
 - 实时比分与比赛状态：未接入。

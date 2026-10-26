@@ -101,7 +101,7 @@ npm run start     # 部署运行，前置 npm run build
 | `calibration/platt.py` | Platt；2425 验证无增益，不进实盘主流程 |
 | `output/analysis.py` | 判断流程，纯函数、不读库，报告与 explain 共用：市场去水 → 市场隐含比分 → 亚盘（市场线五种结算、赢盘信心档 `AH_TIERS`、初盘 → 最新 → 定价的盘口与水位、dc_xg 同线分歧 8pp）→ 自研分歧提示（8pp）→ 盘口变动（5pp 或亚盘线变化）→ 风险 → 倾向 / 双选 / 信心档 |
 | `services/match_analysis.py` | 中间层。`ModelCache` 按联赛懒加载并拟合模型，`analyse_match` 把库里的数据接到 `analysis`；`latest_odds` 给报告和 explain 选赔率（24 小时内 ≥3 家的多家中位数优先，否则赛程表快照；存档仍用赛程表）；`build_report`、`explain_inputs` |
-| `services/live_round.py` `services/near_round.py` | 实盘一轮（`run_round`：更新数据 → 评分 → 存档 → 报告 → 成绩单 → 替换检查，每轮写快照 `reports/latest_round.json`）；临场档 `run_near`。服务函数用参数 `log` 输出进度 |
+| `services/live_round.py` `services/near_round.py` | 实盘一轮（`run_round`：更新数据 → 评分 → 存档 → 报告 → 成绩单 → 替换检查，每轮写快照 `reports/latest_round.json`）；临场档 `run_near`（窗口内有场次时 `refresh_snapshot` 按最新赔率重写快照）。赛前存档 extra 记对阵 `match`。服务函数用参数 `log` 输出进度 |
 | `services/match_read.py` | 给接口的读函数：`open_readonly`（`mode=ro`，有 `fotmob.db` 时只读挂上补比分）、`read_current` / `read_recent`（最近已开球场次的首次存档与比分）/ `read_match`（快照看法 + 首次存档）/ `read_scorecard` |
 | `services/backtest_run.py` | 回测演示的串联 |
 | `output/derive.py` `output/report.py` | 比分矩阵 → 各盘口（亚盘五种结算，`AH_LINES` −4…+4）；报告写到 `reports/预测_YYYY-MM-DD.csv`，亚盘四列紧跟对阵 |

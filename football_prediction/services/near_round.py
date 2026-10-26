@@ -2,7 +2,8 @@
 services/near_round.py  临场档一轮（中间层）
 开球前 T1_HOURS 小时内：先抓阵容再抓多家赔率 → 存 *_t1 临场档（market_avg / market_implied / market_shin），
 已公布正式首发时另存 lineup_t1 与配对基准 lineup_base_t1；每场输出临场最终看法（只输出，不另存档）。
-命令行入口是 `live.py --near`；行为与版本说明见 live.py 的文件头。从 live.py 挪出，行为不变。
+窗口内有场次时，按最新赔率重写给接口读的快照（refresh_snapshot），网站看到开球前的多家赔率。
+命令行入口是 `live.py --near`；行为与版本说明见 live.py 的文件头。
 """
 import shutil
 import sqlite3
@@ -20,7 +21,9 @@ from football_prediction.output.analysis import devig, odds_dict
 from football_prediction.output.derive import derive_markets
 from football_prediction.output.report import upcoming_fixtures
 from football_prediction.review.store import has_prediction, save_prediction
-from football_prediction.services.live_round import LEAGUES, Log, markets_extra, save_market
+from football_prediction.services.live_round import (
+    LEAGUES, SNAPSHOT_PATH, Log, markets_extra, match_ident, refresh_snapshot, save_market,
+)
 from football_prediction.services.match_analysis import ModelCache
 
 T1_HOURS = 1.5         # 临场档：开球前 1.5 小时内
@@ -106,7 +109,7 @@ def predict_near(conn: sqlite3.Connection, now: datetime, cache: ModelCache, log
             continue
         rho = cache.get(r["league"]).inputs(r["home_team"], r["away_team"])["rho"]
         info = {"horizon": "t1", "odds_source": "oddsportal_median", "n_books": cons["n_books"],
-                "odds_fetched_at": cons["fetched_at"], "hours_to_ko": round(hours, 2)}
+                "odds_fetched_at": cons["fetched_at"], "hours_to_ko": round(hours, 2), **match_ident(r)}
         saved += save_market(conn, r["match_id"], cons, rho, r["kickoff_utc"],
                              version.get("features"), "_t1", info)
         view = _lineup_view(conn, r, cons, rho, lineup_models, cache.cutoff)
@@ -118,9 +121,10 @@ def predict_near(conn: sqlite3.Connection, now: datetime, cache: ModelCache, log
 
 
 def run_near(conn: sqlite3.Connection, now: datetime, collect_odds=None, collect_lineups=None,
-             log: Log = print) -> int:
-    """临场一轮：抓开球前 T1_HOURS 小时内的多家赔率与阵容 → 存 *_t1 临场档。返回新存档条数。
-    collect_odds / collect_lineups 可替换（测试用）；不传时用 OddsHarvester 与 FotMob。"""
+             log: Log = print, snapshot_path: str | None = SNAPSHOT_PATH) -> int:
+    """临场一轮：抓开球前 T1_HOURS 小时内的多家赔率与阵容 → 存 *_t1 临场档 → 重写快照。返回新存档条数。
+    collect_odds / collect_lineups 可替换（测试用）；不传时用 OddsHarvester 与 FotMob。
+    窗口内没有场次时不重写快照；snapshot_path=None 时不写。"""
     lo, hi = now.isoformat(), (now + timedelta(hours=T1_HOURS)).isoformat()
     n_fx = conn.execute("SELECT COUNT(*) FROM fixtures WHERE kickoff_utc > ? AND kickoff_utc <= ?",
                         (lo, hi)).fetchone()[0]
@@ -142,4 +146,9 @@ def run_near(conn: sqlite3.Connection, now: datetime, collect_odds=None, collect
             log(f"  多家赔率抓取失败（{type(e).__name__}: {e}），沿用已有数据")
     else:
         log("  未找到 OddsHarvester（.venv-scrape），只用已有多家赔率")
-    return predict_near(conn, now, ModelCache(conn, now.date().isoformat()), log)
+    cache = ModelCache(conn, now.date().isoformat())
+    saved = predict_near(conn, now, cache, log)
+    if snapshot_path:
+        n = refresh_snapshot(conn, now, cache, snapshot_path)
+        log(f"  接口快照已按最新赔率重写（{n} 场）：{snapshot_path}")
+    return saved
