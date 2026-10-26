@@ -1,6 +1,6 @@
 # 项目进度
 
-系统版本：1.10.1，与 `football_prediction/version.py` 的 `SYSTEM_VERSION` 一致。
+系统版本：1.11.0，与 `football_prediction/version.py` 的 `SYSTEM_VERSION` 一致。
 
 更新日期：2026-10-26。
 
@@ -12,7 +12,7 @@
 
 - 联赛：英超 E0、德甲 D1、西甲 SP1、意甲 I1、法甲 F1、英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1（实盘库都从 2122 起；后六个没有 understat xG）。研究库 `research.db` 只有前 5 联赛 9394–2526（赔率从 0001 起，xG 从 1415 起）。
 - 主模型：`market_implied` / `model_market` 1.0.0（市场赔率反推比分）。无赔率时回退 `dc_xg` / `model_xg` 1.0.0。
-- 分析重心：亚盘为主，胜平负 / 比分 / 大小球为辅（output 1.5.0）。报告和 explain 先列市场线亚盘（数字盘口，如 主-0.75），成绩单另列亚盘评分；亚盘评分只作参考，替换主模型仍只看 1X2 的 `promotion_check`。
+- 分析重心：亚盘为主，胜平负 / 比分 / 大小球为辅（output 1.6.0）。每场都给结论和把握程度，另给亚盘稳妥线（选择方赢盘 ≥ 65% 的最近一条线）；胜平负市场档为高的场次标「★ 重点」。报告和 explain 先列市场线亚盘（数字盘口，如 主-0.75），成绩单另列亚盘评分；亚盘评分只作参考，替换主模型仍只看 1X2 的 `promotion_check`。
 - 实盘：`python -m football_prediction.live`；单场说明：`python -m football_prediction.explain 英超 Arsenal Chelsea`
 - 多家赔率：`python -m football_prediction.data.oddsportal --hours 30`
 - 临场档：`python -m football_prediction.live --near`（`run_near.bat`）；阵容 / 伤停：`python -m football_prediction.data.fotmob`
@@ -27,7 +27,7 @@
 ### 只读接口与网站实盘数据（2026-10-26，预测版本不变）
 
 - `server/`：FastAPI 只读接口 `GET /api/matches`（快照里尚未开球的场次 + `recent`：最近 `recent_days` 天（默认 3，上限 14）已开球、有首次存档的场次和比分）、`/api/matches/{id}`（快照看法 + 首次存档与赛后评分）、`/api/review`（快照成绩单）。只调 `services`；库以只读方式打开，无快照 503，未知比赛 404。没有鉴权，默认 127.0.0.1。依赖 fastapi 0.149.0、pydantic 2.14.1、uvicorn 0.54.0，测试用 httpx 0.28.1。
-- `services/match_read.py`：读函数从 `live_round.py` 移出；`read_recent` 给列表附带最近已开球场次；`open_readonly` 在 `fotmob.db` 存在时只读挂上，football-data 赛果没到时用 `fotmob_results` 的比分（与评分同一顺序，`score_source` 标来源）。之前详情页只读 `football.db`，FotMob 先评分的场次比分为空。赛程表 `fixtures` 每次刷新整表替换，所以赛前存档的 extra 里另记对阵 `match`（联赛、主客队、日期；只是元数据，概率不变），matches / fixtures 都查不到时从存档取；记对阵之前的旧存档若已被换掉仍查不到，列表里跳过。快照每场加 `model_name` / `model_version` / `recommended`（市场线且亚盘信心高或中）/ `recommendation_note`。
+- `services/match_read.py`：读函数从 `live_round.py` 移出；`read_recent` 给列表附带最近已开球场次；`open_readonly` 在 `fotmob.db` 存在时只读挂上，football-data 赛果没到时用 `fotmob_results` 的比分（与评分同一顺序，`score_source` 标来源）。之前详情页只读 `football.db`，FotMob 先评分的场次比分为空。赛程表 `fixtures` 每次刷新整表替换，所以赛前存档的 extra 里另记对阵 `match`（联赛、主客队、日期；只是元数据，概率不变），matches / fixtures 都查不到时从存档取；记对阵之前的旧存档若已被换掉仍查不到，列表里跳过。快照每场加 `model_name` / `model_version` / `recommended` / `recommendation_note`（1.11.0 起 `recommended` 改为「有市场赔率且胜平负信心档为高」，见版本记录）。
 - 网站：`web/openapi.json` → `src/api/schema.d.ts`（openapi-typescript）；`API_URL` 有值时各页经服务端读取接口并转成展示契约，标「本机实盘」与本轮生成时间，否则仍是演示样本（e2e 走演示模式）。关注页和「进行中 / 已完赛」筛选用 `recent`；关注里超出窗口的场次提示场数。`API_URL` 无效时报出地址错误；接口不可用时首页仍标「本机实盘」。快照替换在 Windows 上被读取占用时重试 5 次。TanStack Query 暂缓，见 `docs/stack.md`。
 - 常驻脚本：`run_api.bat`（接口只听 127.0.0.1:8000）、`run_site.bat`（build 后 `next start` 只听本机 Tailscale IPv4，`SITE_BIND` 可覆盖），崩溃后 30 秒重启；`setup_site.ps1`（管理员跑一次）注册开机任务和只放行 100.64.0.0/10 的防火墙规则。已在本机验证：接口脚本起服务、杀进程后自动重启；网站脚本在没装 Tailscale 时等待并写日志，`SITE_BIND=127.0.0.1` 时 build + start 约 12 秒后页面显示本机实盘。`setup_site.ps1` 只做了语法检查，没有管理员权限，未注册。
 - 临场档写快照：`live --near` 在 1.5 小时窗口内有场次时，存档之后用 `refresh_snapshot` 按最新赔率重算全部未开赛场次并重写快照（窗口内多为多家中位数，成绩单按现有评分重算；不存档、不写报告 CSV）。窗口内没场次时不动快照。真实库副本上 6 场约 10 秒。之前快照只在每日两次 `live` 时更新，网站看不到开球前的多家赔率。
@@ -70,10 +70,10 @@
 | model_blend | 1.0.0 | dc_xg 0.77 + Elo 0.23 的 1X2 融合，并行存档 |
 | model_lgbm | 1.1.0 | 在 Dixon-Coles 上做残差修正，滚动样本外 |
 | calibration | 1.0.0 | Platt；2425 上没有增益，不进实盘 |
-| output | 1.5.0 | 亚盘为主：报告列「亚盘 / 亚盘选择 / 亚盘信心 / 亚盘变动」紧跟对阵，explain 第 [2] 段为亚盘，`AH_LINES` 覆盖 −4…+4；判断流程（`analysis.py`）、报告、explain 单场说明、亚盘五种结算；信心档按 Shin 概率在 5 联赛重标定，报告与 explain 列本场命中估计；报告与 explain 优先用多家中位数赔率（`services.latest_odds`），列赔率来源 |
+| output | 1.6.0 | 亚盘稳妥线（`analysis.safe_line`，`SAFE_TARGET=0.65`）与重点标记（`highlight` = 有市场赔率且胜平负档高），报告加「亚盘稳妥」「重点」列；亚盘为主：报告列「亚盘 / 亚盘选择 / 亚盘信心 / 亚盘变动」紧跟对阵，explain 第 [2] 段为亚盘，`AH_LINES` 覆盖 −4…+4；判断流程（`analysis.py`）、报告、explain 单场说明、亚盘五种结算；信心档按 Shin 概率在 5 联赛重标定，报告与 explain 列本场命中估计；报告与 explain 优先用多家中位数赔率（`services.latest_odds`），列赔率来源 |
 | validation | 1.1.0 | 时间外回测、市场基准、同场配对 |
 | review | 1.6.0 | 首次预测落库、赛后评分（含亚盘：按存档时的市场线算五种结算 log loss 与赢盘命中，`ah_line` / `ah_log_loss` / `ah_hit`；成绩单代码在 `scorecard.py`）（含大小 2.5 / 精确比分；football-data 未到时先用 FotMob 比分，到达后 `reconcile_results` 核对）、`promotion_check`（跳过 `_t1`）、`horizon_report` 临场对赛前 |
-| live | 1.10.0 | 11 联赛；成绩单加亚盘场数 / LL / 赢盘命中；更新数据（含 FotMob 完赛比分）、评分、预测、报告、成绩单；存档 market_implied / blend / market_shin / dc_market；`--near` 临场档 `*_t1` 与 lineup_t1 / lineup_base_t1，先抓阵容再抓赔率，打印临场最终看法 |
+| live | 1.11.0 | 11 联赛；快照与接口每场带稳妥线 `safe_line` / `safe_cover` 和重点标记；成绩单加亚盘场数 / LL / 赢盘命中；更新数据（含 FotMob 完赛比分）、评分、预测、报告、成绩单；存档 market_implied / blend / market_shin / dc_market；`--near` 临场档 `*_t1` 与 lineup_t1 / lineup_base_t1，先抓阵容再抓赔率，打印临场最终看法 |
 
 `2526` 留出，不在该季上重选 shrink 和权重。替换主模型只看实盘 `promotion_check`，场数至少 1000。
 
@@ -100,7 +100,16 @@
 
 ## 版本记录
 
-### 1.10.1（当前）
+### 1.11.0（当前）
+
+主模型、存档模型和概率算法不变，只改怎么呈现结论。每场照常给倾向、亚盘选择和把握程度，另加两项。
+
+- 亚盘稳妥线：从市场线往选择方每次让 0.25，取第一条选择方赢盘 ≥ 65% 的线（`analysis.safe_line`，最多 12 步），报告列「亚盘稳妥」，explain、快照、接口（`safe_line` / `safe_cover`）和网站卡片 / 详情都显示；首次存档用存档里的 `extra_markets` 现算。依据 `_diag/explore/ah_confidence_line.py`（`research.db`，选参 1213–2425，留出 2526）：偏离市场线的亚盘隐含赢盘概率是校准的（各档偏差选参 ≤ 1.4pp、留出 ≤ 3pp）；T=0.65 时命中选参 0.682、留出 0.674（T=0.60：0.639 / 0.628；T=0.70：0.731 / 0.735）。命中更高是因为让步了，判断本身没有更准。
+- 重点标记：有市场赔率且胜平负信心档为高（Shin 首选概率 ≥ 60%）的场次标「★ 重点」，报告列「重点」，网站「重点比赛」区。高档首选命中选参 0.722（占 28.4%）、留出 0.725（占 26.6%）。原来按亚盘信心档挑推荐，但亚盘高档在留出赛季只有 11 场、命中 0.273，没有得到确认，所以改按胜平负档（据 issues「2526 起部分场次赛前平均亚盘客队水位错误」，这一档留出样本多为坏行，剔除后只剩个位数，仍无法确认）。无赔率的兜底模型场次不标重点。
+- 剔除坏行复核（`_diag/explore/ah_clean_recheck.py`，按 `analysis.asian` 原样计算）：稳妥线留出 2526 命中 0.677±0.012（n=1559，平均概率 0.684），football.db 11 联赛 2526–2627 为 0.672±0.007（n=4094），各联赛 0.651–0.711；胜平负高档留出 0.728 / 0.722，不受坏行影响。亚盘高档剔除后 2122 起只有 7 场，近年市场线上选择方赢盘概率几乎都在 0.56 以下；中档实际 0.599 / 0.586，`AH_TIERS` 中档标签因此由 0.562 改为 0.60（下限不变，高 / 低档标签不变）。「★ 重点」场次在市场线上的亚盘选择方命中只有 0.52–0.55，与全体相当：重点只表示胜平负把握高，不表示亚盘把握高，explain 与网站首页、详情页都加了这句说明。1.11.0 下只跑过 10-26 18:43–20:13 的临场档，每次 1.5 小时内 0 场，没有存档也没有重写快照；档位标签只用于显示、不进存档，所以这些改动并入 1.11.0 / output 1.6.0，不另升版本。
+- 版本：output 1.6.0（analysis / report / explain / derive）、live 1.11.0；`reports/latest_round.json` 要等下一轮 `live` 或临场档重写后才有新字段，之前网站不显示稳妥线。
+
+### 1.10.1
 
 主模型、存档模型和概率算法不变，修存档时间。每轮用随真实时间走的时钟（`services.round_clock`），赛前档与临场档存档前按它判断，已开球不存；`predictions.generated_at` 记真实存档时刻（此前是一轮开始的时刻），`extra.kickoff_utc` 不晚于它时 `save_prediction` 不存。OddsPortal 的 `fetched_at` 改为每组抓回时刻，抓回时已开球的不入库，临场档 90 分钟新鲜度按存档时刻算。旧库里开球后才存的 2 行（一场的 `lineup_t1` / `lineup_base_t1`）不删，成绩单与 `promotion_check` 不计开球后的存档。版本：data 1.8.0、review 1.7.0、live 1.10.1（见 issues「临场档在开球后才存档」）。
 

@@ -32,6 +32,12 @@ export function outcomeText(line: number, outcome: AsianOutcome): string {
   return `${text}，${part("输", "输", outcome.lose, outcome.halfLose)}`;
 }
 
+/** 稳妥线：「客+1.25 66%」；没有时为空。与 Python analysis.safe_text 同写法。 */
+export function safeText(asian: AsianHandicap): string | null {
+  if (asian.safeLine === null || asian.safeCover === null) return null;
+  return `${lineText(asian.safeLine, asian.side)} ${whole(asian.safeCover)}`;
+}
+
 /** 档名加历史命中：「中[56%]」；公平线时为「不分档（公平线）」。 */
 export function tierText(asian: AsianHandicap): string {
   if (asian.tier === "-" || asian.historicalHit === null)

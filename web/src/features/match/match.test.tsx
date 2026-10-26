@@ -61,7 +61,7 @@ const archive: Prediction = {
   scoreSource: "市场隐含", oddsSource: "赛程表（存档时）", sourceNote: "开赛前首次存档。",
   asian: { line: -0.25, lineSource: "市场线",
     outcome: { win: 0.45, halfWin: 0, push: 0, halfLose: 0.25, lose: 0.3 },
-    side: "主", pCover: 0.57, tier: "高", historicalHit: 0.607, selfHomeCover: null, movement: null },
+    side: "主", pCover: 0.57, tier: "高", historicalHit: 0.607, safeLine: null, safeCover: null, selfHomeCover: null, movement: null },
   confidence: "中", historicalFirstHit: 0.5, historicalDoubleHit: 0.7,
   probabilities: [0.48, 0.32, 0.2], lean: "主胜", double: "主胜或平", likelyScores: ["1–0"],
   over25: 0.4, sourceAt: null, fetchedAt: "2026-10-25T06:00:00Z", generatedAt: "2026-10-25T06:00:00Z",
@@ -71,6 +71,19 @@ const near: Prediction = {
   asian: { ...archive.asian!, line: -0.5, movement: "首次存档 主-0.25 → 临场 主-0.50；主队让球加深" },
 };
 const started: MatchRecord = { ...missing, status: "inplay", statusLabel: "已开球", archived: archive };
+
+describe("重点标记", () => {
+  it("未开赛且标为重点时卡片显示，开球后的存档不显示", () => {
+    const hot = { ...missing, current: archive, recommended: true,
+      recommendationNote: "胜平负高把握 · 主胜 70%" };
+    const { rerender } = render(<MatchCard match={hot} />);
+    expect(screen.getByText("★ 重点")).toHaveAttribute("title", "胜平负高把握 · 主胜 70%");
+    rerender(<MatchCard match={{ ...hot, recommended: false }} />);
+    expect(screen.queryByText("★ 重点")).toBeNull();
+    rerender(<MatchCard match={{ ...started, recommended: true }} />);
+    expect(screen.queryByText("★ 重点")).toBeNull();
+  });
+});
 
 describe("开球后显示存档", () => {
   it("卡片：临场档优先，没有时用首次存档，并标明是哪份", () => {

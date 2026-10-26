@@ -25,6 +25,9 @@ class AsianBase(BaseModel):
     p_cover: float
     tier: Literal["高", "中", "低", "-"]
     historical_hit: float | None
+    # 稳妥线（主队方向）：从选择方的线每次退 0.25，直到选择方等效赢盘概率 ≥ 0.65；找不到时为空
+    safe_line: float | None = None
+    safe_cover: float | None = None
 
 
 class AsianCurrent(AsianBase):

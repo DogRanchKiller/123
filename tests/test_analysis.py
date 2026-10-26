@@ -1,9 +1,10 @@
-"""output 1.5.0 亚盘为主：数字盘口文字、选择方、盘口与水位变动、同线分歧、±4 线、报告列。"""
+"""output 1.5.0 亚盘为主：数字盘口文字、选择方、盘口与水位变动、同线分歧、±4 线、报告列。
+output 1.6.0：亚盘稳妥线、重点标记。"""
 import pytest
 
 from football_prediction.model_market.implied import dc_matrix
-from football_prediction.output.analysis import (AH_TIERS, ah_pick_text, ah_text, ah_tier, ah_trail,
-                                                 analyse, asian, _shift)
+from football_prediction.output.analysis import (AH_TIERS, SAFE_TARGET, ah_pick_text, ah_text, ah_tier,
+                                                 ah_trail, analyse, asian, safe_line, safe_text, _shift)
 from football_prediction.output.derive import AH_LINES, derive_markets
 
 
@@ -86,3 +87,33 @@ def test_analyse_ah_move_uses_open_snapshot():
     a = analyse(row, xg, -0.05, {}, last_row=row, ah_open=op)
     assert a["ah"]["line"] == -0.5 and a["ah_move"].startswith("初盘 主-0.25")
     assert "升盘（主队让更多）" in a["ah_move"]
+
+
+def test_safe_line_steps_toward_pick():
+    fair = {-1.0: 0.50, -0.75: 0.56, -0.5: 0.62, -0.25: 0.66, 0.0: 0.72}.get   # 主队各线赢盘
+    assert safe_line(fair, -1.0, "主") == (-0.25, 0.66)
+    assert safe_line(fair, -1.0, "主", target=0.5) == (-1.0, 0.50)               # 本线已够，不退
+    away = {-1.0: 0.40, -1.25: 0.37, -1.5: 0.30}.get                            # 客队方向往更深的主让线退
+    assert safe_line(away, -1.0, "客") == (-1.5, 0.70)
+    assert safe_line(fair, -0.5, "客") is None                                  # 缺线
+    assert safe_text({"side": "客", "safe_line": -1.5, "safe_cover": 0.70}) == "客+1.50 70%"
+    assert safe_text({"side": "主", "safe_line": None, "safe_cover": None}) == ""
+
+
+def test_asian_safe_line_from_matrix():
+    ah, _ = asian(dc_matrix(1.6, 1.1), {"ah_line": -0.5, "ah_h": 1.95, "ah_a": 1.92}, dc_matrix(1.6, 1.1), True)
+    assert ah["safe_cover"] >= SAFE_TARGET
+    side = 1 if ah["side"] == "主" else -1
+    assert (ah["safe_line"] - ah["line"]) * side > 0                            # 市场线赢盘不到 65%，要退
+
+
+def test_analyse_highlight_only_market_high():
+    xg = dc_matrix(1.4, 1.1)
+    hot = dict(avg_h=1.35, avg_d=5.0, avg_a=8.5, avg_over25=1.7, avg_under25=2.15,
+               ah_line=-1.5, avg_ahh=1.92, avg_aha=1.98)
+    even = dict(hot, avg_h=2.6, avg_d=3.3, avg_a=2.8, ah_line=0.0)
+    assert analyse(hot, xg, -0.05)["highlight"] is True
+    assert analyse(even, xg, -0.05)["highlight"] is False
+    big = dc_matrix(3.0, 0.4)                                                   # 无赔率：自研档高也不标重点
+    a = analyse(None, big, -0.05, {"blend": (0.8, 0.12, 0.08)})
+    assert a["tier"] == "高" and a["highlight"] is False

@@ -49,8 +49,10 @@ def test_run_round_writes_report_and_snapshot(league, tmp_path, monkeypatch):
     assert m["odds_source"].startswith("赛程表") and abs(sum(m["probabilities"]) - 1) < 1e-3
     assert m["probability_source"] == "市场" and m["score_source"] == "市场隐含"
     assert (m["model_name"], m["model_version"]) == out["primary"]
-    assert m["recommended"] == (ah["tier"] in live_round.RECOMMEND_TIERS)
+    assert m["recommended"] == (m["confidence"] == "高")              # 重点 = 胜平负市场档高
     assert (m["recommendation_note"] is None) != m["recommended"]
+    side = 1 if ah["side"] == "主" else -1                           # 稳妥线从市场线向选择方退
+    assert ah["safe_cover"] >= 0.65 and (ah["safe_line"] - ah["line"]) * side >= 0
     n = data["matches"][2]                                          # 无赔率：公平线、不分档
     assert n["model_name"] == version.FALLBACK_MODEL[0] and n["recommended"] is False
     assert n["odds_source"] is None and n["asian"]["line_source"] == "公平线"
@@ -96,6 +98,7 @@ def test_read_match_current_and_first_archive(league, tmp_path, monkeypatch):
     assert ar["asian"]["line"] == -1.0 and abs(sum(ar["asian"]["outcome"].values()) - 1) < 1e-3
     assert ar["asian"]["line_source"] == "市场线" and ar["asian"]["tier"] in ("高", "中", "低")
     assert ar["asian"]["side"] in ("主", "客") and ar["asian"]["p_cover"] >= 0.5
+    assert ar["asian"]["safe_cover"] >= 0.65                         # 存档各线的结算算出稳妥线
     assert ar["lean"] == "主胜" and ar["confidence"] in ("高", "中", "低")   # 主胜赔率 1.5
     assert ar["likely_scores"] and ar["historical_first_hit"] > 0
     assert ar["odds"]["avg_h"] == 1.5 and 0 < ar["over25"] < 1

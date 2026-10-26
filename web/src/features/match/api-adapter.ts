@@ -55,6 +55,8 @@ function asianOf(
     pCover: a.p_cover,
     tier: a.tier,
     historicalHit: a.historical_hit,
+    safeLine: a.safe_line ?? null,
+    safeCover: a.safe_cover ?? null,
     selfHomeCover: current?.self_home_cover ?? null,
     movement: current?.movement ?? null,
   };

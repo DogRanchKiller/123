@@ -238,8 +238,14 @@ th {
   align-items: center;
   margin-bottom: 16px;
 }
+.asian-summary {
+  flex-wrap: wrap;
+}
 .asian-summary .pill {
   margin-left: 4px;
+}
+.asian-safe {
+  flex-basis: 100%;
 }
 .asian-block {
   padding-bottom: 20px;

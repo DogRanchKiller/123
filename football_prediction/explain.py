@@ -1,5 +1,5 @@
 """
-football_prediction/explain.py  v1.5.0（输出层的一部分）
+football_prediction/explain.py  v1.6.0（输出层的一部分）
 单场判断说明：按判断流程逐步列出依据。
     python -m football_prediction.explain 英超 Arsenal Chelsea
     python -m football_prediction.explain E0 Arsenal Chelsea --odds 1.9 3.6 4.2 --ou 1.85 2.0 --ah -0.5 1.95 1.95
@@ -10,6 +10,7 @@ football_prediction/explain.py  v1.5.0（输出层的一部分）
 v1.4.0: 赔率来源改用 latest_odds（多家中位数优先），[1] 写明来源与抓取时间。
 v1.5.0: 亚盘为主：[2] 亚盘（数字线、五种结算、等效赢盘、该线水位去水、dc_xg 同线、线与水位轨迹），
         结论先写亚盘选择与亚盘信心，再写胜平负。
+v1.6.0: 结论加亚盘稳妥线（赢盘 ≥ 65% 的最近一条线）与重点标记（胜平负市场档为高）。
 """
 import argparse
 import difflib
@@ -18,10 +19,10 @@ import sys
 from datetime import datetime, timezone
 
 from football_prediction.data.loader import init_db
-from football_prediction.output.analysis import ah_pick_text, ah_text
+from football_prediction.output.analysis import SAFE_TARGET, ah_pick_text, ah_text, safe_text
 from football_prediction.services import DB_PATH, LEAGUES, explain_inputs
 
-LAYER_VERSION = "1.5.0"
+LAYER_VERSION = "1.6.0"
 
 
 def _league(s: str) -> str:
@@ -85,10 +86,15 @@ def explain(conn, league, home, away, manual: dict | None = None,
     L.append("\n[7] 风险：" + ("；".join(a["risks"]) if a["risks"] else "无"))
     L.append(f"\n[8] 结论：亚盘选 {ah_pick_text(ah)}，亚盘信心 {ah['tier']}" +
              (f"（历史同档命中 {ah['hit']:.0%}，不含走盘）" if ah["hit"] is not None else "（无市场亚盘线，不分档）"))
+    if ah.get("safe_line") is not None:
+        L.append(f"    亚盘稳妥线：{safe_text(ah)}（赢盘 ≥ {SAFE_TARGET:.0%} 的最近一条线，线放宽了，命中高不代表判断更准）")
     L.append(f"    胜平负：倾向 {a['lean']}，双选 {a['double']}，信心 {a['tier']}"
              f"（历史同档首选命中 {a['hit1']:.0%}，双选命中 {a['hit2']:.0%}）")
     if a.get("est1") is not None:
         L.append(f"    本场命中估计（Shin 去水概率）：首选 {a['est1']:.0%}，双选 {a['est2']:.0%}")
+    if a.get("highlight"):
+        L.append("    ★ 重点：胜平负市场档为高（历史同档首选命中约 72%）；只表示胜平负把握高，"
+                 "这类场次在市场亚盘线上的命中仍约 52–55%，亚盘看稳妥线")
     L.append("    概率是估计，足球结果随机性大；即使高信心档，历史上也约 1/4 不中。")
     return "\n".join(L)
 

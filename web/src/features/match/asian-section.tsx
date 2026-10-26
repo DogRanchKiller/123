@@ -1,8 +1,8 @@
 import { percentage } from "@/lib/display";
-import { lineText, outcomeText, pickText, tierText } from "./asian";
+import { lineText, outcomeText, pickText, safeText, tierText } from "./asian";
 import type { AsianHandicap } from "./types";
 
-/** 比赛卡片里的一行亚盘摘要：线 · 选择 · 信心。 */
+/** 比赛卡片里的亚盘摘要：线 · 选择 · 信心，下一行是稳妥线。 */
 export function AsianSummary({ asian }: { asian: AsianHandicap | null }) {
   if (!asian)
     return (
@@ -24,6 +24,12 @@ export function AsianSummary({ asian }: { asian: AsianHandicap | null }) {
           {tierText(asian)}
         </span>
       </span>
+      {safeText(asian) && (
+        <span className="asian-safe">
+          稳妥 <strong>{safeText(asian)}</strong>
+          <span className="fine-print">（让步换把握）</span>
+        </span>
+      )}
     </div>
   );
 }
@@ -56,6 +62,10 @@ export function AsianBlock({ asian }: { asian: AsianHandicap | null }) {
           <strong>{pickText(asian)}</strong>
         </div>
         <div className="stat">
+          <p>稳妥线（赢盘 ≥ 65%）</p>
+          <strong>{safeText(asian) ?? "暂无数据"}</strong>
+        </div>
+        <div className="stat">
           <p>预期进球模型同线主队赢盘</p>
           <strong>
             {asian.selfHomeCover === null
@@ -86,7 +96,8 @@ export function AsianBlock({ asian }: { asian: AsianHandicap | null }) {
         </div>
       </dl>
       <p className="fine-print mt-3">
-        赢盘概率按走盘不计、半赢 / 半输各算一半。亚盘信心档是历史分档命中率，不是本场承诺；预期进球模型
+        赢盘概率按走盘不计、半赢 / 半输各算一半。亚盘信心档是历史分档命中率，不是本场承诺。市场线上两边
+        通常接近五五开；稳妥线是同一判断换一条更宽的线，命中更高是因为让步了，不代表判断更准。预期进球模型
         只作对照，历史上市场更准。
       </p>
     </div>

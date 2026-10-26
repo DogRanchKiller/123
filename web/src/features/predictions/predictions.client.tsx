@@ -44,13 +44,13 @@ export function Predictions({
         <span className="pill">{LEAGUE_SUMMARY}</span>
       </div>
       <DataNotice source={source} />
-      <section aria-label="高信心推荐">
+      <section aria-label="重点比赛">
         <SectionHeading
-          title="值得关注的比赛"
-          description="模型高信心推荐 · 仅展示符合条件的赛前结果"
+          title="重点比赛"
+          description="胜平负市场最大概率 ≥ 60% 的赛前场次；其余场次在下方照常给出结论和把握程度"
           aside={
             <span className="pill pill-accent">
-              {recommendations.length} 场推荐
+              {recommendations.length} 场重点
             </span>
           }
         />
@@ -67,12 +67,14 @@ export function Predictions({
           </div>
         ) : (
           <EmptyState
-            title="暂无推荐"
-            description="目前没有符合高信心条件的赛前比赛。"
+            title="暂无重点"
+            description="目前没有胜平负高把握的赛前比赛。"
           />
         )}
         <p className="fine-print mt-3">
-          高信心档历史上仍约有四分之一未命中。请结合概率来源和数据时间阅读。
+          这一档胜平负首选历史上约 72% 命中（2526 留出赛季 72.8%），仍约有四分之一未中。
+          {"重点只表示胜平负把握高：这类场次在市场亚盘线上的命中约 52–55%，和其他场次差不多。"}
+          {"亚盘看卡片里的「稳妥」，即选择方赢盘 ≥ 65% 的最近一条线（历史命中约 67%）。"}
         </p>
       </section>
       <div className="dashboard-columns">

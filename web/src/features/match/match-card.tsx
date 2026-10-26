@@ -35,6 +35,11 @@ export function MatchCard({
         <div className="card-meta">
           <span className="pill">{match.leagueName}</span>
           <span>{beijingTime(match.kickoffUtc)}</span>
+          {match.recommended && match.current && (
+            <span className="pill pill-accent" title={match.recommendationNote ?? undefined}>
+              ★ 重点
+            </span>
+          )}
           <span
             className={
               match.status === "inplay" ? "pill pill-accent" : "fine-print"

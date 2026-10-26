@@ -157,6 +157,10 @@ export interface components {
             outcome: components["schemas"]["AsianOutcome"];
             /** P Cover */
             p_cover: number;
+            /** Safe Cover */
+            safe_cover?: number | null;
+            /** Safe Line */
+            safe_line?: number | null;
             /**
              * Side
              * @enum {string}
@@ -186,6 +190,10 @@ export interface components {
             outcome: components["schemas"]["AsianOutcome"];
             /** P Cover */
             p_cover: number;
+            /** Safe Cover */
+            safe_cover?: number | null;
+            /** Safe Line */
+            safe_line?: number | null;
             /** Self Home Cover */
             self_home_cover: number | null;
             /**

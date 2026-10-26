@@ -35,6 +35,11 @@ export function MatchDetail({
         <p className="muted mt-2">
           {beijingTime(match.kickoffUtc)} 开球 · 北京时间
         </p>
+        {match.recommended && match.recommendationNote && (
+          <p className="mt-2">
+            <span className="pill pill-accent">★ 重点</span> {match.recommendationNote}
+          </p>
+        )}
         <div className="card-teams">
           <TeamCrest
             crest={match.homeCrest}
@@ -82,7 +87,10 @@ export function MatchDetail({
           <section className="panel side-panel">
             <h2>阅读这份预测</h2>
             <p className="mt-3">
-              高信心档历史上仍约有四分之一未命中。命中率是历史表现，不是本场承诺。
+              每场都给结论和把握程度。胜平负市场档为高（市场最大概率 ≥ 60%）时标为重点，这一档历史上约
+              72% 命中，仍约有四分之一未中。
+              {"重点只表示胜平负把握高，这类场次在市场亚盘线上仍接近五五开，亚盘请看稳妥线。"}
+              命中率是历史表现，不是本场承诺。
             </p>
             <ul className="mt-4 space-y-3 text-sm text-muted">
               {match.risks.map((risk) => (

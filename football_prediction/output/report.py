@@ -1,5 +1,5 @@
 """
-output/report.py  v1.5.0（输出层的一部分）
+output/report.py  v1.6.0（输出层的一部分）
 预测报告：对未开赛场次，按判断流程（output/analysis.py）用【最新】赔率现算，
 给出胜平负概率（市场为底）、倾向与双选、信心档（附历史命中率）、预期进球、最可能比分、
 大 2.5 / 双方进球 / 亚盘、自研模型对照、盘口变动、风险提示。
@@ -10,6 +10,7 @@ v1.3.0: 信心档按 Shin 概率、5 联赛重标定；新增列「本场估计(
 v1.4.0: 赔率改由 pipeline.latest_odds 选（多家中位数优先），新增列「赔率来源」。
 v1.5.0: 亚盘为主：主客队之后依次为「亚盘」（数字线 + 赢 / 赢半 / 走 / 输半 / 输）、「亚盘选择」、
         「亚盘信心」（档[历史命中]）、「亚盘变动」（线与水位轨迹）；控制台第一行是亚盘。
+v1.6.0: 新增列「亚盘稳妥」（选择方赢盘 ≥ 65% 的最近一条线）与「重点」（胜平负市场档为高时写「★」）。
 拟合与取赔率的编排（原 build_report、pipeline）在 services/match_analysis.py；本文件只管行格式与写文件。
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 """
@@ -22,10 +23,10 @@ import pandas as pd
 
 from football_prediction.output.analysis import (   # noqa: F401  confidence_tier 供外部/测试使用
     confidence_tier, double_label as _double_label, MARKET_TIERS as CONFIDENCE_TIERS,
-    ah_pick_text, ah_text,
+    ah_pick_text, ah_text, safe_text,
 )
 
-LAYER_VERSION = "1.5.0"
+LAYER_VERSION = "1.6.0"
 
 REPORT_DIR = "reports"
 _BJ = ZoneInfo("Asia/Shanghai")
@@ -73,12 +74,14 @@ def report_row(r: dict, a: dict, league_names: dict[str, str]) -> dict:
                 + ("" if ah["line_src"] == "市场线" else f"（{ah['line_src']}）"),
         "亚盘选择": ah_pick_text(ah),
         "亚盘信心": ah["tier"] if ah["hit"] is None else f"{ah['tier']}[{ah['hit']:.0%}]",
+        "亚盘稳妥": safe_text(ah),
         "亚盘变动": a["ah_move"],
         "主胜": _pct(ph), "平": _pct(pdraw), "客胜": _pct(pa),
         "概率来源": a["p_src"],
         "倾向": a["lean"],
         "双选": a["double"],
         "信心": a["tier"],
+        "重点": "★" if a["highlight"] else "",
         "历史命中(首选/双选)": f"{a['hit1']:.0%}/{a['hit2']:.0%}",
         "本场估计(首选/双选)": f"{a['est1']:.0%}/{a['est2']:.0%}" if a.get("est1") is not None else "",
         "预期进球": f"{mk['exp_home_goals']:.1f}-{mk['exp_away_goals']:.1f}",

@@ -29,7 +29,7 @@ from football_prediction.model_blend.blend import MODEL_NAME as BLEND_NAME
 from football_prediction.model_dc.market_dc import MODEL_NAME as DC_MARKET_NAME
 from football_prediction.model_market.devig import SHIN_NAME
 from football_prediction.model_market.implied import MODEL_NAME as IMPLIED_NAME, implied_matrix
-from football_prediction.output.analysis import devig, odds_dict
+from football_prediction.output.analysis import devig, odds_dict, safe_text
 from football_prediction.output.derive import derive_markets
 from football_prediction.output.report import upcoming_fixtures, write_report
 from football_prediction.review.scorecard import horizon_report, live_report, promotion_check
@@ -254,9 +254,6 @@ def _num(x, nd: int = 4):
     return round(x, nd) if math.isfinite(x) else None
 
 
-RECOMMEND_TIERS = ("高", "中")   # 页面「推荐」：市场线上亚盘信心档为高 / 中的场次（只是展示筛选）
-
-
 def view_model(a: dict) -> tuple[str, str]:
     """本轮看法的比分来源对应的模型（名, 版本）：市场隐含 → 主模型，否则兜底 dc_xg。"""
     name, key = version.PRIMARY_MODEL if a["source"] == "市场隐含" else version.FALLBACK_MODEL
@@ -267,8 +264,11 @@ def match_view(r: dict, a: dict, odds_source: str) -> dict:
     """一场的本轮看法（JSON 可写，不含比分矩阵），字段取自判断结果 analyse()；亚盘在前。"""
     ah, mk = a["ah"], a["markets"]
     name, ver = view_model(a)
-    recommended = ah["line_src"] == "市场线" and ah["tier"] in RECOMMEND_TIERS
-    pick = f"{ah['side']}{(ah['line'] if ah['side'] == '主' else -ah['line']) + 0.0:+.2f}"
+    recommended = bool(a["highlight"])
+    note = None
+    if recommended:
+        note = f"胜平负高把握 · {a['lean']} {a['est1']:.0%}"
+        note += f" · 亚盘稳妥 {safe_text(ah)}" if ah["safe_line"] is not None else ""
     return {
         "match_id": r["match_id"], "league": r["league"],
         "league_name": LEAGUES.get(r["league"], r["league"]),
@@ -276,14 +276,16 @@ def match_view(r: dict, a: dict, odds_source: str) -> dict:
         "kickoff_utc": r.get("kickoff_utc"), "match_date": r["match_date"],
         "model_name": name, "model_version": ver,
         "recommended": recommended,
-        "recommendation_note": f"亚盘{ah['tier']}信心 · {pick}" if recommended else None,
+        "recommendation_note": note,
         "odds_source": odds_source if a["market"] is not None else None,
         "asian": {
             "line": round(float(ah["line"]) + 0.0, 2),
             "line_source": "市场线" if ah["line_src"] == "市场线" else "公平线",
             "outcome": {k: _num(v) for k, v in ah["outcome"].items()},
             "side": ah["side"], "p_cover": _num(ah["p_cover"]), "tier": ah["tier"],
-            "historical_hit": _num(ah["hit"]), "self_home_cover": _num(ah["self_fair"]),
+            "historical_hit": _num(ah["hit"]),
+            "safe_line": None if ah["safe_line"] is None else round(ah["safe_line"] + 0.0, 2),
+            "safe_cover": _num(ah["safe_cover"]), "self_home_cover": _num(ah["self_fair"]),
             "market_home_cover": _num(ah["market_fair"]),
             "movement": a["ah_move"] or None,
         },

@@ -4,7 +4,7 @@ services/match_read.py  只读用例（中间层）
 里的当前看法与成绩单，加上库里主模型的首次存档和赛果。不拟合模型、不写库、不联网。
 首次存档的展示字段（倾向、信心档、亚盘选择方）按存档时的概率现算，规则与 output/analysis 一致：
 有存档赔率时信心档按 Shin 去水的最大概率（市场档），否则按存档概率（自研档）；
-亚盘只有存档时有市场线才分档。
+亚盘只有存档时有市场线才分档；稳妥线用存档里各线的五种结算（AH_LINES ±4 之外为空）。
 比分与评分同一顺序：football-data（matches）优先，没到时用只读挂上的 fotmob.db 的 fotmob_results。
 read_recent 给列表附带最近几天已开球的场次（首次存档 + 比分），关注页与完赛筛选用。
 存档另给主模型临场档 near_archived（开球前 1.5 小时内多家中位数，近开球时的看法）；
@@ -19,7 +19,7 @@ from football_prediction import version
 from football_prediction.data.fotmob import DB_PATH as FOTMOB_DB
 from football_prediction.model_market.devig import shin
 from football_prediction.output.analysis import (
-    LABEL, MARKET_TIERS, MODEL_TIERS, ah_tier, confidence_tier, double_label,
+    LABEL, MARKET_TIERS, MODEL_TIERS, ah_tier, confidence_tier, double_label, safe_line,
 )
 from football_prediction.output.derive import ah_fair_prob
 from football_prediction.services.live_round import DB_PATH, LEAGUES, SNAPSHOT_PATH, _num
@@ -90,17 +90,26 @@ def _archive_pick(p: list[float], od: dict) -> dict:
             "historical_first_hit": hit1, "historical_double_hit": hit2}
 
 
-def _archive_asian(line, ah: list | None, market_line: bool) -> dict | None:
-    """存档时那条线上的五种结算与选择方；只有市场线才给信心档。"""
+def _archive_asian(line, ah: list | None, market_line: bool, ex: dict | None = None) -> dict | None:
+    """存档时那条线上的五种结算与选择方；只有市场线才给信心档。
+    ex：存档 extra（各线 ah_{line} 的五种结算），用来算稳妥线；缺线时稳妥线为空。"""
     if line is None or ah is None:
         return None
+    ex = ex or {}
+
+    def home_fair(x: float) -> float | None:
+        o = ex.get(f"ah_{x + 0.0:+.2f}")
+        return ah_fair_prob(dict(zip(_AH_KEYS, o))) if o else None
+
     out = dict(zip(_AH_KEYS, ah))
     fair = ah_fair_prob(out)
     side, p_cover = ("主", fair) if fair >= 0.5 else ("客", 1 - fair)
     tier, hit = ah_tier(p_cover) if market_line else ("-", None)
+    safe = safe_line(home_fair, float(line), side)
     return {"line": round(float(line) + 0.0, 2), "line_source": "市场线" if market_line else "公平线",
             "outcome": {k: _num(v) for k, v in out.items()}, "side": side,
-            "p_cover": _num(p_cover), "tier": tier, "historical_hit": _num(hit)}
+            "p_cover": _num(p_cover), "tier": tier, "historical_hit": _num(hit),
+            "safe_line": safe[0] if safe else None, "safe_cover": _num(safe[1]) if safe else None}
 
 
 _PRE_KO = ("NOT (json_extract(extra_markets, '$.kickoff_utc') IS NOT NULL "
@@ -133,7 +142,7 @@ def _first_archive(conn: sqlite3.Connection, match_id: str, near: bool = False) 
         "model_name": d["model_name"], "model_version": d["model_ver"],
         "generated_at": d["generated_at"], "kickoff_utc": ex.get("kickoff_utc"),
         "probabilities": probs, **_archive_pick(probs, od),
-        "asian": _archive_asian(line, ah, market_line),
+        "asian": _archive_asian(line, ah, market_line, ex),
         "likely_scores": [{"score": s["score"], "prob": _num(s["prob"])}
                           for s in ex.get("top5_scores", [])],
         "over25": _num(ex.get("over_2.5")),

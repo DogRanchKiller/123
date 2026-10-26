@@ -1,5 +1,5 @@
 """
-output/analysis.py  v1.5.0（输出层的一部分）
+output/analysis.py  v1.6.0（输出层的一部分）
 单场判断流程（预测报告与 explain 共用，纯函数，不读库）：
   1 赔率快照（最新一次）
   2 胜平负 = 市场去水概率（无赔率时回退 blend / dc_xg）
@@ -7,7 +7,7 @@ output/analysis.py  v1.5.0（输出层的一部分）
   4 自研模型对照：与市场任一结果差 > 8pp 时提示（仅提示，历史上市场更准）
   5 盘口变动：首条 vs 最新快照，主胜变动 ≥ 5pp 或亚盘线变化视为新信息，按变动方向理解，不反向
   6 风险：升班马 / 历史数据少 / 缺赔率 / 盘口之间不一致
-  7 结论：倾向、双选、信心档 + 历史命中率 + 本场命中估计
+  7 结论：倾向、双选、信心档 + 历史命中率 + 本场命中估计；亚盘稳妥线；重点标记
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 v1.3.0: 信心档按 Shin 去水的最大概率分档，命中率改用 research.db 5 联赛 1213–2425 重标定
         （_diag/explore/reliability.py）；新增本场命中估计 est1 / est2 = Shin 最大概率 / 前二之和。
@@ -18,6 +18,13 @@ v1.5.0: 亚盘为主。ah 块改为：市场线（缺时用比分矩阵的公平
         选择方（赢盘概率较高的一方）与亚盘信心档 AH_TIERS（research.db 标定，_diag/explore/ah_baseline.py）；
         同线自研 dc_xg 与市场分歧 > AH_DIVERGE_PP 时提示；亚盘线与水位轨迹 ah_trail（初盘 → 最新快照 → 定价，
         升盘 / 降盘按让球方让得更多 / 更少）。ah_text / ah_pick_text 给报告与 explain 共用的数字写法。
+v1.6.0: 每场一个结论 + 把握程度。亚盘块加「稳妥线」safe_line / safe_cover：从选择方的线每次退 0.25，
+        直到等效赢盘概率 ≥ SAFE_TARGET（0.65）。research.db 研究（_diag/explore/ah_confidence_line.py）：
+        市场线以外各线的赢盘概率校准（标定 1213–2425 各分箱差 ≤ 1.4pp，2526 留出 ≤ 3pp），按此找线
+        标定命中 0.682、留出 0.674。新增重点标记 highlight：胜平负市场档为「高」（Shin 最大概率 ≥ 0.60，
+        标定 0.722 / 留出 0.725，约 27% 的场次）。不再用亚盘信心档做重点：亚盘高档 2526 留出未确认。
+        剔除亚盘坏行复核后：稳妥线留出 0.677、重点留出 0.728；亚盘中档标签 0.562 → 0.60（近年 11 联赛）。
+        重点场次在市场线上的亚盘选择方命中只有 0.52–0.55，与全体相当：重点只表示胜平负把握高。
 """
 import numpy as np
 
@@ -25,9 +32,11 @@ from football_prediction.model_market.devig import shin
 from football_prediction.model_market.implied import implied_matrix, fair_probs
 from football_prediction.output.derive import derive_markets, margin_pmf, ah_outcome, ah_fair_prob
 
-LAYER_VERSION = "1.5.0"
+LAYER_VERSION = "1.6.0"
 
 DIVERGE_PP = 0.08      # 自研与市场分歧提示阈值
+SAFE_TARGET = 0.65     # 稳妥线：选择方等效赢盘概率达到这个值的最近一条线
+SAFE_MAX_STEPS = 12    # 稳妥线最多退 3 球（研究里 T=0.65 最多退 4 步）
 AH_DIVERGE_PP = 0.08   # 同一亚盘线上自研 dc_xg 与市场赢盘概率的分歧提示阈值
 MOVE_PP = 0.05         # 盘口变动阈值（主胜概率）
 FIT_RMSE_WARN = 0.02   # 市场隐含拟合误差提示阈值（回测中约 4% 的场次超过）
@@ -50,13 +59,17 @@ MODEL_TIERS = [
     (0.00, "低", 0.41, 0.71),
 ]
 # 亚盘信心档：(赢盘概率下限, 档名, 历史选择方命中率（不含走盘）)；赢盘概率 = 市场隐含比分在市场线上的
-# 等效赢盘概率，取较高一方。research.db 5 联赛赛前平均亚盘，1213–2425 标定（不含走盘 21564 场）：
-# 高 n=1414、中 n=2286、低 n=17864。2526 留出：高 0.457（n=35，±0.084，未确认）、中 0.574（n=61）、
-# 低 0.514（n=1517）。隐含赢盘与该线去水水位平均只差 0.003，分档实际看的是水位偏离五五开的程度
-# （_diag/explore/ah_baseline.log）。
+# 等效赢盘概率，取较高一方。隐含赢盘与该线去水水位平均只差 0.003，分档实际看的是水位偏离五五开的程度
+# （_diag/explore/ah_baseline.log）。下限不变；命中标签按剔除坏行（两边水位隐含概率和 < 1）后的复核
+# （_diag/explore/ah_clean_recheck.log）：
+#   高：research.db 5 联赛 1213–2425 n=1409 命中 0.608，取 0.607 不变；近年几乎不出现（football.db
+#       11 联赛 2122–2627 只有 7 场），原 2526 留出的 0.457（n=35）里 34 场是坏行。
+#   中：football.db 11 联赛 2122–2425 n=601 命中 0.599 → 0.60；2526–2627 留出 0.586（n=174）。
+#       原 0.562 是 research.db 1213–2425 的值。
+#   低：research.db 1213–2425 0.517 不变（football.db 2122–2425 0.526，2526–2627 留出 0.508）。
 AH_TIERS = [
     (0.56, "高", 0.607),
-    (0.54, "中", 0.562),
+    (0.54, "中", 0.60),
     (0.00, "低", 0.517),
 ]
 
@@ -88,6 +101,29 @@ def ah_pick_text(ah: dict) -> str:
     """选择方与等效赢盘概率：主-0.75 52% / 客+0.75 55%。"""
     line = ah["line"] if ah["side"] == "主" else -ah["line"]
     return f"{ah['side']}{line + 0.0:+.2f} {ah['p_cover']:.0%}"
+
+
+def safe_line(home_fair, line: float, side: str, target: float = SAFE_TARGET) -> tuple[float, float] | None:
+    """稳妥线：从 line（主队方向）起，每次向选择方退 0.25，返回第一条选择方等效赢盘概率 ≥ target 的
+    (线, 概率)。home_fair(line) 给主队在该线的等效赢盘概率，返回 None 表示没有该线的数据；
+    退 SAFE_MAX_STEPS 步仍不到或缺线时返回 None。"""
+    step = 0.25 if side == "主" else -0.25
+    for k in range(SAFE_MAX_STEPS + 1):
+        x = round(line + k * step, 2)
+        f = home_fair(x)
+        if f is None:
+            return None
+        p = f if side == "主" else 1 - f
+        if p >= target:
+            return x + 0.0, p
+    return None
+
+
+def safe_text(ah: dict) -> str:
+    """稳妥线写法：「客+1.25 66%」；没有时为空串。"""
+    if ah.get("safe_line") is None:
+        return ""
+    return ah_pick_text({"line": ah["safe_line"], "side": ah["side"], "p_cover": ah["safe_cover"]})
 
 
 def _ah_stage(row: dict | None) -> tuple | None:
@@ -195,7 +231,9 @@ def asian(matrix: np.ndarray, od: dict, xg_matrix: np.ndarray, priced: bool) -> 
     if priced and abs(self_fair - fair) > AH_DIVERGE_PP:
         hints.append(f"dc_xg 在主{line + 0.0:+.2f} 的主队赢盘 {self_fair:.0%}，市场 {fair:.0%}，"
                      f"差 {(self_fair - fair) * 100:+.0f}pp（仅提示，历史上市场更准）")
+    safe = safe_line(lambda x: ah_fair_prob(ah_outcome(pmf, x)), line, side)
     return {"line": line, "line_src": src, "outcome": out, "fair": fair, "side": side,
+            "safe_line": safe[0] if safe else None, "safe_cover": safe[1] if safe else None,
             "p_cover": p_cover, "tier": tier, "hit": hit, "self_fair": self_fair,
             "market_fair": mkt_ah[1] if mkt_ah else None}, hints
 
@@ -263,4 +301,5 @@ def analyse(odds_row: dict | None, xg_matrix: np.ndarray, rho: float,
         "ah_move": ah_trail(ah_open or first_row, last_row, odds_row),
         "risks": risks, "lean": LABEL[order[0]], "double": double_label(order[:2]),
         "tier": tier, "hit1": hit1, "hit2": hit2, "est1": est1, "est2": est2,
+        "highlight": mkt is not None and tier == "高",   # 重点：只认市场档（自研档样本少）
     }

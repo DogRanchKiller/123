@@ -1,5 +1,5 @@
 """
-football_prediction/live.py  v1.10.1
+football_prediction/live.py  v1.11.0
 实盘预测闭环：更新数据（含赔率快照）→ 赛后评分 → 对未开赛场次存档预测 → 预测报告 → 实盘成绩单。
 每轮比赛前后各跑一次即可（开赛前多跑几次可记录盘口变动）：
     python -m football_prediction.live
@@ -36,6 +36,8 @@ v1.10.0: 成绩单加亚盘三列（review 1.6.0）：按存档时的市场亚�
 v1.10.1: 一轮用 round_clock 计时，存档前（拟合之后）再取时刻，已开球的不存档（之前用轮开头的 now，
         临场档抓阵容和赔率二十多分钟后仍存了开球后的 lineup_t1）；OddsPortal fetched_at 记每组抓回时刻、
         抓回时已开球的不入库（data 1.8.0）；成绩单不计开球后才存的旧行（review 1.7.0）。概率算法不变。
+v1.11.0: 每场一个结论 + 把握程度（output 1.6.0）：快照亚盘加稳妥线 safe_line / safe_cover；页面「推荐」
+        recommended 改为胜平负市场档为高（Shin 最大概率 ≥ 0.60），不再用亚盘信心高 / 中。概率与存档不变。
 """
 import argparse
 from datetime import datetime, timezone

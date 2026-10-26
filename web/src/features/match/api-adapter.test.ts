@@ -13,11 +13,11 @@ const view: ApiMatchView = {
   match_id: "E0_2627_Arsenal_Chelsea", league: "E0", league_name: "英超",
   home: "Arsenal", away: "Chelsea", kickoff_utc: "2026-11-02T16:30:00+00:00",
   match_date: "2026-11-02", model_name: "market_implied", model_version: "1.1.0",
-  recommended: true, recommendation_note: "亚盘高信心 · 主-0.75",
+  recommended: true, recommendation_note: "胜平负高把握 · 主胜 55% · 亚盘稳妥 主+0.00 66%",
   odds_source: "多家中位数（5 家）",
   asian: {
     line: -0.75, line_source: "市场线", outcome, side: "主", p_cover: 0.57,
-    tier: "高", historical_hit: 0.58, self_home_cover: 0.55,
+    tier: "高", historical_hit: 0.58, safe_line: 0, safe_cover: 0.66, self_home_cover: 0.55,
     market_home_cover: 0.52, movement: "初盘 主-0.50 → 最新 主-0.75",
   },
   probabilities: [0.55, 0.25, 0.2], probability_source: "市场",
@@ -48,6 +48,7 @@ describe("接口 → 展示契约", () => {
     expect(m.current?.asian).toMatchObject({ line: -0.75, lineSource: "市场线" });
     expect(m.current?.asian?.outcome.halfWin).toBe(0.1);
     expect(m.current?.asian?.selfHomeCover).toBe(0.55);
+    expect(m.current?.asian).toMatchObject({ safeLine: 0, safeCover: 0.66 });
     expect(m.current?.likelyScores).toEqual(["1–0"]);
     expect(m.current?.generatedAt).toBe(list.generated_at);
     expect(m.risks).toEqual([...view.risks, "自研与市场分歧 9 个百分点"]);
@@ -61,6 +62,7 @@ describe("接口 → 展示契约", () => {
     expect(m.recommended).toBe(false);
     expect(m.current).toBeNull();
     expect(m.archived?.asian?.selfHomeCover).toBeNull();
+    expect(m.archived?.asian?.safeLine ?? null).toBeNull();   // 旧接口没有稳妥线字段
     expect(m.archived?.sourceNote).toContain("0.5100");
     expect(m.archived?.oddsSource).toBe("赛程表（存档时）");
     expect(m.scoreSourceAt).toBe("2026-10-21T06:00:00+00:00");

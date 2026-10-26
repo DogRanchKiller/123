@@ -28,6 +28,9 @@ export interface AsianHandicap {
   tier: "高" | "中" | "低" | "-";
   /** 该档历史赢盘命中率；公平线时为空。 */
   historicalHit: number | null;
+  /** 稳妥线（主队方向）：从选择方的线每次退 0.25，直到选择方赢盘概率 ≥ 65%；没有时为空。 */
+  safeLine: number | null;
+  safeCover: number | null;
   /** 自研 dc_xg 在同一条线上的主队赢盘概率，只作对照。 */
   selfHomeCover: number | null;
   /** 初盘 → 最新 → 定价的盘口与水位说明；不足两个阶段时为空。 */

@@ -1,7 +1,7 @@
 # version.py — 各层版本号注册表
 # 修改某一层时只更新对应条目，review 层用版本号区分不同批次预测
 
-SYSTEM_VERSION = "1.10.1"
+SYSTEM_VERSION = "1.11.0"
 
 LAYER_VERSIONS = {
     "data":          "1.8.0",   # book_odds.fetched_at 记每组抓回时刻，抓回时已开球的不入库（1.7.0: + E1/N1/P1/SC0/B1/T1 实盘（2122–2627）与 OddsPortal 队名、understat US_LEAGUES（v1.6.0: 意甲 I1 / 法甲 F1 实盘（2122–2627）与 OddsPortal / FotMob 队名（v1.5.0: 多家公司赔率 book_odds；v1.4.0: 亚盘/Pinnacle/赛程大小球、快照表；v1.3.0: xG；v1.2.0: 射正；v1.1.0: 赔率、赛程）））
@@ -18,10 +18,10 @@ LAYER_VERSIONS = {
     "model_blend":   "1.0.0",  # dc_xg 0.77 + Elo 0.23 的 1X2 融合（确认期 −0.0046±0.0013）
     "model_lgbm":    "1.1.0",   # 滚动 OOS，训练样本翻倍；修复重名方法 bug
     "calibration":   "1.0.0",   # Platt scaling；2425 验证无增益（±0.005），不进主流程
-    "output":        "1.5.0",   # 亚盘为主：报告 / explain 先列市场线亚盘（数字盘口、五种结算、赢盘信心档、盘口与水位变动、dc_xg 同线分歧），AH_LINES 扩到 ±4（1.4.0：报告 / explain 优先用多家中位数赔率（≥3 家、24h 内），列赔率来源（1.3.0：Shin 信心档 + 本场估计；1.2.0：判断流程 + explain））
+    "output":        "1.6.0",   # 每场结论 + 把握：亚盘稳妥线（赢盘 ≥ 65% 的最近一条线）、重点标记（胜平负市场档高）、亚盘中档标签 0.60（1.5.0：亚盘为主：报告 / explain 先列市场线亚盘（数字盘口、五种结算、赢盘信心档、盘口与水位变动、dc_xg 同线分歧），AH_LINES 扩到 ±4（1.4.0：报告 / explain 优先用多家中位数赔率（≥3 家、24h 内），列赔率来源（1.3.0：Shin 信心档 + 本场估计；1.2.0：判断流程 + explain）））
     "validation":    "1.1.0",   # + 市场基准 run_market_backtest、同场配对 paired_compare
     "review":        "1.7.0",   # 开球后不存档（save_prediction 收生成时刻 at），成绩单不计开球后才存的旧行（1.6.0: 亚盘评分：按存档时的市场亚盘线算五种结算 log loss 与赢盘命中（ah_line / ah_log_loss / ah_hit，旧行回填）；成绩单拆到 scorecard.py（1.5.0：football-data 未到时用 FotMob 比分先评分（result_src），到达后核对重评（1.4.0：临场档 _t1 不参与替换检查；horizon_report 临场对赛前）））
-    "live":          "1.10.1",  # 一轮的时钟 round_clock：存档前再取时刻，已开球的不存（v1.10.0: 成绩单加亚盘列（v1.9.0: + 英冠 / 荷甲 / 葡超 / 苏超 / 比甲 / 土超，understat 没有的联赛跳过 load_xg（v1.8.0: 抓 FotMob 完赛比分并先评分、核对 football-data（v1.7.0: 临场档先抓阵容再抓赔率，按先后选阵容系数，打印临场最终看法；v1.6.0: + 意甲 I1 / 法甲 F1；v1.5.0: market_shin / dc_market 存档、FotMob 补 xG、--near 临场档 *_t1））））
+    "live":          "1.11.0",  # 快照加亚盘稳妥线，页面重点改为胜平负高档（v1.10.1: 一轮的时钟 round_clock：存档前再取时刻，已开球的不存（v1.10.0: 成绩单加亚盘列（v1.9.0: + 英冠 / 荷甲 / 葡超 / 苏超 / 比甲 / 土超，understat 没有的联赛跳过 load_xg（v1.8.0: 抓 FotMob 完赛比分并先评分、核对 football-data（v1.7.0: 临场档先抓阵容再抓赔率，按先后选阵容系数，打印临场最终看法；v1.6.0: + 意甲 I1 / 法甲 F1；v1.5.0: market_shin / dc_market 存档、FotMob 补 xG、--near 临场档 *_t1）））））
 }
 
 

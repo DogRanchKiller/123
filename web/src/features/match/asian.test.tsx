@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { lineText, outcomeText, pickText, tierText } from "./asian";
+import { lineText, outcomeText, pickText, safeText, tierText } from "./asian";
 import { AsianBlock, AsianSummary } from "./asian-section";
 import type { AsianHandicap } from "./types";
 
@@ -11,7 +11,7 @@ const market: AsianHandicap = {
   side: "客",
   pCover: 0.55,
   tier: "中",
-  historicalHit: 0.562,
+  historicalHit: 0.562, safeLine: -1.5, safeCover: 0.66,
   selfHomeCover: null,
   movement: null,
 };
@@ -22,7 +22,7 @@ const fair: AsianHandicap = {
   side: "主",
   pCover: 0.53,
   tier: "-",
-  historicalHit: null,
+  historicalHit: null, safeLine: null, safeCover: null,
 };
 
 describe("亚盘文字与 Python ah_text / ah_pick_text 一致", () => {
@@ -48,6 +48,12 @@ describe("亚盘文字与 Python ah_text / ah_pick_text 一致", () => {
     ).toBe("主-0.25 赢盘20%（赢半），输80%（输半）");
   });
 
+  it("稳妥线按选择方写，缺时为空", () => {
+    expect(safeText(market)).toBe("客+1.50 66%");
+    expect(safeText({ ...market, side: "主", safeLine: 0 })).toBe("主+0.00 66%");
+    expect(safeText(fair)).toBeNull();
+  });
+
   it("公平线不分档", () => {
     expect(tierText(market)).toBe("中[56%]");
     expect(tierText(fair)).toBe("不分档（公平线）");
@@ -61,6 +67,7 @@ describe("亚盘区块", () => {
     expect(within(block).getByRole("heading", { name: "亚盘 · 市场线" })).toBeInTheDocument();
     expect(within(block).getByText("亚盘信心 中[56%]")).toBeInTheDocument();
     expect(within(block).getByText("客+0.75 55%")).toBeInTheDocument();
+    expect(within(block).getByText("客+1.50 66%")).toBeInTheDocument();
     expect(within(block).getAllByRole("term")).toHaveLength(6);
     expect(within(block).getAllByText("暂无数据")).toHaveLength(2);
   });
@@ -77,5 +84,11 @@ describe("亚盘区块", () => {
     expect(summary).toHaveTextContent("主-0.50");
     expect(summary).toHaveTextContent("（公平线）");
     expect(summary).toHaveTextContent("不分档（公平线）");
+    expect(summary).not.toHaveTextContent("稳妥");
+  });
+
+  it("卡片摘要有稳妥线时另起一行", () => {
+    render(<AsianSummary asian={market} />);
+    expect(screen.getByRole("group", { name: "亚盘" })).toHaveTextContent("稳妥 客+1.50 66%");
   });
 });

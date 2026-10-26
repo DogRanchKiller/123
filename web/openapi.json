@@ -399,6 +399,28 @@
             "title": "P Cover",
             "type": "number"
           },
+          "safe_cover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Cover"
+          },
+          "safe_line": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Line"
+          },
           "side": {
             "enum": [
               "主",
@@ -483,6 +505,28 @@
           "p_cover": {
             "title": "P Cover",
             "type": "number"
+          },
+          "safe_cover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Cover"
+          },
+          "safe_line": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Line"
           },
           "self_home_cover": {
             "anyOf": [
@@ -1320,7 +1364,7 @@
   "info": {
     "description": "实盘一轮的本轮看法（亚盘为主）、首次存档与成绩单。只读，无鉴权，仅限本机 / 局域网。",
     "title": "足球预测只读接口",
-    "version": "1.10.1"
+    "version": "1.11.0"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -18,7 +18,7 @@ const prediction: Prediction = {
   modelName:"sample", modelVersion:"1", probabilitySource:"market", scoreSource:"sample",
   sourceNote:"测试来源", oddsSource:"赛程表", asian:{
     line:-0.25, lineSource:"市场线", outcome:{win:.45,halfWin:0,push:0,halfLose:.25,lose:.3},
-    side:"主", pCover:.57, tier:"高", historicalHit:.607, selfHomeCover:null, movement:null,
+    side:"主", pCover:.57, tier:"高", historicalHit:.607, safeLine: null, safeCover: null, selfHomeCover:null, movement:null,
   }, confidence:"中", historicalFirstHit:.5, historicalDoubleHit:.7,
   probabilities:[.48,.32,.2], lean:"主胜", double:"主胜或平", likelyScores:["1–0","1–1"],
   over25:.35, sourceAt:null, fetchedAt:"2026-10-25T10:00:00Z", generatedAt:"2026-10-25T10:01:00Z",
