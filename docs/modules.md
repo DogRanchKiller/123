@@ -16,7 +16,7 @@ live.py / main.py  --------^
 | 层 | 目录 | 做什么 | 不做什么 |
 |---|---|---|---|
 | 前端 | `web/` | 展示、发请求、把 OpenAPI 类型交给页面 | 不算概率，不读 `football.db`，不引用 Python |
-| 后端 | `server/` | FastAPI 路由、Pydantic 校验、HTTP 状态、CORS | 不写 SQL，不 `fit`，不编排多个模型 |
+| 后端 | `server/` | FastAPI 路由、Pydantic 校验、HTTP 状态 | 不写 SQL，不 `fit`，不编排多个模型 |
 | 中间层 | `football_prediction/services/` | 一个用例一份编排：实盘一轮、回测一轮、给接口读的报告和成绩单 | 不 import FastAPI，不渲染页面 |
 | 领域 | `football_prediction/` 里除 `services/` 以外的包 | 数据、特征、模型、校准、市场分解、落库、回测指标 | 不 import `server`、`web`、`services` |
 
@@ -66,7 +66,7 @@ live.py / main.py  --------^
 ## 后端文件
 
 ```
-server/app.py            创建应用、CORS、挂上路由
+server/app.py            创建应用、挂上路由
 server/routes/<资源>.py  一个资源一个文件，例如 report、review
 ```
 
@@ -74,13 +74,36 @@ server/routes/<资源>.py  一个资源一个文件，例如 report、review
 
 ## 前端文件
 
-```
-web/src/api/                    只放 OpenAPI 生成物，不手改
-web/src/features/<页面>/        一个页面一目录：请求 hook、页面、只服务这个页面的组件
-web/src/components/             两个页面都用的展示件
+```text
+web/src/app/          Next.js 路由、布局、metadata、Provider；页面只组装
+web/src/features/     entry、auth、predictions、match、following、review；按业务分模块
+web/src/components/   多模块共用展示组件
+web/src/lib/          按职责命名的基础能力；服务端模块标明 server-only
+web/src/styles/       主题变量、全局样式
+web/src/api/          未来 OpenAPI 生成物，禁止手改；本轮不建
 ```
 
-只有一个页面用的组件留在该页面目录。请求只出现在该页面的 hook 里，展示组件接收已经取到的数据。概率、信心档和比分字符串都来自接口。
+前端骨架不建立 server/services，不迁移 Python 编排，不创建 web/src/app/api 或 /api 代理。演示数据从 server-only 模块由服务端组件直接读取，序列化后交给客户端组件；只传页面所需的公开数据。
+
+调用方向：app 组装 features / components；features 可以使用 components / lib；components 不反向引用 features。跨功能调用仅使用模块公开入口，其他模块内部文件通过 ESLint 禁止引用。app 只负责页面组合与路由语义；业务交互放功能组件和 hook。Provider 只在实际使用时创建。
+
+客户端不得导入 .server 模块、演示源或 server-only。未来请求入口放功能 hook，底层 HTTP 能力放职责明确的 lib 文件；服务端取数与客户端刷新隔离。生成类型与展示模型分开，展示类型放使用它的功能模块；不要在 api/ 放手写契约。
+
+根布局仅承担 HTML/Provider/跳过链接；`app/(browse)/layout.tsx` 和 `app/site-frame.tsx` 组装业务壳层，业务 URL 不变。首页 `app/page.tsx` 动态读取并投影 current 字段，`entry` 内分离刷新 hook、HTML 卡片、静态海报及懒加载 3D。场景不得接收概率、比赛 ID、读取回执或以其作为 key。`auth` 只管理弹窗表单与焦点，不创建账号服务。根级错误页含壳，业务组错误页复用组布局，不能重复导航或 main。
+
+### 演示契约与状态
+
+每场含 ID、联赛/球队、UTC 开球时间、状态、推荐标记、档名、历史命中率、模型及来源、当前预测、首次预测存档、来源/获取/预测三种时间、可空比分、inplay 状态。无赔率来源可为 blend 或 dc_xg，前端只显示字段，不重新兜底。高信心推荐由契约提供，不重算概率阈值。
+
+筛选不进入 URL，通过 sessionStorage 保存筛选与滚动；关注用 localStorage，客户端 effect 读取，读完前不写空默认值。服务端与客户端首次渲染一致，存储被禁用时保留内存交互并提示无法保存。数据刷新不得重置交互状态。
+
+### 展示与错误边界
+
+主题与移动适配遵循 stack.md。业务页用语义色变量；首页 3D 材质可以用 stack.md 里的专用场景色。inplay 表示滚球，UTC 比较、北京时间展示。页面不写模型规则；当前结果和首次存档分区显示。缺数据显示暂无数据，不补零。
+
+比赛页按请求动态渲染，metadata 与正文复用请求内读取；检查完成前不开始 streaming，不缓存失败结果。未知 ID 使用 notFound 返回 404；读取失败有旧值则展示旧值和延迟，无旧值则抛错误并返回 5xx。客户端刷新错误不等于文档 404。只用服务端测试配置注入故障，不增加公开测试路由。生产 HTTP 测试必须覆盖失败恢复及状态码。
+
+演示站整站禁止收录，不建 sitemap。canonical 使用 SITE_URL 和稳定 match_id，不带客户端筛选状态。真实比赛由后端传入已有 ID，前端不重新哈希。
 
 ## 单文件尺度
 
@@ -97,6 +120,7 @@ web/src/components/             两个页面都用的展示件
 - `__init__.py`、`version.py` 这种注册表。`__init__.py` 里不写业务。
 - 同族模型的完整变体。`xg_dc.py` 短，是因为它只换数据源和权重，父类行为仍在 `sot_dc.py`。不要为了凑行数把父类抄进子文件。
 - 测试文件不受 80 行下限约束。
+- 前端路由、布局、配置、明确职责的小组件与类型可短；不为凑行数混合职责。
 
 现有文件保持原样。`validation/backtest.py` 约 310 行，仍在上限内。`data/loader.py`、`data/oddsportal.py` 已拆到 400 行以下（赛程快照在 `data/fixtures.py`，OddsPortal 解析在 `data/oddsportal_parse.py`）。不要为了贴合本规范专门去拆或去合并其他文件。下一次改动如果会让文件超过 400 行，先拆再加功能。
 
@@ -145,4 +169,6 @@ web/src/components/             两个页面都用的展示件
 
 一次改动穿过相邻的两层为止：例如一个领域包加上调用它的用例，或一个路由加上用例签名。算法改动不顺手改页面文案，页面改动不改 SQL。响应字段要两边一起变时，这次改动只含契约和它的调用方。
 
-测试跟着被测模块走，放在 `tests/test_<模块>.py`。已有文件能放下就写进已有文件；超过 400 行再按被测模块拆。新测试保持离线，用内存 SQLite，不碰 `football.db`。
+Python 测试跟着被测模块走，放在 `tests/test_<模块>.py`。已有文件能放下就写进已有文件；超过 400 行再按被测模块拆。新测试保持离线，用内存 SQLite，不碰 `football.db`。
+
+前端组件测试放在所属功能目录，生产 HTTP/浏览器测试放 web/tests。源文件长度由 ESLint 检查（物理行，400 行上限），生成物除外。

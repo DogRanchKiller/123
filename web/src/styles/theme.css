@@ -1,0 +1,37 @@
+:root {
+  color-scheme: dark;
+  --background: #040e16;
+  --surface: #0a1b26;
+  --surface-subtle: #102833;
+  --foreground: #e7f5f5;
+  --muted: #94afb9;
+  --border: #203b48;
+  --accent: #5dfff0;
+  --accent-hover: #9ffff5;
+  --accent-soft: #123a3d;
+  --on-accent: #03242b;
+  --warning: #edc987;
+  --warning-soft: #302a20;
+  --danger: #ff9694;
+  --home-probability: #45e2cc;
+  --draw-probability: #839ca9;
+  --away-probability: #619edf;
+  --shadow: 0 12px 36px rgb(0 0 0 / 18%);
+  --scene-background: #031018;
+  --scene-lawn: #075655;
+  --scene-light: #14c8c0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+}

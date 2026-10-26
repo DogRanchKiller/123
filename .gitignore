@@ -18,3 +18,14 @@ research.db
 
 # FotMob 阵容 / 球员库（可由 python -m football_prediction.data.fotmob --history ... 与 --reload-pre 从 _cache/fotmob 重建）
 fotmob.db
+
+# 前端依赖、本机配置与生成物
+web/node_modules/
+web/.next/
+web/coverage/
+web/test-results/
+web/playwright-report/
+web/.env*
+!web/.env.example
+web/*.tsbuildinfo
+web/.test-control.json

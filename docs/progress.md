@@ -8,7 +8,7 @@
 
 ## 当前
 
-命令行预测可以跑。网页、HTTP 接口和 `services/` 中间层还没有写。
+命令行预测可以跑。网站 `/` 是深色全息首页，预测、关注、详情和成绩单共用同一套深色业务页。页面数据仍是演示数据。真实 HTTP 接口、账号服务和 `services/` 中间层尚未建立。
 
 - 联赛：英超 E0、德甲 D1、西甲 SP1、意甲 I1、法甲 F1、英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1（实盘库都从 2122 起；后六个没有 understat xG）。研究库 `research.db` 只有前 5 联赛 9394–2526（赔率从 0001 起，xG 从 1415 起）。
 - 主模型：`market_implied` / `model_market` 1.0.0（市场赔率反推比分）。无赔率时回退 `dc_xg` / `model_xg` 1.0.0。
@@ -22,6 +22,18 @@
 - 定时：Windows 任务计划每天 18:07、23:37 跑 `run_daily.bat`（live + oddsportal + fotmob 阵容），日志 `logs/daily.log`；`FootballPredictNear` 每天 18:13–05:43 每 30 分钟跑 `run_near.bat`，日志 `logs/near.log`（需开机）。
 
 ## 已完成
+
+### 网站演示骨架（web 0.1.0）
+
+- Next.js 16.4.3 + React 19 + TypeScript strict，Node.js 24 LTS；npm 锁文件与前端检查命令已加入，依赖审计 0 vulnerabilities。
+- 预测列表、高信心推荐、比赛详情、首次预测存档、手动关注和成绩单页面；全部使用固定演示数据，明确标识。
+- 全站深色语义主题；独立 `/` 入口壳层与 3D 全息球场，业务页使用静态背景；关注 localStorage、筛选/滚动 sessionStorage，挂载后恢复。
+- 首页预测卡片来自当前演示预测，按推荐优先选场；可见时每 60 秒刷新，失败保留旧值并提示延迟，场景与概率刷新隔离。
+- 首页 3D 使用 Three.js / React Three Fiber、程序化球场和粒子；WebGL/减少动态效果可降级静态海报。邮箱和手机登录注册仅有校验表单，不接账号服务、不持久化凭据。
+- 比赛详情按请求渲染；稳定 ID、北京时间展示、来源/获取/预测三类时间；无赔率来源直接显示契约字段。
+- 演示站整站 noindex、robots 禁止抓取，不发布 sitemap，不建 /api；真实比分、滚球能力只展示未接入状态。
+- 验收通过：TypeScript、ESLint、12 项组件测试、Next.js 生产构建、20 项生产 Chromium 测试；覆盖首页选场/刷新失败恢复/超时后重试/Canvas 稳定、登录键盘与校验、SSR/metadata/404/5xx、关注/筛选/滚动恢复及 360/390/768/1023/1024/1440 页面溢出与平板折叠菜单。Python 离线测试 98 项通过；预测版本不变。
+- 已在桌面 Google Chrome 与 Safari 打开检查首页，Playwright Chromium 覆盖六种视口；手机为响应式模拟，未做真机测试。球场帧率未做设备级测量，60/30fps 仍是优化目标。尚未正式部署。
 
 | 层 | 版本 | 状态 |
 |---|---|---|
@@ -53,7 +65,12 @@
 - 兜底模型：建议把 `FALLBACK_MODEL` 换成 `dc_market`（回测在 4/5 联赛优于 dc_xg），由用户决定；按规则也可等实盘配对。
 - 临场档信心档：`MARKET_TIERS` 已按 Shin 赛前概率重标（output 1.3.0）；临场档（T1 多家中位数）有实盘样本后再核对档位命中率。
 - 多家中位数的准确度：报告已改用 OddsPortal 多家中位数（只有 5 家美国公司），它与 football-data 平均赔率哪个更准，等 `horizon_report` 和赛前存档有足够已评分场次后再比；赛前存档仍用赛程表赔率。
-- `web/`：Vite + React + TypeScript。见 `docs/stack.md`。
+- 网站真实数据：FastAPI 接入后生成 OpenAPI 类型，加入 TanStack Query 和同域 /api 代理。首页现在每 60 秒重读演示数据；演示内容不变时，卡片数字不会变。
+- 账号与短信：顶栏已有登录/注册表单（邮箱密码、确认密码、手机验证码）和校验。提交、验证码和找回密码只提示服务未接入。账号服务、短信和登录会话尚未实现。
+- 数据更新：先评估免费 API 的覆盖、授权与额度，再实现赛前赔率持续更新；目标 1–5 分钟，以数据源实际能力为准。
+- 实时比分与比赛状态：未接入。
+- 滚球预测（inplay）：未实现，需独立模型与数据链路，不能复用赛前结果冒充。
+- 正式部署与搜索收录：尚未上线；真实数据上线后才开放指定页面并建立 sitemap。
 - `server/`：FastAPI。见 `docs/stack.md`。
 - `football_prediction/services/`：中间层。写 `server/` 时和 `live.py`、`explain.py`、`main.py`、`output/pipeline.py` 的编排一起落地。见 `docs/modules.md`。
 - `football_prediction/model_nn/`：还没有神经网络。`requirements.txt` 里还没有 `torch`、`fastapi`、`uvicorn`。
