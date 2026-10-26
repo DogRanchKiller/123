@@ -15,7 +15,15 @@ export function MatchCard({
   featured?: boolean;
   action?: ReactNode;
 }) {
-  const prediction = match.current;
+  // 未开赛看本轮看法；开球后看存档：临场档（更接近开球）优先，没有时用首次存档。
+  const prediction = match.current ?? match.nearArchived ?? match.archived;
+  const archiveLabel = match.current
+    ? null
+    : match.nearArchived
+      ? "临场存档"
+      : match.archived
+        ? "首次存档"
+        : null;
   return (
     <article
       className={"match-card" + (featured ? " featured" : "")}
@@ -71,6 +79,7 @@ export function MatchCard({
               </span>
             </div>
             <p className="fine-print mt-3">
+              {archiveLabel && archiveLabel + " · "}
               概率来源：{prediction.probabilitySource} · {prediction.modelName}
               {prediction.oddsSource && " · 赔率：" + prediction.oddsSource}
             </p>
@@ -80,7 +89,7 @@ export function MatchCard({
             <span>
               {match.status === "upcoming"
                 ? "预测结果暂无数据"
-                : "赛前预测已存档"}
+                : "赛前预测暂无存档"}
             </span>
             <span>{match.inplay.label}</span>
           </div>

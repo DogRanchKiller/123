@@ -30,6 +30,7 @@
 - `services/match_read.py`：读函数从 `live_round.py` 移出；`read_recent` 给列表附带最近已开球场次；`open_readonly` 在 `fotmob.db` 存在时只读挂上，football-data 赛果没到时用 `fotmob_results` 的比分（与评分同一顺序，`score_source` 标来源）。之前详情页只读 `football.db`，FotMob 先评分的场次比分为空。赛程表 `fixtures` 每次刷新整表替换，所以赛前存档的 extra 里另记对阵 `match`（联赛、主客队、日期；只是元数据，概率不变），matches / fixtures 都查不到时从存档取；记对阵之前的旧存档若已被换掉仍查不到，列表里跳过。快照每场加 `model_name` / `model_version` / `recommended`（市场线且亚盘信心高或中）/ `recommendation_note`。
 - 网站：`web/openapi.json` → `src/api/schema.d.ts`（openapi-typescript）；`API_URL` 有值时各页经服务端读取接口并转成展示契约，标「本机实盘」与本轮生成时间，否则仍是演示样本（e2e 走演示模式）。关注页和「进行中 / 已完赛」筛选用 `recent`；关注里超出窗口的场次提示场数。`API_URL` 无效时报出地址错误；接口不可用时首页仍标「本机实盘」。快照替换在 Windows 上被读取占用时重试 5 次。TanStack Query 暂缓，见 `docs/stack.md`。
 - 临场档写快照：`live --near` 在 1.5 小时窗口内有场次时，存档之后用 `refresh_snapshot` 按最新赔率重算全部未开赛场次并重写快照（窗口内多为多家中位数，成绩单按现有评分重算；不存档、不写报告 CSV）。窗口内没场次时不动快照。真实库副本上 6 场约 10 秒。之前快照只在每日两次 `live` 时更新，网站看不到开球前的多家赔率。
+- 两份存档：`read_match` 和 `read_recent` 另给主模型临场档 `near_archived`（`market_implied_t1`，开球前 1.5 小时内的多家中位数；`horizon` / `n_books` / `hours_to_ko`），两份存档都不计开球后才存的行。网站开球后卡片优先显示临场档，没有时用首次存档，并标明是哪一份；详情页两份都列出，临场档的「盘口变动」写出首次存档 → 临场的亚盘线变化（按让球方说：主队让球加深 / 变浅、受让变多 / 变少、让球方换边）。官方评分仍只看首次存档。真实库上最近 3 天 53 场已开球场次里有 40 场有临场档。
 
 ### 中间层 services（2026-10-26，预测版本不变）
 

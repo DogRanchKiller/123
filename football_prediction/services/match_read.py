@@ -7,6 +7,8 @@ services/match_read.py  只读用例（中间层）
 亚盘只有存档时有市场线才分档。
 比分与评分同一顺序：football-data（matches）优先，没到时用只读挂上的 fotmob.db 的 fotmob_results。
 read_recent 给列表附带最近几天已开球的场次（首次存档 + 比分），关注页与完赛筛选用。
+存档另给主模型临场档 near_archived（开球前 1.5 小时内多家中位数，近开球时的看法）；
+两份存档都不计开球后才存的行。
 """
 import json
 import pathlib
@@ -101,13 +103,20 @@ def _archive_asian(line, ah: list | None, market_line: bool) -> dict | None:
             "p_cover": _num(p_cover), "tier": tier, "historical_hit": _num(hit)}
 
 
-def _first_archive(conn: sqlite3.Connection, match_id: str) -> dict | None:
-    """该场主模型（当前版本优先）的首次存档；没有主模型存档时用兜底模型 dc_xg。"""
+_PRE_KO = ("NOT (json_extract(extra_markets, '$.kickoff_utc') IS NOT NULL "
+           "AND generated_at >= json_extract(extra_markets, '$.kickoff_utc'))")   # 开球后的存档不算
+
+
+def _first_archive(conn: sqlite3.Connection, match_id: str, near: bool = False) -> dict | None:
+    """该场主模型（当前版本优先）的首次存档；没有主模型存档时用兜底模型 dc_xg。
+    near=True 时取主模型的临场档（{主模型}_t1，开球前 1.5 小时内多家中位数），没有兜底。"""
     (p_name, p_key), (f_name, f_key) = version.PRIMARY_MODEL, version.FALLBACK_MODEL
+    if near:
+        p_name, f_name, f_key = p_name + "_t1", p_name + "_t1", p_key
     try:
         r = conn.execute(
             f"SELECT {','.join(_ARCHIVE_COLS)} FROM predictions WHERE match_id=? AND model_name IN (?,?) "
-            "ORDER BY model_name != ?, model_ver NOT IN (?,?), generated_at LIMIT 1",
+            f"AND {_PRE_KO} ORDER BY model_name != ?, model_ver NOT IN (?,?), generated_at LIMIT 1",
             (match_id, p_name, f_name, p_name, version.get(p_key), version.get(f_key))).fetchone()
     except sqlite3.OperationalError:          # 库里还没有 predictions 表
         return None
@@ -129,6 +138,8 @@ def _first_archive(conn: sqlite3.Connection, match_id: str) -> dict | None:
                           for s in ex.get("top5_scores", [])],
         "over25": _num(ex.get("over_2.5")),
         "odds": od or None,
+        "horizon": ex.get("horizon", "pre"), "n_books": ex.get("n_books"),
+        "hours_to_ko": _num(ex.get("hours_to_ko")),
         "scored": d["scored_at"] is not None,
         **{k: (_num(d[k]) if k not in ("actual_outcome", "result_src", "scored_at") else d[k])
            for k in ("actual_outcome", "log_loss", "brier", "ou25_log_loss", "score_log_loss",
@@ -184,7 +195,8 @@ def _match_info(conn: sqlite3.Connection, match_id: str) -> dict | None:
 
 
 def read_match(conn: sqlite3.Connection, match_id: str, path: str = SNAPSHOT_PATH) -> dict | None:
-    """单场详情：本轮看法（快照里有才给，开球后也保留最后一轮的看法）+ 主模型首次存档 + 赛果。
+    """单场详情：本轮看法（快照里有才给，开球后也保留最后一轮的看法）+ 主模型首次存档
+    + 主模型临场档（near_archived，没有时 None）+ 赛果。
     快照、matches、fixtures、存档里记下的对阵都没有这场（不知道对阵）时 None。只读。"""
     snap = read_snapshot(path)
     current = next((m for m in (snap or {}).get("matches", []) if m["match_id"] == match_id), None)
@@ -198,6 +210,7 @@ def read_match(conn: sqlite3.Connection, match_id: str, path: str = SNAPSHOT_PAT
     if not match.get("kickoff_utc"):
         match["kickoff_utc"] = archived["kickoff_utc"] if archived else None
     return {"match": match, "current": current, "archived": archived,
+            "near_archived": _first_archive(conn, match_id, near=True),
             "generated_at": snap["generated_at"] if snap else None}
 
 
@@ -206,7 +219,7 @@ ARCHIVE_LEAD_DAYS = 8  # 存档最早在开球前约一周（fixtures.csv 的范
 
 
 def read_recent(conn: sqlite3.Connection, now: datetime, days: int = RECENT_DAYS) -> list[dict]:
-    """最近 days 天内已开球、有主模型（或 dc_xg）首次存档的场次：对阵与比分 + 首次存档，开球时间倒序。
+    """最近 days 天内已开球、有主模型（或 dc_xg）首次存档的场次：对阵与比分 + 首次存档 + 临场档，开球时间倒序。
     对阵取 matches / fixtures / 存档里记下的对阵；三处都没有的（记对阵之前的旧存档、且已被赛程表换掉）跳过。"""
     names = (version.PRIMARY_MODEL[0], version.FALLBACK_MODEL[0])
     since = (now - timedelta(days=days + ARCHIVE_LEAD_DAYS)).isoformat()
@@ -226,5 +239,6 @@ def read_recent(conn: sqlite3.Connection, now: datetime, days: int = RECENT_DAYS
         ko = (datetime.fromisoformat(info["kickoff_utc"]) if info["kickoff_utc"]
               else datetime.fromisoformat(info["match_date"] + "T00:00:00+00:00"))
         if _started(info, now) and ko >= now - timedelta(days=days):
-            out.append({"match": info, "archived": archived})
+            out.append({"match": info, "archived": archived,
+                        "near_archived": _first_archive(conn, mid, near=True)})
     return sorted(out, key=lambda x: x["match"]["kickoff_utc"] or x["match"]["match_date"], reverse=True)

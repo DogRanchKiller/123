@@ -1,5 +1,5 @@
 """GET /api/matches：本轮未开赛场次的看法 + 最近几天已开球场次（首次存档与比分）；
-GET /api/matches/{match_id}：单场本轮看法 + 首次存档 + 赛果。
+GET /api/matches/{match_id}：单场本轮看法 + 首次存档 + 临场档 + 赛果。
 只读：快照由实盘一轮写，库用只读连接打开。还没跑过实盘一轮（无快照）时列表返回 503。"""
 import sqlite3
 from datetime import datetime, timezone
@@ -27,6 +27,7 @@ class MatchDetail(BaseModel):
     match: MatchInfo
     current: MatchView | None
     archived: ArchivedPrediction | None
+    near_archived: ArchivedPrediction | None = None
     generated_at: str | None
 
 

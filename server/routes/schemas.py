@@ -90,7 +90,7 @@ class ArchivedOdds(BaseModel):
 
 
 class ArchivedPrediction(BaseModel):
-    """主模型（没有时兜底 dc_xg）开赛前的首次存档与赛后评分。"""
+    """主模型（没有时兜底 dc_xg）开赛前的首次存档与赛后评分；临场档同形状（horizon=t1）。"""
     model_name: str
     model_version: str
     generated_at: str
@@ -105,6 +105,9 @@ class ArchivedPrediction(BaseModel):
     likely_scores: list[LikelyScore]
     over25: float | None
     odds: ArchivedOdds | None
+    horizon: Literal["pre", "t1"] = "pre"
+    n_books: int | None = None
+    hours_to_ko: float | None = None
     scored: bool
     actual_outcome: Literal["home_win", "draw", "away_win"] | None
     log_loss: float | None
@@ -136,9 +139,10 @@ class MatchInfo(BaseModel):
 
 
 class RecentMatch(BaseModel):
-    """最近已开球的一场：对阵与比分 + 首次存档（不是本轮看法）。"""
+    """最近已开球的一场：对阵与比分 + 首次存档 + 临场档（不是本轮看法）。"""
     match: MatchInfo
     archived: ArchivedPrediction
+    near_archived: ArchivedPrediction | None = None
 
 
 class ScorecardRow(BaseModel):

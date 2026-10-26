@@ -95,9 +95,43 @@ const detail: ApiMatchDetail = {
     odds: { avg_h: 1.6, avg_d: 4, avg_a: 5, ah_line: -1 },
     scored: true, actual_outcome: "home_win", log_loss: 0.51, brier: 0.2,
     ou25_log_loss: 0.6, score_log_loss: 2.1, ah_log_loss: 0.9, ah_hit: 1,
-    result_src: "football-data", scored_at: "2026-10-21T00:00:00+00:00",
+    result_src: "football-data", scored_at: "2026-10-21T00:00:00+00:00", horizon: "pre",
   },
 };
+
+describe("接口 → 展示契约：临场存档", () => {
+  const near = {
+    ...detail.archived!, model_name: "market_implied_t1", horizon: "t1" as const,
+    n_books: 5, hours_to_ko: 1.2, generated_at: "2026-10-20T12:00:00+00:00",
+    asian: { ...detail.archived!.asian!, line: -1.25 },
+  };
+
+  it("临场档标明多家中位数与开球前时长，亚盘线变化写进盘口变动", () => {
+    const m = detailOf({ ...detail, near_archived: near }, now)!;
+    expect(m.archived?.asian?.movement).toBeNull();
+    expect(m.nearArchived?.modelName).toBe("market_implied_t1");
+    expect(m.nearArchived?.oddsSource).toBe("多家中位数（5 家，存档时）");
+    expect(m.nearArchived?.sourceNote).toContain("开球前 1.2 小时");
+    expect(m.nearArchived?.asian?.movement).toBe(
+      "首次存档 主-1.00 → 临场 主-1.25；主队让球加深");
+    const up = (line: number) => detailOf({ ...detail, archived: { ...detail.archived!,
+      asian: { ...detail.archived!.asian!, line: 1.5 } },
+      near_archived: { ...near, asian: { ...near.asian!, line } } }, now)!.nearArchived?.asian?.movement;
+    expect(up(1.25)).toContain("主队受让变少");
+    expect(up(1.75)).toContain("主队受让变多");
+    expect(up(-0.25)).toContain("让球方换边");
+    const same = detailOf({ ...detail, near_archived: { ...near, asian: detail.archived!.asian } }, now)!;
+    expect(same.nearArchived?.asian?.movement).toContain("盘口未变");
+  });
+
+  it("没有临场档时为空；列表的最近场次同样带上", () => {
+    expect(detailOf(detail, now)!.nearArchived).toBeNull();
+    const [, recent] = matchesOf({ ...list, recent: [
+      { match: detail.match, archived: detail.archived!, near_archived: near }] }, now);
+    expect(recent.nearArchived?.asian?.line).toBe(-1.25);
+    expect(recent.archived?.oddsSource).toBe("赛程表（存档时）");
+  });
+});
 
 describe("接口 → 展示契约：状态与缩写", () => {
   it("开球后没有比分：先是比赛中，超过时限为等待赛果", () => {

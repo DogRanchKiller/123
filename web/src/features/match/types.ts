@@ -71,7 +71,10 @@ export interface MatchRecord {
   recommended: boolean;
   recommendationNote: string | null;
   current: Prediction | null;
+  /** 开赛前首次存档（赛前档，赛程表赔率），赛后评分以它为准。 */
   archived: Prediction | null;
+  /** 临场存档（开球前 1.5 小时内多家中位数，模型名带 `_t1`）；没跑临场档时为空。 */
+  nearArchived: Prediction | null;
   score: { home: number; away: number } | null;
   scoreSourceAt: string | null;
   inplay: {

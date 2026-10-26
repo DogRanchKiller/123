@@ -55,6 +55,9 @@ export function MatchDetail({
       <div className="detail-grid">
         <div>
           <PredictionSection title="当前预测" prediction={match.current} />
+          {match.nearArchived && (
+            <PredictionSection title="临场存档" prediction={match.nearArchived} />
+          )}
           <PredictionSection title="首次预测存档" prediction={match.archived} />
         </div>
         <aside>
@@ -79,7 +82,8 @@ export function MatchDetail({
           <section className="panel side-panel">
             <h3>结果与存档</h3>
             <p>
-              当前预测随数据变化；首次预测用于赛后评价，后续刷新不会覆盖历史记录。
+              当前预测随数据变化；首次预测用于赛后评价，后续刷新不会覆盖历史记录。临场存档是开球前
+              1.5 小时内按多家赔率另存的一份，亚盘线与首次存档不同时在盘口变动里标出。
             </p>
             <p className="mt-3 break-all">比赛 ID：{match.id}</p>
           </section>

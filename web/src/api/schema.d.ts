@@ -80,7 +80,7 @@ export interface components {
         };
         /**
          * ArchivedPrediction
-         * @description 主模型（没有时兜底 dc_xg）开赛前的首次存档与赛后评分。
+         * @description 主模型（没有时兜底 dc_xg）开赛前的首次存档与赛后评分；临场档同形状（horizon=t1）。
          */
         ArchivedPrediction: {
             /** Actual Outcome */
@@ -105,6 +105,14 @@ export interface components {
             historical_double_hit: number;
             /** Historical First Hit */
             historical_first_hit: number;
+            /**
+             * Horizon
+             * @default pre
+             * @enum {string}
+             */
+            horizon: "pre" | "t1";
+            /** Hours To Ko */
+            hours_to_ko?: number | null;
             /** Kickoff Utc */
             kickoff_utc: string | null;
             /** Lean */
@@ -117,6 +125,8 @@ export interface components {
             model_name: string;
             /** Model Version */
             model_version: string;
+            /** N Books */
+            n_books?: number | null;
             odds: components["schemas"]["ArchivedOdds"] | null;
             /** Ou25 Log Loss */
             ou25_log_loss: number | null;
@@ -224,6 +234,7 @@ export interface components {
             /** Generated At */
             generated_at: string | null;
             match: components["schemas"]["MatchInfo"];
+            near_archived?: components["schemas"]["ArchivedPrediction"] | null;
         };
         /** MatchInfo */
         MatchInfo: {
@@ -340,11 +351,12 @@ export interface components {
         };
         /**
          * RecentMatch
-         * @description 最近已开球的一场：对阵与比分 + 首次存档（不是本轮看法）。
+         * @description 最近已开球的一场：对阵与比分 + 首次存档 + 临场档（不是本轮看法）。
          */
         RecentMatch: {
             archived: components["schemas"]["ArchivedPrediction"];
             match: components["schemas"]["MatchInfo"];
+            near_archived?: components["schemas"]["ArchivedPrediction"] | null;
         };
         /** Review */
         Review: {

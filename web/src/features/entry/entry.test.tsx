@@ -26,7 +26,7 @@ const prediction: Prediction = {
 const fixture: MatchRecord = {
   id:"one", league:"E0", leagueName:"测试联赛", home:"队伍甲", away:"队伍乙", homeShort:"H", awayShort:"A",
   kickoffUtc:"2026-10-26T12:00:00Z", status:"upcoming", statusLabel:"未开赛", recommended:false,
-  recommendationNote:null, current:prediction, archived:{ ...prediction, probabilities:[.9,.05,.05] },
+  recommendationNote:null, current:prediction, archived:{ ...prediction, probabilities:[.9,.05,.05] }, nearArchived:null,
   score:null, scoreSourceAt:null, inplay:{status:"not_connected",label:"未接入",prediction:null}, risks:[],
 };
 const match = selectEntryPrediction([fixture])!;

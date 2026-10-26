@@ -96,7 +96,7 @@
         "type": "object"
       },
       "ArchivedPrediction": {
-        "description": "主模型（没有时兜底 dc_xg）开赛前的首次存档与赛后评分。",
+        "description": "主模型（没有时兜底 dc_xg）开赛前的首次存档与赛后评分；临场档同形状（horizon=t1）。",
         "properties": {
           "actual_outcome": {
             "anyOf": [
@@ -182,6 +182,26 @@
             "title": "Historical First Hit",
             "type": "number"
           },
+          "horizon": {
+            "default": "pre",
+            "enum": [
+              "pre",
+              "t1"
+            ],
+            "title": "Horizon",
+            "type": "string"
+          },
+          "hours_to_ko": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours To Ko"
+          },
           "kickoff_utc": {
             "anyOf": [
               {
@@ -222,6 +242,17 @@
           "model_version": {
             "title": "Model Version",
             "type": "string"
+          },
+          "n_books": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Books"
           },
           "odds": {
             "anyOf": [
@@ -598,6 +629,16 @@
           },
           "match": {
             "$ref": "#/components/schemas/MatchInfo"
+          },
+          "near_archived": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArchivedPrediction"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1012,13 +1053,23 @@
         "type": "object"
       },
       "RecentMatch": {
-        "description": "最近已开球的一场：对阵与比分 + 首次存档（不是本轮看法）。",
+        "description": "最近已开球的一场：对阵与比分 + 首次存档 + 临场档（不是本轮看法）。",
         "properties": {
           "archived": {
             "$ref": "#/components/schemas/ArchivedPrediction"
           },
           "match": {
             "$ref": "#/components/schemas/MatchInfo"
+          },
+          "near_archived": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArchivedPrediction"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

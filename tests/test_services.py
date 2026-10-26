@@ -165,7 +165,19 @@ def test_run_near_rewrites_snapshot_with_book_odds(league, tmp_path, monkeypatch
     assert [m["match_id"] for m in after["matches"]] == ["near", "late"]
     assert after["matches"][0]["odds_source"].startswith("多家中位数（3 家")
     assert after["matches"][1]["odds_source"].startswith("赛程表")
-    assert services.read_recent(conn, now + timedelta(hours=2))[0]["match"]["home"] == "A"
+    rec = services.read_recent(conn, now + timedelta(hours=2))[0]
+    assert rec["match"]["home"] == "A"
+    # 两份存档：赛前首次存档（赛程表赔率）+ 临场档（多家中位数）
+    d = services.read_match(conn, "near", snap)
+    na = d["near_archived"]
+    assert (na["model_name"], na["horizon"], na["n_books"]) == (version.PRIMARY_MODEL[0] + "_t1", "t1", 3)
+    assert na["hours_to_ko"] == pytest.approx(0.67, abs=0.01) and na["asian"]["line_source"] == "市场线"
+    assert d["archived"]["horizon"] == "pre" and d["archived"]["n_books"] is None
+    assert rec["near_archived"]["generated_at"] == na["generated_at"]
+    assert services.read_match(conn, "late", snap)["near_archived"] is None
+    conn.execute("UPDATE predictions SET generated_at=? WHERE model_name LIKE '%_t1'",
+                 ((now + timedelta(hours=1, minutes=5)).isoformat(),))   # 修复前开球后才存的临场档
+    assert services.read_match(conn, "near", snap)["near_archived"] is None
 
     far = now + timedelta(hours=3)                                  # 1.5 小时内没有开球的场次
     assert services.run_near(conn, far, fake_odds, lambda c, t, h: [], log=lambda s: None,
