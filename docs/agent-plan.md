@@ -1,6 +1,6 @@
 # Agent 与训练模块方案（第 5 稿，已通过）
 
-状态：2026-10-27 审核通过，按 [agent-dev.md](agent-dev.md) 分阶段开发。第 1 稿 2026-10-26 提出；第 2 稿同日按审核意见修订：依赖与环境隔离（第 5 节）、结构化数字校验（第 8 节）、RAG 时点与白名单（第 7 节）、`model_nn` 覆盖与门槛（第 9.1 节）、网页访问与额度（第 10 节），框架比较改为概念验证（第 3 节）。第 3 稿（2026-10-27）按复审意见修订：G1 预注册与多重比较、训练样本按场时点构造（第 9.1 节）；事实作用域、单位、开球后快照改标（第 6、8 节）；白名单逐文件、赛果与评分分块（第 7 节）；身份头信任边界、CSRF、额度原子预留（第 10 节）；Windows wheel 解析参数（第 5 节）。第 4 稿（2026-10-27）按第三轮复审修订：评分块按指标指纹检测变化、来源标签随比分块的可见时间（第 7.1 节）；研究白名单逐文件写依据和锚点（第 7.2 节）；模型请求次数与逐次预留（第 8.1、10.3 节）；G1 检验家族与显著性预算（第 9.1 节）；概念验证用单独环境装两套框架（第 3、5 节）；数字校验覆盖中文数字等写法（第 8.3 节）；阶段 6 按鉴权做法分别验收（第 10.4 节）。第 5 稿（2026-10-27）按第四轮复审修订：一个留出集只有一份显著性预算，新预算只给未评估过的新留出集（第 9.1 节）；G1 选参和留出改在 `football.db` 冻结副本上做，训练历史从 2122 起与实盘一致（第 9.1 节）；`model_calls` 改为独立硬上限（第 8.1、10.3 节）；数字校验改为默认拦截加放行表，补英文整十词、序数、罗马数字（第 8.3 节）。审核通过后，把定下来的规则并入 `docs/stack.md`、`docs/modules.md`、`docs/ml-stack.md`、`AGENTS.md`，本文件只留阶段契约；进度仍只写在 [progress.md](progress.md)。通过后的修改：2026-10-27 阶段 0 经用户同意，第 5 节的 Windows wheel 检查由 `pip download --platform` 改为 `uv pip compile --python-platform`。
+状态：2026-10-27 审核通过，按 [agent-dev.md](agent-dev.md) 分阶段开发。第 1 稿 2026-10-26 提出；第 2 稿同日按审核意见修订：依赖与环境隔离（第 5 节）、结构化数字校验（第 8 节）、RAG 时点与白名单（第 7 节）、`model_nn` 覆盖与门槛（第 9.1 节）、网页访问与额度（第 10 节），框架比较改为概念验证（第 3 节）。第 3 稿（2026-10-27）按复审意见修订：G1 预注册与多重比较、训练样本按场时点构造（第 9.1 节）；事实作用域、单位、开球后快照改标（第 6、8 节）；白名单逐文件、赛果与评分分块（第 7 节）；身份头信任边界、CSRF、额度原子预留（第 10 节）；Windows wheel 解析参数（第 5 节）。第 4 稿（2026-10-27）按第三轮复审修订：评分块按指标指纹检测变化、来源标签随比分块的可见时间（第 7.1 节）；研究白名单逐文件写依据和锚点（第 7.2 节）；模型请求次数与逐次预留（第 8.1、10.3 节）；G1 检验家族与显著性预算（第 9.1 节）；概念验证用单独环境装两套框架（第 3、5 节）；数字校验覆盖中文数字等写法（第 8.3 节）；阶段 6 按鉴权做法分别验收（第 10.4 节）。第 5 稿（2026-10-27）按第四轮复审修订：一个留出集只有一份显著性预算，新预算只给未评估过的新留出集（第 9.1 节）；G1 选参和留出改在 `football.db` 冻结副本上做，训练历史从 2122 起与实盘一致（第 9.1 节）；`model_calls` 改为独立硬上限（第 8.1、10.3 节）；数字校验改为默认拦截加放行表，补英文整十词、序数、罗马数字（第 8.3 节）。审核通过后，把定下来的规则并入 `docs/stack.md`、`docs/modules.md`、`docs/ml-stack.md`、`AGENTS.md`，本文件只留阶段契约；进度仍只写在 [progress.md](progress.md)。通过后的修改：2026-10-27 阶段 0 经用户同意，第 5 节的 Windows wheel 检查由 `pip download --platform` 改为 `uv pip compile --python-platform`。2026-10-27 阶段 2 用户选定 Milvus Lite 作向量库，替代第 3 节原定的 Chroma；BM25 改用 Milvus 自带的 BM25 函数，不再装 `rank-bm25`（第 2、3、5、7 节已跟着改）。
 
 ## 1. 先定的一条线
 
@@ -28,7 +28,7 @@ Agent 层    agent/graph.py   LangGraph 状态图：理解 → 调工具 → 提
      ┌───────┴────────┐
 模型层                 工具与数据层
 agent/llm.py           agent/tools/   包装 football_prediction.services 的只读函数
- Claude / GPT          agent/kb/      向量知识库（Chroma + bge-m3 + BM25）
+ Claude / GPT          agent/kb/      向量知识库（Milvus Lite + bge-m3 + BM25）
  本地开源模型(LoRA)    agent/mcp_server.py  同一套工具以 MCP 暴露
                        football.db / fotmob.db（只读）
 ```
@@ -46,9 +46,9 @@ agent/llm.py           agent/tools/   包装 football_prediction.services 的只
 | Agent 编排 | LangGraph 1.2.x 或 OpenAI Agents SDK | 不预先排除。阶段 1 之后做概念验证再定（见下） |
 | 模型接口、Tool、Retriever | LangChain 1.4.x（`langchain-anthropic`、`langchain-openai`） | 选 Agents SDK 时不用 |
 | 状态持久化 | LangGraph 选 `langgraph-checkpoint-sqlite`；Agents SDK 选它自带的会话存储 | 都存在 `agent_data/`，不写进 `football.db`（实盘库只由 Windows 定时任务提交） |
-| 向量库 | Chroma 1.5.x，本地持久化目录 | 需要按 `available_at` 过滤元数据；Chroma 支持 `where` 过滤。FAISS 要自己维护元数据，pgvector 要多起一个 Postgres |
+| 向量库 | Milvus Lite 3.2.x（`pymilvus` 3.0.x），本地数据目录（阶段 2 用户选定，替代原定的 Chroma） | 需要按 `available_at` 过滤元数据：Milvus 的标量过滤表达式支持；同一集合里稠密向量和 BM25 稀疏向量两路检索。纯 Python 包，Mac / Windows 同一个 wheel（Windows 未实测）。数据目录有独占锁，同一时间只能一个进程打开 |
 | 向量模型 | `BAAI/bge-m3` | 中英混合；本地运行，重建索引不产生费用，知识库内容不外发 |
-| 关键词检索 | BM25（`rank-bm25`），中文先按字二元切分 | 是否换 jieba 由阶段 2 的检索评测决定 |
+| 关键词检索 | BM25（Milvus 自带的 BM25 函数），入库前中文先按字二元切分 | 是否换 jieba 由阶段 2 的检索评测决定 |
 | 重排（可选） | `BAAI/bge-reranker-v2-m3` | 评测证明有提升才开 |
 | 深度学习 | PyTorch 2.14.x | TensorFlow / JAX 已被 `docs/stack.md` 排除 |
 | 大模型微调 | Transformers 5.x + PEFT 0.21.x（LoRA）+ TRL 1.16.x（SFT） | P-Tuning / PET 已被 `docs/ml-stack.md` 排除 |
@@ -126,7 +126,7 @@ agent --> football_prediction.services --> 领域包
 | `.venv-poc`（只在阶段 1.5，gitignore） | 上一行 + `requirements-poc.txt`（两套编排框架） | 框架概念验证；定框架后删除 |
 
 - 只建一个 ML 环境，不再拆 agent / train 两份：sentence-transformers 依赖 torch，向量检索本身就要 torch，拆开也省不掉。
-- `requirements-ml.txt` 写直接依赖并钉 `==`：chromadb、sentence-transformers、rank-bm25、mcp、python-dotenv、torch、transformers、peft、trl、datasets。编排框架这一组（langgraph、langgraph-checkpoint-sqlite、langchain 系，或 openai-agents）在阶段 1.5 定框架后才写进来，之前不装：阶段 1 的工具是普通函数加 MCP，不依赖编排框架。
+- `requirements-ml.txt` 写直接依赖并钉 `==`：pymilvus、milvus-lite、sentence-transformers（阶段 0 时是 chromadb、rank-bm25，阶段 2 换掉）、mcp、python-dotenv、torch、transformers、peft、trl、datasets。编排框架这一组（langgraph、langgraph-checkpoint-sqlite、langchain 系，或 openai-agents）在阶段 1.5 定框架后才写进来，之前不装：阶段 1 的工具是普通函数加 MCP，不依赖编排框架。
 - 阶段 1.5 的概念验证单独建 `.venv-poc`（gitignore）：`requirements.txt` + `requirements-ml.txt` + `requirements-poc.txt`（两套框架都列、都钉 `==`），同样受 `constraints-ml.txt` 约束。装完先过 `pip check`；两套框架的依赖解析冲突时，各建一个 `.venv-poc-lg` / `.venv-poc-oai`，概念验证的对比记录写明用了哪种。`requirements-poc.txt` 随概念验证分支提交，不合并进 main。
 - 定框架后：选中的那组从 `requirements-poc.txt` 移进 `requirements-ml.txt`，删掉 `.venv-poc*`，重建 `.venv-ml`，重跑阶段 0 的实测项（`pip check`、两个环境的 `pytest tests`、`.venv` 的 `pip freeze` 不变、Windows wheel 解析）。
 - `constraints-ml.txt` 钉关键的间接依赖：numpy、pandas、scipy、pydantic、fastapi、httpx、tokenizers、safetensors 等。其中与 `requirements.txt` 重叠的包，版本必须和 `.venv` 里实际装的一致；解析冲突时改 ML 包的版本，不改 `requirements.txt`。不用整份 `pip freeze`，它会带进只在 Mac 上有的包。
@@ -136,11 +136,11 @@ agent --> football_prediction.services --> 领域包
 
 **和 `docs/ml-stack.md` 的冲突怎么解**：那里写「`model_nn` 落地时把 `torch` 写进 `requirements.txt`」。改成：`model_nn` 在 `.venv-ml` 里研究和训练；只有通过门槛 G1（第 9.1 节）、要在实盘并行存档时，才把 torch 加进 `requirements.txt`，并且那次改动要在 Windows 实盘机上装好、跑一轮 `live` 作为验收。阶段 0 同时改 `ml-stack.md` 这一句。
 
-`.gitignore` 加：`.venv-ml/`、`.venv-poc*/`、`.env`、`agent_data/`（Chroma 索引、对话状态、用量库）、`checkpoints/`（权重）。新增 `.env.example`，只列变量名。
+`.gitignore` 加：`.venv-ml/`、`.venv-poc*/`、`.env`、`agent_data/`（知识库索引 `agent_data/kb/`、对话状态、用量库）、`checkpoints/`（权重）。新增 `.env.example`，只列变量名。
 
 **阶段 0 的实测项（都写进交接记录作证据）**：
 
-- Mac：`.venv-ml` 安装成功；`pip check` 无冲突；`import torch, chromadb, transformers, mcp` 成功（编排框架阶段 0 不装）；`torch.backends.mps.is_available()` 的结果。
+- Mac：`.venv-ml` 安装成功；`pip check` 无冲突；`import torch, chromadb, transformers, mcp` 成功（编排框架阶段 0 不装；阶段 2 换成 Milvus Lite 后核对的是 `import pymilvus, milvus_lite`）；`torch.backends.mps.is_available()` 的结果。
 - `.venv` 没有被改：安装前后 `.venv/bin/python -m pip freeze` 完全一致；`python -m pytest tests` 的通过数与安装前的基线一致（2026-10-27 本机基线：阶段 0 开始时 210 passed，1 skipped，跳过的是缺 httpx 的接口测试；经用户同意给 `.venv` 补装 `requirements.txt` 缺的 httpx 后，基线为 218 passed）。
 - `.venv-ml` 里跑 `python -m pytest tests` 同样通过。
 - Windows wheel：在 Mac 上对完整的 `.venv-ml`（主依赖 + ML 依赖）做交叉解析，用 uv 按目标平台解析（uv 是本机独立安装的工具，不装进任何环境），目标解释器参数写死：
@@ -243,6 +243,8 @@ MCP：`python -m agent.mcp_server` 用 stdio 暴露上表工具，Claude Code / 
 - 来源标签在检索时按 `as_of` 现定，不取评分块里存的值：`as_of` 时可见的比分块里，有 football-data 块且比分等于 `score_used` 就标「football-data」；只有 FotMob 块可见时标「FotMob，待 football-data 核对」；可见的 football-data 比分与 `score_used` 不同（重评之前的那段时间）时标「按 FotMob 比分评分，football-data 比分不同，待重评」。这样比分相同、只改了 `result_src` 的那一行，在 football-data 到达之前和之后都标对，而且不需要知道 `reconcile_results` 实际跑的时刻。取不到 `score_used`（例如 `result_src = fotmob` 但没挂 `fotmob.db`）的行不建评分块。`result_src` 为空的旧行按 `fd` 处理，与 `review/store.py` 的约定一致。
 - `--rebuild` 以库里当前值建块，旧块不保留。`_backfill_ah` 补过的行在重建后 `available_at` 回到 `scored_at`，早于实际补算时间；补算只用了 `scored_at` 时已有的存档和比分，所以不带入新信息，可以接受。若要精确记录，需要在 `review/store.py` 里加一列「最后改动时间」，那是 review 层的行为变化，要升版本，本方案不做，留作可选。
 - 测试：在合成库上分别模拟三种改法，`--update` 后旧块、新块、`superseded_at`、元数据与预期一致；比分相同只改 `result_src` 的一行，`as_of` 在 football-data 块之前、之后分别检索，标签依次是 FotMob 和 football-data；比分不同时，重评之前的 `as_of` 检索得到「待重评」标签。
+存档块只放存档行里就有的数（概率、赔率、市场线和那条线的五种结算、可能比分、大 2.5 概率）和由它们直接算出的选择方。`services.read_match` 给存档补的信心档、历史命中率、亚盘信心档和稳妥线是按现在的规则现算的，存档行里没有；写进块会让 `as_of` 早于这些规则的检索看到后来的规则（阶段 2 评测发现：10-25 的存档块里出现了 1.11.0 才有的稳妥线），所以不入块。快照看法块照常带它们，那是快照生成时的规则。
+
 通用规则：
 
 - 找不到可靠观测时间的资料不入库，不拿别的时间代替。
@@ -300,7 +302,7 @@ MCP：`python -m agent.mcp_server` 用 stdio 暴露上表工具，Claude Code / 
 ### 7.3 检索与评测
 
 - bge-m3 向量 + BM25 两路，各取前 20，倒数排名融合（RRF）取前 k；评测证明有用再加重排。
-- 索引在 `agent_data/chroma/`，`python -m agent.kb --rebuild` 完整重建，`--update` 只加新块。先手动跑，不接进 `run_daily.bat`。
+- 索引在 `agent_data/kb/`（Milvus Lite 数据目录 + `meta.json`），`python -m agent.kb --rebuild` 完整重建，`--update` 只加新块。先手动跑，不接进 `run_daily.bat`。
 - 评测集 `agent/eval/retrieval.jsonl`：60–100 条问题，每条带 `as_of` 和应命中的块（人工标注）。比较只用向量、只用 BM25、混合、混合 + 重排的 recall@5 和 MRR；阶段 2 先测基线，目标值看到基线后再定。
 - 泄漏用例：`as_of` 早于赛果、早于某份文档提交的问题，结果里出现晚于 `as_of` 的块就算失败。这一项必须是 0。
 
@@ -411,7 +413,7 @@ HTTP 重试由 `agent/llm.py` 自己做，SDK 自带的自动重试设为 0（�
 
 - 模型层：`.env` 里 `AGENT_PROVIDER=claude|openai|local`、`AGENT_MODEL=...`，`llm.py` 返回 ChatModel，图不知道背后是哪家。每次调用的用量交给 `budget.py`（第 10 节）。
 - 对话状态存在 `agent_data/state.db`，同一 `thread_id` 可以追问。
-- 测试全部离线：假模型按脚本吐出工具调用和结构化答案；内存 SQLite + `tests/conftest.py` 的合成比赛；临时目录里的 Chroma。必测：编造数字、错比赛、错模型、错时点、错单位（含 `xg` 报成 `goals`）、把存档当当前看法、开球后把快照看法标成 `current`、知识库 `quote` 不在原文里、队名与比赛不符，各自被 verify 打回；占位与事实不一一对应时打回；第 8.3 节第 1 条列出的数字写法用例；第 8.1 节计数表的每个上限都能单独触发（假模型一直要工具：执行 4 轮工具后共调用 6 次即停，没有第 7 次；超限提议和格式错误都计入 `model_calls`；第 2 次提交不通过即降级；6 次用完时的答案不通过也直接降级）；降级输出不含未核实数字；工具只读（跑完库的 md5 不变）；`football_prediction`、`server` 不 import `agent`。
+- 测试全部离线：假模型按脚本吐出工具调用和结构化答案；内存 SQLite + `tests/conftest.py` 的合成比赛；临时目录里的 Milvus Lite。必测：编造数字、错比赛、错模型、错时点、错单位（含 `xg` 报成 `goals`）、把存档当当前看法、开球后把快照看法标成 `current`、知识库 `quote` 不在原文里、队名与比赛不符，各自被 verify 打回；占位与事实不一一对应时打回；第 8.3 节第 1 条列出的数字写法用例；第 8.1 节计数表的每个上限都能单独触发（假模型一直要工具：执行 4 轮工具后共调用 6 次即停，没有第 7 次；超限提议和格式错误都计入 `model_calls`；第 2 次提交不通过即降级；6 次用完时的答案不通过也直接降级）；降级输出不含未核实数字；工具只读（跑完库的 md5 不变）；`football_prediction`、`server` 不 import `agent`。
 
 ## 9. 训练
 

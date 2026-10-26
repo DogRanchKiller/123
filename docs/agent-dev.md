@@ -196,6 +196,8 @@ P0 环境与规范 ──→ P1 工具层 + MCP ──→ P1.5 框架概念验�
 
 **目标**：带时点过滤的混合检索，把 `kb_search` 换成真实实现（方案 §7）。
 
+**结果（2026-10-27，代码已写，待你抽查评测集后验收）**：向量库按你的决定用 Milvus Lite（`pymilvus` 3.0.2 + `milvus-lite` 3.2.2），替代原定的 Chroma，`rank-bm25` 不装。评测集 100 条（83 条普通题、17 条泄漏用例），基线和泄漏结果在 `docs/progress.md` 与本阶段的交接记录里。没有下载重排模型，「混合 + 重排」未跑。研究白名单里锚点不够的 4 条（`algo_sweep`、`new_league_tiers`、`reliability`、`ah_baseline`）先不收。
+
 **先读**：方案 §6（块的格式）、§7 全部；`football_prediction/review/store.py` 的 `score_predictions`、`reconcile_results`、`_backfill_ah`。
 
 **入口**：P1.5 已定框架，`.venv-ml` 已重建；决定 8（下载 bge-m3）已同意；研究白名单里锚点不够的 4 条已由你确认，或决定先不收。
@@ -211,15 +213,15 @@ P0 环境与规范 ──→ P1 工具层 + MCP ──→ P1.5 框架概念验�
    - 比赛类的块（看法、存档、比分、评分、阵容）通过 `services` 的读函数从库里取，`available_at` / `event_time` / `at_source` 按方案 §7.1 的表；
    - 比分按来源分块，评分块只放指标和 `score_used`。
 3. `agent/kb/index.py`：
-   - Chroma 存在 `agent_data/chroma/`，bge-m3 做向量；
-   - BM25 中文按字二元切分；
+   - Milvus Lite 存在 `agent_data/kb/`，bge-m3 做向量（2026-10-27 用户选定 Milvus Lite，替代原定的 Chroma）；
+   - BM25 用 Milvus 自带的 BM25 函数，入库前中文按字二元切分；
    - 两路各取前 20，用 RRF 合并；
    - 按 `as_of` 和 `superseded_at` 过滤；
    - 评分块的指纹，以及三种改法的处理和来源标签现定，都按方案 §7.1；
    - `python -m agent.kb --rebuild` / `--update`。
 4. `agent/tools/knowledge.py` 换成真实实现：传 `match_id` 时，`as_of` 由工具算，不由模型填。
 5. 评测集 `agent/eval/retrieval.jsonl`：60–100 条，人工标注应命中的块，带 `as_of`。先由我起草，你抽查后定稿。
-6. 测试（离线，用临时目录里的 Chroma；不想加载 bge-m3 时可换成假的向量函数）：
+6. 测试（离线，用临时目录里的 Milvus Lite；不想加载 bge-m3 时可换成假的向量函数）：
    - 白名单测试（方案 §7.2 的五条）；
    - 泄漏用例；
    - 评分块三种改法分别在 `--update` 后的结果；

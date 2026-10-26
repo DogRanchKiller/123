@@ -35,10 +35,14 @@ tokenizers==0.23.3
 safetensors==0.8.0
 huggingface-hub==2.3.0
 accelerate==1.15.0
-onnxruntime==1.31.0
 pyarrow==26.0.0
 protobuf==7.36.2
 grpcio==1.85.0
+
+# 第二组：向量知识库（Milvus Lite）的关键间接依赖（版本取 2026-10-27 P2 在 Mac 上解析出的结果）
+faiss-cpu==1.15.1
+cachetools==7.2.5
+orjson==3.13.0
 
 # 第二组：编排框架（LangGraph）的关键间接依赖（版本取 2026-10-27 P1.5 概念验证 .venv-poc 实测）
 langgraph-checkpoint==4.3.0

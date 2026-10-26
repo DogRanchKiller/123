@@ -1,13 +1,14 @@
 """Agent 的模块边界（docs/modules.md、docs/agent-dev.md 第 5 节），用 AST 扫描：
 - football_prediction/ 和 server/ 不 import agent；
-- agent/ 只 import 标准库、football_prediction.services / version、agent 自己、mcp、dotenv，不 import 领域包；
+- agent/ 只 import 标准库、football_prediction.services / version、agent 自己、mcp、dotenv、
+  pymilvus、sentence_transformers，不 import 领域包；
 - agent/ 里没有 SQL 字符串，也不调用 .execute 系列（读库一律走 services）。"""
 import ast
 import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-AGENT_THIRD_PARTY = {"mcp", "dotenv"}
+AGENT_THIRD_PARTY = {"mcp", "dotenv", "pymilvus", "sentence_transformers"}   # 后两个是知识库（agent/kb）
 SQL_WORDS = ("SELECT ", "INSERT ", "UPDATE ", "DELETE ", "CREATE TABLE", "DROP ", "ATTACH ", "PRAGMA ")
 EXEC_CALLS = {"execute", "executemany", "executescript"}
 

@@ -51,8 +51,10 @@ def world(league, tmp_path, monkeypatch):
 
 
 def use(w: dict, at: datetime, **kw):
-    """按世界 w 的库和快照、固定时钟 at 换配置；fotmob 库默认指向 w['fm']（不存在时不挂）。"""
-    paths = {"db_path": str(w["db"]), "snapshot_path": str(w["snap"]), "fotmob_path": str(w["fm"])}
+    """按世界 w 的库和快照、固定时钟 at 换配置；fotmob 库默认指向 w['fm']（不存在时不挂），
+    知识库默认指向临时目录里还没建的索引（不碰 agent_data/kb）。"""
+    paths = {"db_path": str(w["db"]), "snapshot_path": str(w["snap"]), "fotmob_path": str(w["fm"]),
+             "kb_path": str(w["db"].parent / "kb-none")}
     return config.override(**{**paths, **kw}, clock=lambda: at)
 
 
@@ -229,22 +231,21 @@ def test_team_news(world):
         assert check(out) == [] and "尚未开球" in out["note"]
 
 
-def test_kb_search_fake_and_as_of(world):
+def test_kb_search_without_index_and_as_of(world):
+    """索引没建（或 .venv 里没有 pymilvus）时返回空块和说明；as_of 规则与参数校验不依赖索引。
+    真实检索、时点过滤和泄漏用例在 tests/test_agent_kb.py（需要 pymilvus）。"""
     later = datetime.fromisoformat("2026-11-01T00:00:00+00:00")
     with use(world, later):
         out = kb_search("亚盘怎么结算")
-        bs = check(out)
-        assert len(bs) == 1 and bs[0]["chunk_id"] == "fake-agents-md" and bs[0]["fake"] is True
-        assert out["query"] == "亚盘怎么结算" and out["searched_as_of"] == later.isoformat()
-        assert check(kb_search("x", as_of="2026-01-01")) == []                # 假块那天之前看不到
+        assert check(out) == [] and out["note"] and out["query"] == "亚盘怎么结算"
+        assert out["searched_as_of"] == later.isoformat()
+        assert kb_search("x", as_of="2026-01-01")["searched_as_of"] == "2026-01-01T00:00:00+00:00"
         assert kb_search("x", as_of="2030-01-01")["searched_as_of"] == later.isoformat()   # 不超过调用时刻
-        assert check(kb_search("x", scope="handoff")) == []
-        # 传 match_id：按开球前检索（合成比赛在 2024 年，假块还不存在）
-        out = kb_search("x", match_id="soon", as_of="2030-01-01")
+        out = kb_search("x", match_id="soon", as_of="2030-01-01")             # 传 match_id：按开球前检索
         assert out["searched_as_of"] == world["soon_ko"].isoformat() and check(out) == []
-        for bad in ({"k": 0}, {"k": 21}, {"scope": "all"}, {"match_id": "nope"}):
+        for bad in ({"k": 0}, {"k": 21}, {"scope": "all"}, {"match_id": "nope"}, {"query": " "}):
             with pytest.raises(ValueError):
-                kb_search("x", **bad)
+                kb_search(**{"query": "x", **bad})
     with use(world, world["now"]):
         assert kb_search("x", match_id="soon")["searched_as_of"] == world["now"].isoformat()
 

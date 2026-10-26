@@ -32,15 +32,22 @@ live.py / main.py  --------^
 
 ## Agent 模块
 
-`agent/` 在仓库根目录，与 `server/` 并列，按 [agent-dev.md](agent-dev.md) 分阶段写。它只在 `.venv-ml` 里运行（见 [stack.md](stack.md)）。现有（P1）：
+`agent/` 在仓库根目录，与 `server/` 并列，按 [agent-dev.md](agent-dev.md) 分阶段写。它只在 `.venv-ml` 里运行（见 [stack.md](stack.md)）。现有（P1、P2）：
 
 | 文件 | 做什么 |
 |---|---|
-| `agent/config.py` | 库、快照、FotMob 库路径与时钟；环境变量 > `.env` 的 `AGENT_DB_PATH` / `AGENT_SNAPSHOT_PATH` / `AGENT_FOTMOB_PATH` > 默认值，相对路径按仓库根目录；`connect()` 只读打开；测试用 `override()` |
+| `agent/config.py` | 库、快照、FotMob 库、知识库目录、向量模型目录与时钟；环境变量 > `.env` 的 `AGENT_DB_PATH` / `AGENT_SNAPSHOT_PATH` / `AGENT_FOTMOB_PATH` / `AGENT_KB_PATH` / `AGENT_EMBED_MODEL` > 默认值，相对路径按仓库根目录；`connect()` 只读打开；测试用 `override()`（可注入假的向量函数） |
 | `agent/tools/blocks.py` | 把 `services` 的返回包成块（开头 `scope`、主体键、`kind`、`at`）；开球后的快照看法改标 `last_pre_kickoff`，快照不早于开球的整块丢弃 |
 | `agent/tools/matches.py` | 比赛类只读工具：`list_upcoming`、`get_match`、`recent_results`、`explain_fixture`、`scorecard`、`resolve_team`、`team_news` |
-| `agent/tools/knowledge.py` | `kb_search`（P1 是假实现，P2 换成真实检索） |
+| `agent/tools/knowledge.py` | `kb_search`：调 `agent/kb/index.py` 检索，结果包成块；缺 pymilvus、索引没建或正在重建时返回空块和说明 |
 | `agent/mcp_server.py` | 用 MCP（stdio）注册 `agent.tools.TOOLS` 里的同一批函数，`ValueError` 转成工具错误 |
+| `agent/kb/whitelist.toml` `whitelist.py` | 入库文件白名单（四级 `authority`）和它的核对（路径、不收名单、研究文件的 `cited_in` / `basis` / `generated_by` / 锚点、有提交） |
+| `agent/kb/sources.py` | 白名单文件按 git 提交历史切块（每块的可见与被替代时间取提交时间，未提交的改动不收） |
+| `agent/kb/match_chunks.py` | 比赛类块（看法、存档、比分、评分、阵容），只经 `services` 的读函数取 |
+| `agent/kb/embed.py` | 预切词（中文字二元）、bge-m3 向量函数、测试用的假向量函数 |
+| `agent/kb/index.py` | Milvus Lite 索引：建库、增量（替代时间、评分指纹）、按 `as_of` 过滤的向量 + BM25 + RRF 检索、来源标签 |
+| `agent/kb/build.py` `__main__.py` | 收齐资料交给 index；`python -m agent.kb --rebuild / --update / --stats / --eval` |
+| `agent/eval/retrieval.py` `retrieval.jsonl` | 检索评测集与脚本：三种方式的 recall@5 / MRR 和泄漏检查 |
 
 工具是普通函数（类型注解 + 中文说明），不 import `mcp`；MCP 和以后的编排框架包装同一个函数，不写两份。
 
@@ -82,7 +89,7 @@ agent  -->  football_prediction.services  -->  领域包
 | `services/live_round.py` | 实盘一轮：更新数据、赛后评分、未开赛预测存档、主模型报告、成绩单、替换检查；每轮写快照 `reports/latest_round.json`；读函数 `read_current` / `read_match` / `read_scorecard` |
 | `services/near_round.py` | 临场档：开球前 1.5 小时内抓阵容和多家赔率，存 `*_t1`（0.6 小时内另存 `*_t2`）并给最终看法 |
 | `services/match_analysis.py` | 单场判断的取数与拟合：`ModelCache`、`latest_odds`、`analyse_match`，以及报告（`build_report`）和 explain（`explain_detail`，带赔率获取时间；`explain_inputs` 是它的元组版）共用的串联 |
-| `services/team_read.py` | 按队名的只读用例（Agent 工具层用，接口也可用）：`league_code`、`resolve_team_name`（原样 → 别名表 → 部分匹配 → 近似拼写）、`read_team_recent`、`read_next_fixture`、`read_lineups`（只读挂上的 `fotmob.db`）、`read_grading`（评分行，含 `result_src` 与指标列） |
+| `services/team_read.py` | 按队名的只读用例（Agent 工具层用，接口也可用）：`league_code`、`resolve_team_name`（原样 → 别名表 → 部分匹配 → 近似拼写）、`read_team_recent`、`read_next_fixture`、`read_lineups`（只读挂上的 `fotmob.db`）、`read_grading`（评分行，含 `result_src` 与指标列）；知识库建块用的 `read_archived_ids`（有开球前存档的场次）、`read_scores`（按来源分开的比分，各带获取时间） |
 | `services/backtest_run.py` | 回测演示：原 `main.py` 里的串联 |
 
 读接口只送出这一轮已经算好的结果，不按请求拟合模型：实盘一轮把每场看法（亚盘在前）和成绩单原子写进快照，`read_current` 剔除快照后已开球的场次，`read_match` 把快照里的本轮看法、`predictions` 里主模型的首次存档（没有时用兜底 dc_market）和赛果拼在一起。快照字段改名或删字段时升 `live_round.SNAPSHOT_SCHEMA`，并同时改路由和测试。`live_round.py` 超过下面的行数上限，或出现第二种读法时，把读函数拆到新的用例文件。

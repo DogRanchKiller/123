@@ -80,9 +80,11 @@ Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `f
 | `.venv` | `requirements.txt` | `live`、`server`、定时任务、`python -m pytest tests` |
 | `.venv-ml`（gitignore） | `requirements.txt` + `requirements-ml.txt`，受 `constraints-ml.txt` 约束 | `agent/`、MCP、知识库、`model_nn` 训练、LoRA 微调 |
 
-- `requirements-ml.txt` 只写直接依赖，都用 `==` 钉版本：langgraph、langgraph-checkpoint-sqlite、langchain-core、langchain-openai、langchain-anthropic（编排与模型接口）；chromadb、sentence-transformers、rank-bm25（知识库）；mcp、python-dotenv；torch、transformers、peft、trl、datasets（训练）。
+- `requirements-ml.txt` 只写直接依赖，都用 `==` 钉版本：langgraph、langgraph-checkpoint-sqlite、langchain-core、langchain-openai、langchain-anthropic（编排与模型接口）；pymilvus、milvus-lite、sentence-transformers（知识库）；mcp、python-dotenv；torch、transformers、peft、trl、datasets（训练）。
 - `constraints-ml.txt` 钉与 `requirements.txt` 重叠的包，版本等于 `.venv` 里实际装的版本；解析冲突时改 ML 包的版本，不改 `requirements.txt`。另钉 tokenizers、safetensors 等关键间接依赖。不用整份 `pip freeze`。
 - 编排框架用 LangGraph（用户 2026-10-27 在 P1.5 概念验证后选定，不用 OpenAI Agents SDK；两者没有做对比实现）：图与状态用 `langgraph`，对话状态持久化用 `langgraph-checkpoint-sqlite`（存 `agent_data/`），模型接口用 `langchain-openai`（OpenAI 兼容接口：中转站、本地 Ollama）和 `langchain-anthropic`（Claude）。SDK 自带重试关掉，由我们自己的代码限次重试并逐个数 HTTP 请求。概念验证的代码在分支 `agent/p15-poc`，不合入 main；`.venv-poc` 已删。
 - 默认云端模型（决定 2）：OpenAI 兼容中转站上的 `DeepSeek-v4.1-flash-1017`，地址、模型名和密钥只写在本机 `.env`（`AGENT_PROVIDER` / `AGENT_MODEL` / `AGENT_BASE_URL` / `OPENAI_API_KEY`）。
-- 密钥只放仓库根目录 `.env`（gitignore），变量名见 `.env.example`；代码和日志里不出现密钥。Chroma 索引、对话状态、用量库放 `agent_data/`，权重放 `checkpoints/`，都不进版本库，也不写进 `football.db`。
+- 密钥只放仓库根目录 `.env`（gitignore），变量名见 `.env.example`；代码和日志里不出现密钥。知识库索引（`agent_data/kb/`）、对话状态、用量库放 `agent_data/`，权重放 `checkpoints/`，都不进版本库，也不写进 `football.db`。
+- 向量知识库用 Milvus Lite（用户 2026-10-27 在 P2 选定，替代原方案的 Chroma）：`pymilvus` 的 `MilvusClient` 打开本地数据目录 `agent_data/kb/milvus.db`，同一集合里存 bge-m3 稠密向量和 Milvus BM25 函数生成的稀疏向量，两路检索后在 Python 里做 RRF。数据目录有独占锁，`--rebuild` / `--update` 进行中时 `kb_search` 返回「正在被使用」的说明。纯 Python 包，Windows 未实测。
+- 向量模型 bge-m3 放 `checkpoints/bge-m3/`（约 2.1 GB），只从本地加载（`local_files_only`），路径可用 `AGENT_EMBED_MODEL` 改。下载：`huggingface_hub.snapshot_download("BAAI/bge-m3", revision="5617a9f61b028005a4858fdac845db406aefb181", local_dir="checkpoints/bge-m3")`，只取 sentence-transformers 需要的配置、分词器和 `pytorch_model.bin`（不取 ONNX 和 colbert / sparse 权重），再用 torch 转成 `model.safetensors`、删掉 `.bin`。另一台机器照此下载，或直接拷贝这个目录。
 - 模型权重（bge-m3、重排模型、Qwen 等）下载前先说明仓库和体积，经用户同意再下。

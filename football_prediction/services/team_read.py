@@ -6,6 +6,7 @@ services/team_read.py  按队名的只读用例（中间层）
   （docs/agent-plan.md 第 12 节决定 6），定之前中文名查不到。
 - 比分与 match_read 同一顺序：football-data（matches）优先，没到时用 fotmob_results。
 - 评分行只取开球前存的行（与首次存档同一条件），result_src 为空的旧行按 fd（与 review/store 一致）。
+- 知识库建块（agent/kb）用的两个读法：有存档的场次 id、某场按来源分开的比分（不合并，各带获取时间）。
 """
 import difflib
 import sqlite3
@@ -14,7 +15,7 @@ from datetime import datetime
 from football_prediction import version
 from football_prediction.data.loader import TEAM_ALIASES
 from football_prediction.services.live_round import LEAGUES, _num
-from football_prediction.services.match_read import _PRE_KO, _match_info, _started
+from football_prediction.services.match_read import _PRE_KO, _fotmob_score, _match_info, _started
 
 MARKET_NAME = "market_avg"
 # 单场评分默认取的模型：主模型、兜底、市场基准，以及主模型与基准的临场档
@@ -147,3 +148,25 @@ def read_grading(conn: sqlite3.Connection, match_id: str,
                     "result_src": src or "fd", **metrics})
     order = {m: i for i, m in enumerate(models or ())}
     return sorted(out, key=lambda r: order.get(r["model_name"], len(order)))
+
+
+def read_archived_ids(conn: sqlite3.Connection) -> list[str]:
+    """有开球前存档的全部场次 id（按最早存档时间排序），知识库建比赛块时逐场读。没有 predictions 表时 []。"""
+    try:
+        return [r[0] for r in conn.execute(
+            f"SELECT match_id FROM predictions WHERE {_PRE_KO} GROUP BY match_id ORDER BY MIN(generated_at)")]
+    except sqlite3.OperationalError:
+        return []
+
+
+def read_scores(conn: sqlite3.Connection, match_id: str) -> list[dict]:
+    """某场按来源分开的比分：[{source, home, away, fetched_at}]，football-data 在前、FotMob 在后，
+    各用自己的获取时间（不合并、不互相回填）。没挂 fotmob.db 时只有 football-data 那条；都没有时 []。"""
+    out = []
+    r = conn.execute("SELECT home_goals, away_goals, fetched_at FROM matches WHERE match_id=?",
+                     (match_id,)).fetchone()
+    if r is not None and r[0] is not None:
+        out.append({"source": "football-data", "home": r[0], "away": r[1], "fetched_at": r[2]})
+    if fm := _fotmob_score(conn, match_id):
+        out.append({"source": "fotmob", "home": fm[0], "away": fm[1], "fetched_at": fm[2]})
+    return out

@@ -1,8 +1,8 @@
 """
-agent/config.py  Agent 的配置：库路径、快照路径、FotMob 库路径与时钟。
-从仓库根目录的 .env 读（只读下面三个键，环境变量优先），没写或为空时用 services 的默认值。
+agent/config.py  Agent 的配置：库路径、快照路径、FotMob 库路径、知识库目录、向量模型目录与时钟。
+从仓库根目录的 .env 读（只读 KEYS 里的键，环境变量优先），没写或为空时用默认值。
 相对路径按仓库根目录解析，所以 MCP 客户端从别的目录启动也能找到库。
-测试用 override() 换路径和时钟，不读 .env。密钥不在这里读，也不打印。
+测试用 override() 换路径、时钟和向量函数（embedder，测试注入假的），不读 .env。密钥不在这里读，也不打印。
 """
 import contextlib
 import os
@@ -11,13 +11,16 @@ import sqlite3
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from typing import Any
 
 from football_prediction import services
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env"
 KEYS = {"db_path": "AGENT_DB_PATH", "snapshot_path": "AGENT_SNAPSHOT_PATH",
-        "fotmob_path": "AGENT_FOTMOB_PATH"}
+        "fotmob_path": "AGENT_FOTMOB_PATH", "kb_path": "AGENT_KB_PATH", "embed_model": "AGENT_EMBED_MODEL"}
+KB_PATH = "agent_data/kb"              # Milvus Lite 数据目录（gitignore）
+EMBED_MODEL = "checkpoints/bge-m3"     # BAAI/bge-m3 本地目录（gitignore），见 docs/stack.md
 
 
 def _utcnow() -> datetime:
@@ -29,7 +32,10 @@ class AgentConfig:
     db_path: str
     snapshot_path: str
     fotmob_path: str | None
+    kb_path: str = field(default_factory=lambda: _abs(KB_PATH))
+    embed_model: str = field(default_factory=lambda: _abs(EMBED_MODEL))
     clock: Callable[[], datetime] = field(default=_utcnow, compare=False)
+    embedder: Any = field(default=None, compare=False)    # None：按 embed_model 加载 bge-m3（agent/kb/embed.py）
 
 
 def _abs(p: str) -> str:
@@ -41,7 +47,7 @@ def _defaults() -> AgentConfig:
 
 
 def load_config(env_file: pathlib.Path = ENV_FILE) -> AgentConfig:
-    """环境变量 > .env > 默认值；空字符串视为没写。只取 KEYS 里的三个键。"""
+    """环境变量 > .env > 默认值；空字符串视为没写。只取 KEYS 里的键。"""
     file_vals: dict[str, str | None] = {}
     if env_file.exists():
         from dotenv import dotenv_values      # 只在 .venv-ml 里有；没有 .env 时不需要
@@ -80,7 +86,8 @@ def connect() -> Iterator[sqlite3.Connection]:
 
 @contextlib.contextmanager
 def override(**kw) -> Iterator[AgentConfig]:
-    """临时换配置（测试用）：override(db_path=..., snapshot_path=..., fotmob_path=None, clock=...)。"""
+    """临时换配置（测试用）：override(db_path=..., snapshot_path=..., fotmob_path=None, kb_path=..., clock=...,
+    embedder=...)。"""
     cfg = replace(_defaults(), **kw)
     _stack.append(cfg)
     try:
