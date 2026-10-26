@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 import { Icon } from "@/components/icon";
 import { ProbabilityBar } from "@/components/presentation";
 import { beijingTime } from "@/lib/display";
+import { modelLabel } from "@/lib/models";
 import { AsianSummary } from "./asian-section";
+import { TeamCrest } from "./team-crest";
 import type { MatchRecord } from "./types";
 
 export function MatchCard({
@@ -43,7 +45,12 @@ export function MatchCard({
         </div>
         <div className="card-teams">
           <div>
-            <span className="team-badge">{match.homeShort}</span>
+            <TeamCrest
+              crest={match.homeCrest}
+              short={match.homeShort}
+              name={match.home}
+              decorative
+            />
             <p className="team-name">{match.home}</p>
           </div>
           {match.score ? (
@@ -51,10 +58,15 @@ export function MatchCard({
               {match.score.home} : {match.score.away}
             </span>
           ) : (
-            <span className="versus">VS</span>
+            <span className="versus">对</span>
           )}
           <div>
-            <span className="team-badge">{match.awayShort}</span>
+            <TeamCrest
+              crest={match.awayCrest}
+              short={match.awayShort}
+              name={match.away}
+              decorative
+            />
             <p className="team-name">{match.away}</p>
           </div>
         </div>
@@ -80,7 +92,10 @@ export function MatchCard({
             </div>
             <p className="fine-print mt-3">
               {archiveLabel && archiveLabel + " · "}
-              概率来源：{prediction.probabilitySource} · {prediction.modelName}
+              概率来源：{prediction.probabilitySource} ·{" "}
+              <span title={prediction.modelName}>
+                {modelLabel(prediction.modelName)}
+              </span>
               {prediction.oddsSource && " · 赔率：" + prediction.oddsSource}
             </p>
           </>

@@ -42,6 +42,7 @@
 .entry-card-label > span:last-child:not(.entry-dot) { margin-left: auto; color: var(--muted); font-size: 10px; }
 .entry-match-link { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 18px; font-weight: 650; }
 .entry-match-link > span { color: var(--muted); font: 10px monospace; }
+.entry-crest { width: 28px; height: 28px; object-fit: contain; }
 .entry-match .fine-print { font-size: 10px; margin: 9px 0 17px; }
 .entry-probabilities { display: grid; grid-template-columns: repeat(3,1fr); border-top: 1px solid #46747766; padding-top: 16px; gap: 15px; }
 .entry-probabilities > div { display: grid; gap: 7px; }

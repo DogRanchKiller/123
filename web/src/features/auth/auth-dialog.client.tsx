@@ -50,7 +50,7 @@ export function AuthTrigger() {
       onClose={() => { setOpen(false); trigger.current?.focus(); }}>
       {open && <div className="auth-content">
         <button className="auth-close button" aria-label="关闭登录窗口" onClick={close}>×</button>
-        <p className="eyebrow">YOUR NEXT MATCH STARTS HERE</p>
+        <p className="eyebrow">下一场比赛从这里开始</p>
         <h2 id="auth-title">{mode === "login" ? "欢迎回到绿茵观察" : "开启你的比赛视角"}</h2>
         <p className="auth-intro">前端预览 · 账号服务尚未接入，查看预测无需登录。</p>
         <div className="auth-tabs" aria-label="账号操作">

@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   detailOf,
   matchesOf,
-  teamShort,
   type ApiMatchDetail,
   type ApiMatchList,
   type ApiMatchView,
 } from "./api-adapter";
+import { crestOf, teamShort, teamZh } from "./teams";
 
 const outcome = { win: 0.4, half_win: 0.1, push: 0, half_lose: 0.1, lose: 0.4 };
 const view: ApiMatchView = {
@@ -41,21 +41,23 @@ describe("接口 → 展示契约", () => {
     const [m, ...rest] = matchesOf(list, now);
     expect(rest).toHaveLength(0);
     expect(m.status).toBe("upcoming");
-    expect(m.homeShort).toBe("ARS");
+    expect(m.home).toBe("阿森纳");
+    expect(m.homeShort).toBe("阿森");
+    expect(m.homeCrest).toMatch(/^\/crests\/\d+\.png$/);
     expect(m.recommended).toBe(true);
     expect(m.current?.asian).toMatchObject({ line: -0.75, lineSource: "市场线" });
     expect(m.current?.asian?.outcome.halfWin).toBe(0.1);
     expect(m.current?.asian?.selfHomeCover).toBe(0.55);
     expect(m.current?.likelyScores).toEqual(["1–0"]);
     expect(m.current?.generatedAt).toBe(list.generated_at);
-    expect(m.risks).toEqual([...view.risks, ...view.hints]);
+    expect(m.risks).toEqual([...view.risks, "自研与市场分歧 9 个百分点"]);
     expect(m.archived).toBeNull();
   });
 
   it("详情：已完赛用存档，赛前看法为空时不推荐", () => {
     const m = detailOf(detail, now)!;
     expect(m.status).toBe("finished");
-    expect(m.homeShort).toBe("BM");
+    expect(m.home).toBe("拜仁慕尼黑");
     expect(m.recommended).toBe(false);
     expect(m.current).toBeNull();
     expect(m.archived?.asian?.selfHomeCover).toBeNull();
@@ -142,8 +144,12 @@ describe("接口 → 展示契约：状态与缩写", () => {
     expect(b.statusLabel).toBe("已开球 · 等待赛果");
   });
 
-  it("队名缩写", () => {
-    expect(teamShort("Man City")).toBe("MC");
-    expect(teamShort("Lens")).toBe("LEN");
+  it("队名：中文名、缩写、队徽；表里没有的队用原名和英文缩写", () => {
+    expect(teamZh("Man City")).toBe("曼城");
+    expect(teamShort("Lens")).toBe("朗斯");
+    expect(teamZh("Some United")).toBe("Some United");
+    expect(teamShort("Some United")).toBe("SU");
+    expect(teamShort("Lensx")).toBe("LEN");
+    expect(crestOf("Some United")).toBeNull();
   });
 });

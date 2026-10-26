@@ -56,7 +56,7 @@ export function AsianBlock({ asian }: { asian: AsianHandicap | null }) {
           <strong>{pickText(asian)}</strong>
         </div>
         <div className="stat">
-          <p>dc_xg 同线主队赢盘</p>
+          <p>预期进球模型同线主队赢盘</p>
           <strong>
             {asian.selfHomeCover === null
               ? "暂无数据"
@@ -86,7 +86,7 @@ export function AsianBlock({ asian }: { asian: AsianHandicap | null }) {
         </div>
       </dl>
       <p className="fine-print mt-3">
-        赢盘概率按走盘不计、半赢 / 半输各算一半。亚盘信心档是历史分档命中率，不是本场承诺；dc_xg
+        赢盘概率按走盘不计、半赢 / 半输各算一半。亚盘信心档是历史分档命中率，不是本场承诺；预期进球模型
         只作对照，历史上市场更准。
       </p>
     </div>

@@ -45,6 +45,19 @@
   letter-spacing: -0.04em;
   color: var(--accent);
 }
+
+/* 队徽图片与文字标记同尺寸；深色队徽在暗底上加一圈浅描边以免看不清 */
+.team-crest {
+  display: inline-block;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 1px rgb(255 255 255 / 0.45));
+}
+
+.team-crest.mx-auto {
+  display: block;
+}
 .versus {
   color: var(--muted);
   font-size: 12px;

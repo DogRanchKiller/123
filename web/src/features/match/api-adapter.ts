@@ -1,7 +1,9 @@
 /** 只读接口（OpenAPI 生成的类型）→ 页面展示契约。纯函数：不计算概率，只改字段名和展示文本。 */
 import type { components } from "@/api/schema";
+import { zhText } from "@/lib/models";
 import { lineText } from "./asian";
 import { LEAGUE_CODES, type LeagueCode } from "./leagues";
+import { crestOf, teamShort, teamZh } from "./teams";
 import type {
   AsianHandicap,
   MatchRecord,
@@ -25,14 +27,6 @@ const INPLAY = {
 
 export function isLeague(code: string): code is LeagueCode {
   return (LEAGUE_CODES as readonly string[]).includes(code);
-}
-
-/** 队名缩写：多词取首字母，单词取前三个字母。 */
-export function teamShort(name: string): string {
-  const words = name.split(/[\s.\-']+/).filter(Boolean);
-  const short =
-    words.length > 1 ? words.map((word) => word[0]).join("") : name.slice(0, 3);
-  return short.slice(0, 3).toUpperCase();
 }
 
 function scoreText(score: string): string {
@@ -73,13 +67,13 @@ export function currentOf(
 ): Prediction {
   const note = view.odds_source
     ? "由赛前市场赔率反推，亚盘按市场线五种结算；来自最近一次实盘运行。"
-    : "本场暂无赔率，回退到自研模型（dc_xg）；亚盘为公平线，不分信心档。";
+    : "本场暂无赔率，回退到自研的预期进球模型；亚盘为公平线，不分信心档。";
   return {
     modelName: view.model_name,
     modelVersion: view.model_version,
-    probabilitySource: view.probability_source,
-    scoreSource: view.score_source,
-    oddsSource: view.odds_source,
+    probabilitySource: zhText(view.probability_source),
+    scoreSource: zhText(view.score_source),
+    oddsSource: view.odds_source && zhText(view.odds_source),
     sourceNote: note,
     asian: asianOf(view.asian),
     confidence: view.confidence,
@@ -133,8 +127,8 @@ export function archivedOf(a: ApiArchive, movement: string | null = null): Predi
   const hasOdds = a.odds?.avg_h != null;
   const scored =
     a.scored && a.log_loss !== null
-      ? `已评分：胜平负 Log Loss ${a.log_loss.toFixed(4)}` +
-        (a.ah_log_loss !== null ? `，亚盘 Log Loss ${a.ah_log_loss.toFixed(4)}` : "") +
+      ? `已评分：胜平负对数损失 ${a.log_loss.toFixed(4)}` +
+        (a.ah_log_loss !== null ? `，亚盘对数损失 ${a.ah_log_loss.toFixed(4)}` : "") +
         (a.result_src ? `（赛果来源 ${resultSource(a.result_src)}）` : "")
       : "尚未评分：等待赛果";
   return {
@@ -194,16 +188,18 @@ function record(
 ): MatchRecord | null {
   if (!isLeague(base.league)) return null;
   const [status, statusLabel] = statusOf(base, score, now);
-  const risks = current ? [...current.risks, ...current.hints] : [];
+  const risks = current ? [...current.risks, ...current.hints].map(zhText) : [];
   const [first, near] = archives;
   return {
     id: base.match_id,
     league: base.league,
     leagueName: base.league_name,
-    home: base.home,
-    away: base.away,
+    home: teamZh(base.home),
+    away: teamZh(base.away),
     homeShort: teamShort(base.home),
     awayShort: teamShort(base.away),
+    homeCrest: crestOf(base.home),
+    awayCrest: crestOf(base.away),
     kickoffUtc: base.kickoff_utc,
     status,
     statusLabel,

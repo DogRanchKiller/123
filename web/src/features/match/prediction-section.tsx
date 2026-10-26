@@ -1,5 +1,6 @@
 import { ProbabilityBar, EmptyState } from "@/components/presentation";
 import { beijingTime, percentage } from "@/lib/display";
+import { modelLabel } from "@/lib/models";
 import { AsianBlock } from "./asian-section";
 import type { Prediction } from "./types";
 
@@ -64,8 +65,8 @@ export function PredictionSection({
       <dl className="mt-5">
         <div className="definition">
           <dt>模型 / 版本</dt>
-          <dd>
-            {prediction.modelName} / {prediction.modelVersion}
+          <dd title={prediction.modelName}>
+            {modelLabel(prediction.modelName)} / {prediction.modelVersion}
           </dd>
         </div>
         <div className="definition">

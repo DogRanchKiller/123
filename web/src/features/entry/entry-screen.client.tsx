@@ -36,18 +36,18 @@ export function EntryScreen({ result, account, source = DEMO_SOURCE }: { result:
       <Link href="/predictions"><Icon name="ball" size={22} /><span>预测</span></Link>
       <Link href="/following"><Icon name="star" size={22} /><span>关注</span></Link>
       <Link href="/review"><Icon name="chart" size={22} /><span>成绩单</span></Link>
-      <span className="entry-rail-bottom">EST. 2026</span>
+      <span className="entry-rail-bottom">始于 2026</span>
     </aside>
     <div className="entry-body">
       <header className="entry-header">
-        <Link href="/" className="brand" aria-label="绿茵观察首页"><span className="entry-brand-icon"><Icon name="ball" size={29} /></span><span>绿茵观察<small>FOOTBALL INSIGHTS</small></span></Link>
+        <Link href="/" className="brand" aria-label="绿茵观察首页"><span className="entry-brand-icon"><Icon name="ball" size={29} /></span><span>绿茵观察<small>足球赛果观察</small></span></Link>
         <Navigation />
         <span className="pill pill-accent header-tag">{demo ? "演示版本" : "本机实盘"}</span>
         {account}
       </header>
       <main id="main-content" className="entry-main">
         <div className="entry-copy">
-          <p className="entry-eyebrow"><span /> THE GAME, THROUGH DATA</p>
+          <p className="entry-eyebrow"><span /> 用数据看比赛</p>
           <h1>从数据中，<br />发现胜负的<span>可能</span><i>。</i></h1>
           <p className="entry-description">每一场比赛，都有值得读懂的信号。<br />对照市场赔率与模型，从赛前判断到赛后验证。</p>
           <Link href="/predictions" className="entry-cta">查看今日预测 <Icon name="arrow" size={22} /></Link>
@@ -55,7 +55,7 @@ export function EntryScreen({ result, account, source = DEMO_SOURCE }: { result:
           <div className="entry-leagues">{HIGHLIGHTS.map(([title, note], i) => <div key={title}><span>0{i + 1} /</span><strong>{title}</strong><small>{note}</small></div>)}</div>
         </div>
         <div className="entry-visual">
-          <div className="entry-scene-caption"><span className="entry-dot" /> HOLOGRAPHIC MATCH LAB<span>01 — 03</span></div>
+          <div className="entry-scene-caption"><span className="entry-dot" /> 全息比赛实验室<span>01 — 03</span></div>
           <PitchLoaderBoundary><PitchCanvas /></PitchLoaderBoundary>
           <PredictionCards match={match} delayed={delayed} demo={demo} />
           <p className="entry-scene-note">全息球场 · 装饰性战术示意，非实时比赛轨迹</p>

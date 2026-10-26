@@ -24,7 +24,7 @@ const prediction: Prediction = {
   over25:.35, sourceAt:null, fetchedAt:"2026-10-25T10:00:00Z", generatedAt:"2026-10-25T10:01:00Z",
 };
 const fixture: MatchRecord = {
-  id:"one", league:"E0", leagueName:"测试联赛", home:"队伍甲", away:"队伍乙", homeShort:"H", awayShort:"A",
+  id:"one", league:"E0", leagueName:"测试联赛", home:"队伍甲", away:"队伍乙", homeShort:"H", awayShort:"A", homeCrest:null, awayCrest:null,
   kickoffUtc:"2026-10-26T12:00:00Z", status:"upcoming", statusLabel:"未开赛", recommended:false,
   recommendationNote:null, current:prediction, archived:{ ...prediction, probabilities:[.9,.05,.05] }, nearArchived:null,
   score:null, scoreSourceAt:null, inplay:{status:"not_connected",label:"未接入",prediction:null}, risks:[],

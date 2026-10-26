@@ -1,5 +1,6 @@
 import { DataNotice, EmptyState } from "@/components/presentation";
 import { percentage, type DataSource } from "@/lib/display";
+import { modelLabel } from "@/lib/models";
 
 /** 对应 Python `review/scorecard.live_report()` 的一行；数值由页面格式化。 */
 export interface ReviewRow {
@@ -47,11 +48,11 @@ export function Review({
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">LOOK BACK / 赛后验证</p>
+          <p className="eyebrow">回看 / 赛后验证</p>
           <h1>让每一次预测，经得起回看。</h1>
           <p>基于首次预测存档，展示模型的赛后表现。亚盘为主，胜平负为辅。</p>
         </div>
-        <span className="pill">指标越低越好 · Log Loss / Brier</span>
+        <span className="pill">指标越低越好 · 对数损失 / 布里尔分数</span>
       </div>
       <DataNotice source={source} />
       <section className="panel">
@@ -59,7 +60,7 @@ export function Review({
         <p className="muted mt-2 mb-5">
           {source.mode === "demo"
             ? "以下为界面展示样本，不代表项目真实评测结果。"
-            : "实盘首次存档的赛后评分，按胜平负 Log Loss 升序；样本少时差异不稳定。"}
+            : "实盘首次存档的赛后评分，按胜平负对数损失升序；样本少时差异不稳定。"}
         </p>
         {rows.length === 0 ? (
           <EmptyState
@@ -78,20 +79,20 @@ export function Review({
                 <th>模型</th>
                 <th>版本</th>
                 <th>亚盘场次</th>
-                <th>亚盘 Log Loss</th>
+                <th>亚盘对数损失</th>
                 <th>亚盘命中</th>
                 <th>胜平负场次</th>
-                <th>Log Loss</th>
-                <th>Brier</th>
+                <th>对数损失</th>
+                <th>布里尔分数</th>
                 <th>首选命中率</th>
-                <th>同场对比 market_avg</th>
+                <th>同场对比市场平均赔率</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={`${row.name}-${row.version}`}>
                   <td>
-                    <strong>{row.name}</strong>
+                    <strong title={row.name}>{modelLabel(row.name)}</strong>
                   </td>
                   <td>{row.version}</td>
                   <td>{row.asianMatches}</td>
@@ -109,8 +110,8 @@ export function Review({
         </div>
         )}
         <p className="fine-print mt-3">
-          亚盘命中不计走盘。同场对比为差值 ± SE，负数表示优于市场；|差值| 小于
-          2 倍 SE 视为无显著差异。
+          亚盘命中不计走盘。同场对比为差值 ± 标准误，负数表示优于市场；|差值| 小于
+          2 倍标准误视为无显著差异。
         </p>
       </section>
       <div className="grid gap-5 md:grid-cols-2 mt-6">
@@ -124,7 +125,7 @@ export function Review({
           <h3>替换主模型只看胜平负</h3>
           <p>
             亚盘成绩只作参考。替换主模型要求同一批已评分比赛不少于 1000
-            场，且胜平负 Log Loss 的差值加 2 倍 SE 仍小于 0。
+            场，且胜平负对数损失的差值加 2 倍标准误仍小于 0。
           </p>
         </section>
       </div>

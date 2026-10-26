@@ -8,6 +8,7 @@ export function selectEntryPrediction(matches: readonly MatchRecord[]): EntryPre
   const { probabilities, over25, likelyScores, lean, fetchedAt, sourceNote, asian } = match.current;
   return {
     id: match.id, leagueName: match.leagueName, home: match.home, away: match.away,
+    homeCrest: match.homeCrest, awayCrest: match.awayCrest,
     statusLabel: match.statusLabel, kickoffUtc: match.kickoffUtc,
     probabilities, over25, likelyScores, lean, fetchedAt, sourceNote,
     asianPick: asian ? pickText(asian) : null,

@@ -12,7 +12,7 @@ export function SiteFrame({ children, source }: { children: ReactNode; source?: 
     <header className="site-header"><div className="header-inner">
       <Link href="/" className="brand" aria-label="绿茵观察首页">
         <span className="brand-mark"><Icon name="ball" size={25} /></span>
-        <span>绿茵观察<small>FOOTBALL INSIGHTS</small></span>
+        <span>绿茵观察<small>足球赛果观察</small></span>
       </Link>
       <Navigation />
       {source && <span className={demo ? "pill pill-warning header-tag" : "pill pill-accent header-tag"}>{demo ? "演示版本" : "本机实盘"}</span>}

@@ -37,7 +37,7 @@ export function Predictions({
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">MATCHDAY / 比赛观察</p>
+          <p className="eyebrow">比赛日 / 比赛观察</p>
           <h1>每一场比赛，都有迹可循。</h1>
           <p>从赛前概率到赛后验证，清楚了解每一次判断。</p>
         </div>
@@ -140,7 +140,7 @@ export function Predictions({
         </section>
         <aside className="sidebar">
           <section className="panel side-panel">
-            <p className="eyebrow">MODEL NOTES</p>
+            <p className="eyebrow">模型说明</p>
             <h3>让预测有据可查</h3>
             <p>
               亚盘为主，胜平负、比分与大小球为辅，模型来源一起呈现。预测会变化，首次判断会被保留。

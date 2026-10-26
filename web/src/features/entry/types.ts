@@ -3,6 +3,9 @@ export interface EntryPrediction {
   leagueName: string;
   home: string;
   away: string;
+  /** 队徽地址（public/crests），没有时为空。 */
+  homeCrest: string | null;
+  awayCrest: string | null;
   statusLabel: string;
   kickoffUtc: string | null;
   probabilities: [number | null, number | null, number | null];

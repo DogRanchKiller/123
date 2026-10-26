@@ -64,7 +64,7 @@ test("首次读取失败是 5xx，恢复后成功；有旧数据时保留原时�
   await expect(page.getByRole("heading", { name: "数据暂时无法读取" })).toBeVisible();
   fail([]);
   await page.getByRole("button", { name: "重新读取" }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("皇家马德里 vs 皇家贝蒂斯");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("皇家马德里 对 皇家贝蒂斯");
   const recovered = await request.get(path);
   expect(recovered.status()).toBe(200);
   expect(await recovered.text()).toContain("皇家马德里");
@@ -92,7 +92,7 @@ test("滚动恢复与主题变量", async ({ page }) => {
   const savedY = await page.evaluate(() => window.scrollY);
   await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("football.predictions.view.v1") ?? "{}").scrollY)).toBe(savedY);
   await detailLink.click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("皇家马德里 vs 皇家贝蒂斯");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("皇家马德里 对 皇家贝蒂斯");
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("football.predictions.view.v1") ?? "{}").scrollY)).toBe(savedY);
   await page.getByRole("link", { name: "← 返回比赛列表" }).click();
   await expect(page.getByLabel("筛选联赛")).toHaveValue("SP1");
@@ -125,7 +125,7 @@ test("关注保存、筛选恢复、前进后退及无水合错误", async ({ pa
     .getByRole("link", { name: "查看皇家马德里对皇家贝蒂斯详情" })
     .click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "皇家马德里 vs 皇家贝蒂斯",
+    "皇家马德里 对 皇家贝蒂斯",
   );
   await page.goBack();
   await expect(page.getByLabel("筛选联赛")).toHaveValue("SP1");

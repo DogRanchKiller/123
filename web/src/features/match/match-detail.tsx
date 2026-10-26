@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { DataNotice } from "@/components/presentation";
 import { beijingTime } from "@/lib/display";
 import { PredictionSection } from "./prediction-section";
+import { TeamCrest } from "./team-crest";
 import type { MatchRead } from "./types";
 
 export function MatchDetail({
@@ -29,13 +30,18 @@ export function MatchDetail({
           {match.leagueName} · {match.statusLabel}
         </span>
         <h1 className="mt-4">
-          {match.home} vs {match.away}
+          {match.home} 对 {match.away}
         </h1>
         <p className="muted mt-2">
           {beijingTime(match.kickoffUtc)} 开球 · 北京时间
         </p>
         <div className="card-teams">
-          <span className="team-badge mx-auto">{match.homeShort}</span>
+          <TeamCrest
+            crest={match.homeCrest}
+            short={match.homeShort}
+            name={match.home}
+            className="mx-auto"
+          />
           <div>
             <p className="score">
               {match.score
@@ -48,7 +54,12 @@ export function MatchDetail({
                 : "比分暂无数据"}
             </p>
           </div>
-          <span className="team-badge mx-auto">{match.awayShort}</span>
+          <TeamCrest
+            crest={match.awayCrest}
+            short={match.awayShort}
+            name={match.away}
+            className="mx-auto"
+          />
         </div>
         {action}
       </div>

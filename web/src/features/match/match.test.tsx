@@ -12,6 +12,8 @@ const missing: MatchRecord = {
   away: "客队",
   homeShort: "H",
   awayShort: "A",
+  homeCrest: null,
+  awayCrest: null,
   kickoffUtc: "2026-10-25T12:00:00Z",
   status: "upcoming",
   statusLabel: "未开赛",
@@ -49,7 +51,7 @@ describe("缺失数据", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent("更新延迟");
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "主队 vs 客队",
+      "主队 对 客队",
     );
   });
 });
@@ -73,7 +75,7 @@ const started: MatchRecord = { ...missing, status: "inplay", statusLabel: "已�
 describe("开球后显示存档", () => {
   it("卡片：临场档优先，没有时用首次存档，并标明是哪份", () => {
     const { rerender } = render(<MatchCard match={{ ...started, nearArchived: near }} />);
-    expect(screen.getByText(/临场存档 · 概率来源/)).toHaveTextContent("market_implied_t1");
+    expect(screen.getByText(/临场存档 · 概率来源/)).toHaveTextContent("市场隐含（临场）");
     expect(screen.getByText("主-0.50")).toBeInTheDocument();
     rerender(<MatchCard match={started} />);
     expect(screen.getByText(/首次存档 · 概率来源/)).toBeInTheDocument();

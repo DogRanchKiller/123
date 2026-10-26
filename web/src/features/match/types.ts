@@ -62,8 +62,12 @@ export interface MatchRecord {
   leagueName: string;
   home: string;
   away: string;
+  /** 没有队徽时显示的文字标记。 */
   homeShort: string;
   awayShort: string;
+  /** 本站静态队徽地址（/crests/{id}.png）；没有时为空。 */
+  homeCrest: string | null;
+  awayCrest: string | null;
   /** 赛程未给开球时间时为空。 */
   kickoffUtc: string | null;
   status: MatchStatus;
