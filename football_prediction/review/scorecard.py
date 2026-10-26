@@ -1,0 +1,150 @@
+"""
+review/scorecard.py  （review 层的一部分，版本跟 review/store.py 的 LAYER_VERSION）
+实盘成绩单与对照：版本对比 compare_versions、成绩单 live_report（同场对比 market_avg）、
+主模型替换检查 promotion_check、临场档对赛前档 horizon_report。只读 predictions 表里已评分的行。
+v1.6.0: 从 store.py 拆出（行为不变）；成绩单增加亚盘列 ah_n / ah_ll / ah_hit（只作参考，不进替换检查）。
+修改此文件后请同步更新 version.py 中 "review" 的版本号。
+"""
+import sqlite3
+
+import numpy as np
+import pandas as pd
+
+from football_prediction.review.store import HORIZON_SUFFIX, _init_review_db
+
+HORIZON_BASE = {"lineup_t1": "lineup_base_t1"}  # 临场档的默认对照是去掉后缀的赛前档，例外在此登记
+
+
+def compare_versions(conn: sqlite3.Connection,
+                     model_name: str) -> pd.DataFrame:
+    """
+    按 model_ver 汇总已评分预测的平均 Log Loss 和 Brier Score。
+    用于判断新版本是否优于旧版本。
+    """
+    _init_review_db(conn)
+    return pd.read_sql_query(
+        """SELECT model_ver, feature_ver,
+                  COUNT(*)            AS matches,
+                  AVG(log_loss)       AS avg_log_loss,
+                  AVG(brier)          AS avg_brier
+           FROM predictions
+           WHERE model_name = ? AND actual_outcome IS NOT NULL
+           GROUP BY model_ver, feature_ver
+           ORDER BY avg_log_loss""",
+        conn,
+        params=(model_name,),
+    )
+
+
+def _scored_first(conn: sqlite3.Connection) -> pd.DataFrame:
+    """已评分预测，同场同模型版本只取最早一条（与 has_prediction 规则一致），附命中标记。"""
+    _init_review_db(conn)
+    df = pd.read_sql_query(
+        """SELECT p.match_id, p.model_name, p.model_ver, p.log_loss, p.brier,
+                  p.ou25_log_loss, p.score_log_loss, p.ah_log_loss, p.ah_hit,
+                  p.p_home_win, p.p_draw, p.p_away_win, p.actual_outcome
+           FROM predictions p
+           WHERE p.actual_outcome IS NOT NULL
+           ORDER BY p.generated_at""",
+        conn,
+    )
+    if df.empty:
+        return df
+    df = df.drop_duplicates(["match_id", "model_name", "model_ver"]).reset_index(drop=True)
+    pick = np.array(["home_win", "draw", "away_win"])[
+        df[["p_home_win", "p_draw", "p_away_win"]].to_numpy().argmax(axis=1)]
+    df["hit"] = (pick == df["actual_outcome"]).astype(float)
+    return df
+
+
+def _paired(a: pd.DataFrame, b: pd.DataFrame) -> tuple[int, float, float]:
+    """同场配对 log loss 差（a − b）：返回 (场数, 差值, SE)。"""
+    m = a[["match_id", "log_loss"]].merge(
+        b[["match_id", "log_loss"]], on="match_id", suffixes=("_a", "_b"))
+    if m.empty:
+        return 0, float("nan"), float("nan")
+    d = m["log_loss_a"] - m["log_loss_b"]
+    se = d.std(ddof=1) / np.sqrt(len(d)) if len(d) > 1 else float("nan")
+    return len(d), float(d.mean()), float(se)
+
+
+def live_report(conn: sqlite3.Connection,
+                baseline: str = "market_avg") -> pd.DataFrame:
+    """
+    实盘成绩单：每个 模型/版本 的已评分场数、Log Loss、Brier、命中率，
+    以及在【同一批比赛】上与市场基准的配对差值和 SE（负=模型优于市场）。
+    亚盘列：ah_n 有亚盘评分的场数，ah_ll 市场线五种结算 log loss，ah_hit 选择方命中（不含走盘）。
+    """
+    df = _scored_first(conn)
+    if df.empty:
+        return df
+    base = df[df["model_name"] == baseline].drop_duplicates("match_id")
+
+    rows = []
+    for (name, ver), g in df.groupby(["model_name", "model_ver"]):
+        n, diff, se = _paired(g, base)
+        rows.append({
+            "model_name":   name,
+            "model_ver":    ver,
+            "matches":      len(g),
+            "log_loss":     g["log_loss"].mean(),
+            "brier":        g["brier"].mean(),
+            "hit_rate":     g["hit"].mean(),
+            "ou25_ll":      g["ou25_log_loss"].mean(),    # 无数据时为 NaN
+            "score_ll":     g["score_log_loss"].mean(),
+            "ah_n":         int(g["ah_log_loss"].notna().sum()),   # 亚盘：只作参考，不进替换检查
+            "ah_ll":        g["ah_log_loss"].mean(),
+            "ah_hit":       g["ah_hit"].mean(),                    # 走盘不计
+            "paired_n":     n,
+            "diff_vs_base": diff,
+            "se":           se,
+        })
+    return pd.DataFrame(rows).sort_values("log_loss")
+
+
+def promotion_check(conn: sqlite3.Connection, primary: tuple[str, str],
+                    min_n: int) -> pd.DataFrame:
+    """
+    主模型替换检查：每个挑战者（除主模型与市场基准外）与主模型同场配对。
+    规则：场数 ≥ min_n 且 (差值 + 2×SE) < 0 时 verdict="可替换"。
+    primary 为 (model_name, model_ver)。
+    """
+    df = _scored_first(conn)
+    if df.empty:
+        return df
+    prim = df[(df["model_name"] == primary[0]) & (df["model_ver"] == primary[1])]
+    rows = []
+    for (name, ver), g in df.groupby(["model_name", "model_ver"]):
+        if (name, ver) == tuple(primary) or name == "market_avg" or name.endswith(HORIZON_SUFFIX):
+            continue   # 临场档只覆盖部分场次、信息时点不同，不与赛前主模型争替换（见 horizon_report）
+        n, diff, se = _paired(g, prim)
+        if n < min_n:
+            verdict = f"样本不足（{n}/{min_n}）"
+        elif diff + 2 * se < 0:
+            verdict = "可替换"
+        else:
+            verdict = "不替换"
+        rows.append({"model_name": name, "model_ver": ver, "paired_n": n,
+                     "diff": diff, "se": se, "verdict": verdict})
+    return pd.DataFrame(rows)
+
+
+def horizon_report(conn: sqlite3.Connection) -> pd.DataFrame:
+    """
+    临场档对赛前档：每个 X_t1（各版本）与赛前档 X 在同一批已评分比赛上配对（差值负=临场更好）。
+    赛前档有多个版本时每场取最早一条；没有配对场次的不列出。
+    """
+    df = _scored_first(conn)
+    if df.empty:
+        return df
+    rows = []
+    for (name, ver), g in df.groupby(["model_name", "model_ver"]):
+        if not name.endswith(HORIZON_SUFFIX):
+            continue
+        base_name = HORIZON_BASE.get(name, name[: -len(HORIZON_SUFFIX)])
+        base = df[df["model_name"] == base_name].drop_duplicates("match_id")
+        n, diff, se = _paired(g, base)
+        if n:
+            rows.append({"model_name": name, "model_ver": ver, "base": base_name,
+                         "paired_n": n, "diff": diff, "se": se})
+    return pd.DataFrame(rows)

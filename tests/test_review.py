@@ -5,9 +5,12 @@ import numpy as np
 import pytest
 
 from football_prediction.data import fotmob
+from football_prediction.review.scorecard import (
+    live_report, promotion_check, horizon_report, _paired, _scored_first,
+)
 from football_prediction.review.store import (
-    has_prediction, save_prediction, score_predictions, live_report, promotion_check,
-    horizon_report, pending_fotmob, reconcile_results, _paired, _scored_first,
+    has_prediction, save_prediction, score_predictions, pending_fotmob, reconcile_results,
+    ah_scores, ah_settle,
 )
 
 
@@ -66,6 +69,67 @@ def test_fotmob_fallback_and_reconcile(conn):
     assert out["m4"] == "draw"
     assert pending_fotmob(conn) == 0 and src()["m1"] == src()["m2"] == "fd"
     assert reconcile_results(conn) == (0, []) and score_predictions(conn) == 0
+
+
+@pytest.mark.parametrize("margin,line,want", [
+    (1, -0.5, "win"), (0, -0.5, "lose"), (1, -1.0, "push"), (2, -1.0, "win"),
+    (0, -0.25, "half_lose"), (1, -0.25, "win"), (1, -0.75, "half_win"), (2, -0.75, "win"),
+    (0, 0.0, "push"), (0, 0.25, "half_win"), (-1, 0.75, "half_lose"), (3, -3.0, "push"),
+    (3, -3.25, "half_lose"), (4, -3.75, "half_win"), (-2, 2.0, "push"),
+])
+def test_ah_settle(margin, line, want):
+    assert ah_settle(margin, line) == want
+
+
+def test_ah_scores_from_extra():
+    ex = {"ah_-0.75": [0.3, 0.2, 0.0, 0.0, 0.5], "ah_+0.00": [0.4, 0.0, 0.3, 0.0, 0.3]}
+    ll, hit = ah_scores(ex, 2, 1, -0.75)               # 净胜 1：赢半；赢盘概率 0.4/0.9 < 50% 选客
+    assert ll == pytest.approx(-log(0.2)) and hit == 0.0
+    ll, hit = ah_scores(ex, 1, 1, -0.0)                # 平手走盘：命中为空；-0.0 与 +0.00 同一键
+    assert ll == pytest.approx(-log(0.3)) and hit is None
+    assert ah_scores(ex, 1, 0, -1.5) == (None, None)   # extra 没有该线
+    assert ah_scores(ex, 1, 0, None) == (None, None)
+
+
+def _ah_extra(line, p):
+    return {f"ah_{line:+.2f}": p, "ah_+0.00": [0.5, 0, 0, 0, 0.5]}
+
+
+def test_ah_scoring_uses_market_line_for_all_models(conn):
+    _match(conn, "m1", 2, 0)
+    _match(conn, "m2", 1, 1)
+    # 市场隐含行带赔率（线 -0.5），dc_xg 没有赔率：用同场赛前档的线
+    save_prediction(conn, "m1", "market_implied", "1", "1", 0.5, 0.3, 0.2,
+                    {**_ah_extra(-0.5, [0.55, 0, 0, 0, 0.45]), "odds": {"ah_line": -0.5}})
+    save_prediction(conn, "m1", "dc_xg", "1", "1", 0.5, 0.3, 0.2, _ah_extra(-0.5, [0.4, 0, 0, 0, 0.6]))
+    save_prediction(conn, "m1", "market_avg", "1", "1", 0.5, 0.3, 0.2, {"odds": [2.0, 3.3, 4.0]})
+    save_prediction(conn, "m1", "market_implied_t1", "1", "1", 0.5, 0.3, 0.2,
+                    {**_ah_extra(-0.75, [0.4, 0.2, 0, 0, 0.4]), "odds": {"ah_line": -0.75}})
+    save_prediction(conn, "m1", "lineup_t1", "1", "1", 0.5, 0.3, 0.2, _ah_extra(-0.75, [0.5, 0.1, 0, 0, 0.4]))
+    save_prediction(conn, "m2", "dc_xg", "1", "1", 0.4, 0.3, 0.3, _ah_extra(-0.5, [0.4, 0, 0, 0, 0.6]))
+    score_predictions(conn)
+    got = {(m, n): (l, ll, h) for m, n, l, ll, h in conn.execute(
+        "SELECT match_id, model_name, ah_line, ah_log_loss, ah_hit FROM predictions")}
+    assert got[("m1", "market_implied")] == (-0.5, pytest.approx(-log(0.55), abs=1e-6), 1.0)
+    assert got[("m1", "dc_xg")] == (-0.5, pytest.approx(-log(0.4), abs=1e-6), 0.0)   # 选了客队
+    assert got[("m1", "market_avg")] == (None, None, None)                          # 没有亚盘概率
+    assert got[("m1", "lineup_t1")][0] == -0.75                                      # 临场档用临场线
+    assert got[("m2", "dc_xg")] == (None, None, None)                                # 该场没有市场线
+
+    rep = live_report(conn).set_index("model_name")
+    assert rep.loc["dc_xg", "ah_n"] == 1 and rep.loc["dc_xg", "ah_hit"] == 0.0
+    assert {"ah_n", "ah_ll", "ah_hit"} <= set(rep.columns)
+
+
+def test_ah_backfill_for_rows_scored_before(conn):
+    _match(conn, "m1", 1, 0)
+    save_prediction(conn, "m1", "market_implied", "1", "1", 0.5, 0.3, 0.2,
+                    {**_ah_extra(-1.0, [0.3, 0, 0.25, 0, 0.45]), "odds": {"ah_line": -1.0}})
+    score_predictions(conn)
+    conn.execute("UPDATE predictions SET ah_line=NULL, ah_log_loss=NULL, ah_hit=NULL")  # 模拟 1.6.0 之前
+    assert score_predictions(conn) == 0                 # 不重复计 1X2 评分，只补亚盘
+    row = conn.execute("SELECT ah_line, ah_log_loss, ah_hit FROM predictions").fetchone()
+    assert row[0] == -1.0 and row[1] == pytest.approx(-log(0.25), abs=1e-6) and row[2] is None
 
 
 def test_scored_first_keeps_earliest(conn):

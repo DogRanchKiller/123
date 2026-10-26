@@ -180,7 +180,8 @@ def test_analyse_market_base_and_divergence_hint():
     assert a["p_src"] == "市场" and a["source"] == "市场隐含"
     assert a["p1x2"] == pytest.approx(devig(1.5, 4.2, 6.5))
     assert a["tier"] == "高" and a["lean"] == "主胜"
-    assert a["hints"] and "dc_xg 与市场分歧" in a["hints"][0]       # dc_xg 主胜远低于市场
+    assert any("dc_xg 与市场分歧" in h for h in a["hints"])       # dc_xg 主胜远低于市场
+    assert "dc_xg 在主-1.00" in a["hints"][0]                       # 亚盘同线分歧排在最前
     assert a["risks"] == ["X 升班马"] and a["ah"]["line"] == -1.0
     assert a["ah"]["fair"] == pytest.approx(a["ah"]["market_fair"], abs=0.03)
     assert a["markets"]["exp_home_goals"] > a["markets"]["exp_away_goals"]
@@ -190,7 +191,8 @@ def test_analyse_fallbacks():
     xg = dc_matrix(1.5, 1.0)
     a = analyse(None, xg, -0.05, {"blend": (0.5, 0.3, 0.2)})
     assert a["p_src"] == "blend" and a["p1x2"] == (0.5, 0.3, 0.2) and a["hit1"] == 0.52
-    assert any("缺胜平负" in r for r in a["risks"]) and a["ah"] is None
+    assert any("缺胜平负" in r for r in a["risks"])
+    assert a["ah"]["line_src"].startswith("公平线") and a["ah"]["tier"] == "-" and a["ah"]["hit"] is None
     b = analyse(dict(avg_h=2.0, avg_d=3.4, avg_a=3.8), xg, -0.05)
     assert b["p_src"] == "市场" and b["source"].startswith("dc_xg")
     assert any("缺大小球盘" in r for r in b["risks"])

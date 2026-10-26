@@ -1,8 +1,8 @@
 # 项目进度
 
-系统版本：1.9.0，与 `football_prediction/version.py` 的 `SYSTEM_VERSION` 一致。
+系统版本：1.10.0，与 `football_prediction/version.py` 的 `SYSTEM_VERSION` 一致。
 
-更新日期：2026-10-25。
+更新日期：2026-10-26。
 
 这份文件只描述当前状态。规则在 `AGENTS.md`、`docs/stack.md`、`docs/modules.md`、`docs/ml-stack.md`。问题记录在 [issues.md](issues.md)。
 
@@ -12,6 +12,7 @@
 
 - 联赛：英超 E0、德甲 D1、西甲 SP1、意甲 I1、法甲 F1、英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1（实盘库都从 2122 起；后六个没有 understat xG）。研究库 `research.db` 只有前 5 联赛 9394–2526（赔率从 0001 起，xG 从 1415 起）。
 - 主模型：`market_implied` / `model_market` 1.0.0（市场赔率反推比分）。无赔率时回退 `dc_xg` / `model_xg` 1.0.0。
+- 分析重心：亚盘为主，胜平负 / 比分 / 大小球为辅（output 1.5.0）。报告和 explain 先列市场线亚盘（数字盘口，如 主-0.75），成绩单另列亚盘评分；亚盘评分只作参考，替换主模型仍只看 1X2 的 `promotion_check`。
 - 实盘：`python -m football_prediction.live`；单场说明：`python -m football_prediction.explain 英超 Arsenal Chelsea`
 - 多家赔率：`python -m football_prediction.data.oddsportal --hours 30`
 - 临场档：`python -m football_prediction.live --near`（`run_near.bat`）；阵容 / 伤停：`python -m football_prediction.data.fotmob`
@@ -51,10 +52,10 @@
 | model_blend | 1.0.0 | dc_xg 0.77 + Elo 0.23 的 1X2 融合，并行存档 |
 | model_lgbm | 1.1.0 | 在 Dixon-Coles 上做残差修正，滚动样本外 |
 | calibration | 1.0.0 | Platt；2425 上没有增益，不进实盘 |
-| output | 1.4.0 | 判断流程（`analysis.py`）、报告、explain 单场说明、亚盘五种结算；信心档按 Shin 概率在 5 联赛重标定，报告与 explain 列本场命中估计；报告与 explain 优先用多家中位数赔率（`pipeline.latest_odds`），列赔率来源 |
+| output | 1.5.0 | 亚盘为主：报告列「亚盘 / 亚盘选择 / 亚盘信心 / 亚盘变动」紧跟对阵，explain 第 [2] 段为亚盘，`AH_LINES` 覆盖 −4…+4；判断流程（`analysis.py`）、报告、explain 单场说明、亚盘五种结算；信心档按 Shin 概率在 5 联赛重标定，报告与 explain 列本场命中估计；报告与 explain 优先用多家中位数赔率（`pipeline.latest_odds`），列赔率来源 |
 | validation | 1.1.0 | 时间外回测、市场基准、同场配对 |
-| review | 1.5.0 | 首次预测落库、赛后评分（含大小 2.5 / 精确比分；football-data 未到时先用 FotMob 比分，到达后 `reconcile_results` 核对）、`promotion_check`（跳过 `_t1`）、`horizon_report` 临场对赛前 |
-| live | 1.9.0 | 11 联赛；更新数据（含 FotMob 完赛比分）、评分、预测、报告、成绩单；存档 market_implied / blend / market_shin / dc_market；`--near` 临场档 `*_t1` 与 lineup_t1 / lineup_base_t1，先抓阵容再抓赔率，打印临场最终看法 |
+| review | 1.6.0 | 首次预测落库、赛后评分（含亚盘：按存档时的市场线算五种结算 log loss 与赢盘命中，`ah_line` / `ah_log_loss` / `ah_hit`；成绩单代码在 `scorecard.py`）（含大小 2.5 / 精确比分；football-data 未到时先用 FotMob 比分，到达后 `reconcile_results` 核对）、`promotion_check`（跳过 `_t1`）、`horizon_report` 临场对赛前 |
+| live | 1.10.0 | 11 联赛；成绩单加亚盘场数 / LL / 赢盘命中；更新数据（含 FotMob 完赛比分）、评分、预测、报告、成绩单；存档 market_implied / blend / market_shin / dc_market；`--near` 临场档 `*_t1` 与 lineup_t1 / lineup_base_t1，先抓阵容再抓赔率，打印临场最终看法 |
 
 `2526` 留出，不在该季上重选 shrink 和权重。替换主模型只看实盘 `promotion_check`，场数至少 1000。
 
@@ -74,13 +75,23 @@
 - `server/`：FastAPI。见 `docs/stack.md`。
 - `football_prediction/services/`：中间层。写 `server/` 时和 `live.py`、`explain.py`、`main.py`、`output/pipeline.py` 的编排一起落地。见 `docs/modules.md`。
 - `football_prediction/model_nn/`：还没有神经网络。`requirements.txt` 里还没有 `torch`、`fastapi`、`uvicorn`。
+- 亚盘研究（第 3 步）：在 `research.db` 上看哪些信息能改进市场线上的赢盘概率（盘口与水位变动、Pinnacle 对平均、四分之一线结算形状），沿用同场配对与 2526 留出规则。
+- Pinnacle 亚盘（第 4 步）：先核对本机能否看到、服务条款与 robots.txt，允许才接入；不绕过反爬。
 - 用户定的顺序（2026-10-25）：扩联赛（1.9.0 已做六个一级联赛）→ 网页 + 接口（局域网 / 群友内网访问）→ 神经网络穿插进行 → 新信息源持续做。
 - 杯赛档（欧冠、国内杯赛）：football-data 没有杯赛数据，需另找赛果与赔率来源；有加时 / 点球，评分要先定按 90 分钟还是最终结果；跨联赛对阵不能用按联赛拟合的 Elo / DC，只能用市场赔率。
 - 新增六个联赛的 xG：football-data 2627 起有 `HxG` / `AxG` 列，可作为 understat 之外的来源（见 issues）。
 
 ## 版本记录
 
-### 1.9.0（当前）
+### 1.10.0（当前）
+
+分析重心改为亚盘，主模型、存档模型和比分算法不变。报告与 explain 先列市场线亚盘：数字盘口（主队方向，负数 = 主让），赢盘 / 赢半 / 走 / 输半 / 输，选择方与等效赢盘概率，亚盘信心档，初盘 → 最新快照 → 定价的盘口与水位（升盘 / 降盘），dc_xg 在同一线上的赢盘分歧（8pp 提示）。没有市场亚盘时用比分矩阵的公平线，不分档。`AH_LINES` 扩到 −4…+4，存档的 `extra_markets` 从此多出 ±2.25…±4 的线，已有线的概率不变（output 1.5.0）。
+
+亚盘信心档 `AH_TIERS` 在 research.db 5 联赛 1213–2425 标定（不含走盘 21564 场）：赢盘概率 ≥56% 高（历史命中 60.7%，n=1414）、54–56% 中（56.2%，n=2286）、<54% 低（51.7%，n=17864）。2526 留出：中 57.4%（n=61）、低 51.4%（n=1517），高 45.7%（n=35，±8.4%）未确认。市场线上的赢盘概率多数在 50–54%（留出期 94%），隐含模型与该线去水水位平均只差 0.003，五种结算 log loss 标定期 0.983、留出 0.984（`_diag/explore/ah_baseline.py`）。
+
+成绩单加亚盘评分（review 1.6.0）：同场所有模型都在存档时的市场亚盘线上评五种结算 log loss 与赢盘命中（走盘不计），写入 `predictions.ah_line / ah_log_loss / ah_hit`，以前已评分的行自动回填。没有亚盘概率的模型（market_avg、elo、blend）这三列为空。亚盘评分只作参考，`promotion_check` 仍只看 1X2。成绩单代码从 `review/store.py` 拆到 `review/scorecard.py`。版本：output 1.5.0、review 1.6.0、live 1.10.0。
+
+### 1.9.0
 
 实盘联赛从 5 个加到 11 个：英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1，赛季 2122–2627 共 10740 场写入 `football.db`（`_diag/expand/add_live_leagues.py`）。赔率只有 T1 2223 缺 29 场，其余全有；`MARKET_TIERS` 在六个联赛 2122–2526 的 10228 场上核对过（高 73.6% / 90.4%、中 52.0% / 79.1%、低 41.1% / 71.9%），与现有档位一致，不重标（`_diag/explore/new_league_tiers.log`）。Elo / DC 按联赛分别拟合，原五联赛的预测不变。FotMob 登记六个联赛的 id 与队名别名，2627 全部球队都能映射；OddsPortal 登记 slug 与队名别名（含 Wolves、Dundee Utd）。understat 没有这六个联赛，`live` 跳过 `load_xg`，xG 只靠 FotMob 补。`data.oddsportal` 和 `data.fotmob` 的默认联赛改为全部已登记联赛。成绩单和 `promotion_check` 也计入 FotMob 先评分的场次（review 1.5.0 内修正）。版本：data 1.7.0、data_fotmob 1.2.0、live 1.9.0。
 

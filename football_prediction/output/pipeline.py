@@ -1,9 +1,10 @@
 """
-output/pipeline.py  v1.4.0（输出层的一部分）
+output/pipeline.py  v1.5.0（输出层的一部分）
 把数据库、模型与判断流程（analysis.analyse）连起来：按联赛缓存拟合好的模型，
 对一场比赛给出完整判断。live（存档）、report（报告）、explain（单场说明）共用。
 v1.4.0: latest_odds：报告与 explain 优先用 OddsPortal 多家中位数（≥3 家、24 小时内、有 1X2 与大小 2.5），
         否则用赛程表快照；存档（live._predict_upcoming）仍用赛程表赔率，不受影响。
+v1.5.0: analyse_match 另取赛程表首条快照作亚盘初盘（只有一条快照时也有），给亚盘轨迹用。
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 """
 import sqlite3
@@ -21,7 +22,7 @@ from football_prediction.model_dc.xg_dc import XgDixonColesModel
 from football_prediction.model_elo.elo import EloModel
 from football_prediction.output.analysis import analyse, devig, matrix_1x2
 
-LAYER_VERSION = "1.4.0"
+LAYER_VERSION = "1.5.0"
 
 THIN_MATCHES = 10   # 某队在该联赛历史场数少于此值视为数据少
 BOOK_MIN = 3        # 报告用多家中位数：至少 3 家公司
@@ -118,10 +119,18 @@ def analyse_match(conn: sqlite3.Connection, cache: ModelCache, league: str,
     盘口变动只在赛程表快照之间比（首条 vs 最新），不拿多家中位数与 football-data 平均跨来源比。"""
     lm = cache.get(league)
     inp = lm.inputs(home, away)
-    first = last = None
+    first = last = ah_open = None
     if match_id:
         mv = odds_movement(conn, match_id)
         if mv:
             first, last = mv[0], mv[-1]
+        ah_open = first or _first_snapshot(conn, match_id)
     return analyse(odds_row, inp["xg_matrix"], inp["rho"], inp["models"], first,
-                   team_risks(conn, league, home, away, cache.cutoff), last)
+                   team_risks(conn, league, home, away, cache.cutoff), last, ah_open)
+
+
+def _first_snapshot(conn: sqlite3.Connection, match_id: str) -> dict | None:
+    """赛程表首条快照的亚盘（只有一条快照时 odds_movement 返回 None，亚盘初盘仍要用它）。"""
+    r = conn.execute("SELECT ah_line, avg_ahh, avg_aha FROM odds_snapshots WHERE match_id=? "
+                     "ORDER BY fetched_at LIMIT 1", (match_id,)).fetchone()
+    return dict(zip(("ah_line", "avg_ahh", "avg_aha"), r)) if r else None
