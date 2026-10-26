@@ -30,6 +30,18 @@ live.py / main.py  --------^
 
 - `model_market/implied.py` 引用 `output/derive.py` 的亚盘结算函数（`margin_pmf`、`ah_outcome`、`ah_fair_prob`）来拟合市场隐含 λ。
 
+## Agent 模块
+
+`agent/` 在仓库根目录，与 `server/` 并列（还没有代码，P1 起按 [agent-dev.md](agent-dev.md) 分阶段写）。它只在 `.venv-ml` 里运行（见 [stack.md](stack.md)）。
+
+```
+agent  -->  football_prediction.services  -->  领域包
+```
+
+- `agent/` 只调 `football_prediction.services` 的公开函数和 `version`，不直接 import 领域包，不写 SQL，库一律用 `open_readonly` 打开，不写 `football.db` / `fotmob.db`。需要的新读法加到 `services`（和接口共用）。
+- `football_prediction/` 和 `server/` 都不 import `agent`。`server/` 仍只 import `services` / `version`；对话服务是 `agent/serve.py` 单独一个进程，不挂在 `server/` 上。这两条在 P1 由 `tests/test_agent_boundary.py` 检查。
+- 前端「不建 `app/api` 或代理」的规则暂不变。网站对话需要的那一个转发路由，等 P6 决定做网站对话时再在这里写成例外。
+
 ## 领域包
 
 一个包一种修改理由。新能力优先放进已有的包；只有出现第二种修改理由时才新开包。

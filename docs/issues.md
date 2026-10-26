@@ -48,6 +48,15 @@
 
 ## 已解决
 
+### Mac 的 `.venv` 没装 httpx，接口测试被跳过
+
+- 状态：已解决（依赖未变，只补装本机 `.venv`）
+- 日期：2026-10-27
+- 现象：Mac 上 `.venv/bin/python -m pytest tests -q` 是 210 passed、1 skipped，跳过原因 `tests/test_server.py:11: could not import 'httpx'`，`test_server.py` 的 8 项都没跑。同一份测试在装齐 `requirements.txt` 的 `.venv-ml` 里是 218 passed。
+- 原因：`requirements.txt` 的 `httpx==0.28.1` 是 2026-10-26 提交 `7f2aba5` 加的；Mac 的 `.venv` 建于 2026-10-24（`pyvenv.cfg` 修改时间），之后没按新的 `requirements.txt` 重装。Windows 实盘机的 `.venv` 有没有装，未核对。
+- 处理：2026-10-27 经用户同意，`.venv/bin/python -m pip install -r requirements.txt -c <当时的 pip freeze>`（锁住已有包的版本），只多装了 httpx 0.28.1 和 httpcore 1.0.9，`pip check` 无冲突。Mac 上 `.venv` 和 `.venv-ml` 都是 218 passed。`.venv` 里有一条 Starlette 的弃用提示（`starlette.testclient` 建议用 `httpx2`），不影响结果。Windows 实盘机拉取后自行核对，见 `docs/agent-dev.md` 第 3 节。
+- 位置：`.venv`（本机）、`requirements.txt`、`tests/test_server.py`、`constraints-ml.txt`
+
 ### 新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版
 
 - 状态：已解决（output 1.7.0 / 系统 1.12.0）

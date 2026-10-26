@@ -1,0 +1,20 @@
+# ML 环境 .venv-ml 的直接依赖（Agent、MCP、知识库、model_nn、LoRA）。现有 .venv 不装这些。
+# 安装：python -m venv .venv-ml
+#       .venv-ml/bin/python -m pip install -r requirements.txt -r requirements-ml.txt -c constraints-ml.txt
+# 编排框架（langgraph / langchain 系或 openai-agents）在 P1.5 定框架后才写进来，见 docs/agent-plan.md 第 3、5 节。
+
+# 向量知识库与检索
+chromadb==1.5.9
+sentence-transformers==6.2.0
+rank-bm25==0.2.2
+
+# 工具协议与配置
+mcp==2.3.0
+python-dotenv==1.2.4
+
+# 训练（model_nn、LoRA）
+torch==2.14.1
+transformers==5.20.2
+peft==0.21.2
+trl==1.16.0
+datasets==5.1.0

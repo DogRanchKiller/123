@@ -44,7 +44,7 @@ SITE_URL 在生产构建前设置，静态页面 metadata 会使用构建时域�
 
 Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `football_prediction/services/`，数据库继续使用根目录 football.db。`services/` 已建立；接口读实盘一轮写的快照 `reports/latest_round.json` 和 `predictions` 首次存档，不按请求拟合模型（见 [modules.md](modules.md)）。
 
-只读接口：`python -m server`（默认 127.0.0.1:8000；`--host/--port/--db/--snapshot/--fotmob`），`GET /api/matches`（`?recent_days=` 附带最近已开球场次，默认 3）、`/api/matches/{id}`、`/api/review`。库以 `mode=ro` 打开（`fotmob.db` 同样只读挂上补比分），无快照时 503，未知比赛 404。没有鉴权：默认只监听本机，改 `--host` 时会打印警告，局域网访问范围要在网络层限制。网站服务端用 `API_URL` 直连，浏览器不访问接口，不需要 CORS，也不建 Next Route Handler 或代理。Web 不提供公开训练、采集或写库入口。
+只读接口：`python -m server`（默认 127.0.0.1:8000；`--host/--port/--db/--snapshot/--fotmob`），`GET /api/matches`（`?recent_days=` 附带最近已开球场次，默认 3）、`/api/matches/{id}`、`/api/review`。库以 `mode=ro` 打开（`fotmob.db` 同样只读挂上补比分），无快照时 503，未知比赛 404。没有鉴权：默认只监听本机，改 `--host` 时会打印警告，局域网访问范围要在网络层限制。网站服务端用 `API_URL` 直连，浏览器不访问接口，不需要 CORS，也不建 Next Route Handler 或代理。Web 不提供公开训练、采集或写库入口。Agent 和训练不在 `.venv` 里运行，见下面「Agent 与训练环境」。
 
 先评估允许公开展示的免费 API：11 个实盘联赛的覆盖、盘口种类、额度、实际延迟。目标刷新 1–5 分钟，不能将页面刷新频率当作数据源实时能力；搜索引擎不是赔率源，爬虫只作允许访问的补充。依次接入赛前赔率、实时比分与状态、独立滚球模型。后端集中采集与缓存，网页只读；当前预测与首次预测存档分离。接口应提供数据来源时间、获取时间、预测时间以及新鲜度状态。
 
@@ -68,3 +68,20 @@ Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `f
 `大模型项目/微调/` 里的 P-Tuning 和 PET 是上一代课堂写法。新训练不沿用这两种方法。需要参考时只借鉴循环结构（数据切分、训练步、验证、保存），实现放在 `football_prediction`，不 import 该目录。
 
 新网络的落点、概率契约、`2526` 留出和 Log Loss / Brier 见 [ml-stack.md](ml-stack.md)。
+
+## Agent 与训练环境
+
+设计在 [agent-plan.md](agent-plan.md)，分阶段做法在 [agent-dev.md](agent-dev.md)。大模型不产生概率：胜平负、亚盘、比分、大小球的数字只来自 `services` 和现有模型，Agent 负责调用工具、检索、比对和解释。
+
+两个环境，现有 `.venv` 不加任何包：
+
+| 环境 | 装什么 | 谁用 |
+|---|---|---|
+| `.venv` | `requirements.txt` | `live`、`server`、定时任务、`python -m pytest tests` |
+| `.venv-ml`（gitignore） | `requirements.txt` + `requirements-ml.txt`，受 `constraints-ml.txt` 约束 | `agent/`、MCP、知识库、`model_nn` 训练、LoRA 微调 |
+
+- `requirements-ml.txt` 只写直接依赖，都用 `==` 钉版本：chromadb、sentence-transformers、rank-bm25（知识库）；mcp、python-dotenv；torch、transformers、peft、trl、datasets（训练）。
+- `constraints-ml.txt` 钉与 `requirements.txt` 重叠的包，版本等于 `.venv` 里实际装的版本；解析冲突时改 ML 包的版本，不改 `requirements.txt`。另钉 tokenizers、safetensors 等关键间接依赖。不用整份 `pip freeze`。
+- 编排框架（LangGraph 或 OpenAI Agents SDK）还没定，P1.5 概念验证在单独的 `.venv-poc*` 里比较，定了之后才写进 `requirements-ml.txt` 并重建 `.venv-ml`。
+- 密钥只放仓库根目录 `.env`（gitignore），变量名见 `.env.example`；代码和日志里不出现密钥。Chroma 索引、对话状态、用量库放 `agent_data/`，权重放 `checkpoints/`，都不进版本库，也不写进 `football.db`。
+- 模型权重（bge-m3、重排模型、Qwen 等）下载前先说明仓库和体积，经用户同意再下。

@@ -12,7 +12,7 @@
 
 ## 检索
 
-接手项目先读 [`docs/handover.md`](docs/handover.md)（全貌、环境、日常运行、从哪里改）；调用接口看 [`docs/api.md`](docs/api.md)。前后端与训练的选型在 [`docs/stack.md`](docs/stack.md)。模块边界、前后端分隔、中间层、单文件长度在 [`docs/modules.md`](docs/modules.md)。训练和分析的实现规则在 [`docs/ml-stack.md`](docs/ml-stack.md)。
+接手项目先读 [`docs/handover.md`](docs/handover.md)（全貌、环境、日常运行、从哪里改）；调用接口看 [`docs/api.md`](docs/api.md)。Agent 与训练模块（`agent/`、`model_nn`）的设计在 [`docs/agent-plan.md`](docs/agent-plan.md)，分阶段做法（P0–P6 的入口、任务、验证、出口证据）在 [`docs/agent-dev.md`](docs/agent-dev.md)；动这两块之前先读开发文档。前后端与训练的选型在 [`docs/stack.md`](docs/stack.md)。模块边界、前后端分隔、中间层、单文件长度在 [`docs/modules.md`](docs/modules.md)。训练和分析的实现规则在 [`docs/ml-stack.md`](docs/ml-stack.md)。
 
 新增目录、拆文件、加 HTTP 接口，或让命令行和接口走同一条流程时，先读 `docs/modules.md`。遇到下面任一情况时先读 `docs/ml-stack.md`，再读对应技能并按其步骤做完：
 
@@ -62,6 +62,18 @@ python -m server --openapi web/openapi.json   # 导出 OpenAPI，再在 web/ 运
 - 改完一层后跑 `python -m pytest tests`。`tests/` 只用内存 SQLite 和合成比赛（`tests/conftest.py`）；新测试保持离线，爬虫测试通过替换 `runner` 参数模拟。lightgbm 缺失时相关测试会 skip。
 - Python 没有 lint 或 build 步骤，依赖见 `requirements.txt`。前端依赖和锁文件独立在 `web/`。
 
+Agent 与训练（`agent/`、MCP、知识库、`model_nn`、LoRA）只在独立环境 `.venv-ml` 里跑，`.venv` 不加任何包（规则见 `docs/stack.md`）：
+
+```bash
+python -m venv .venv-ml   # Mac 用 python3.14 等与 .venv 同版本的解释器
+.venv-ml/bin/python -m pip install -r requirements.txt -r requirements-ml.txt -c constraints-ml.txt   # Windows 换 .venv-ml\Scripts\python
+.venv-ml/bin/python -m pip check
+.venv-ml/bin/python -m pytest tests   # 与 .venv 的 pytest tests 都要通过
+```
+
+- `requirements-ml.txt` 只写直接依赖并钉 `==`；`constraints-ml.txt` 里与 `requirements.txt` 重叠的包必须等于 `.venv` 的实际版本。改了 `requirements.txt` 或 `.venv` 的版本时，同步改 `constraints-ml.txt`。
+- 用到 torch、chromadb、mcp 等 ML 包的测试用 `pytest.importorskip`，在 `.venv` 里跳过。
+
 前端使用 Node.js 24 LTS（Mac/Windows 同主版本），在 `web/` 执行：
 
 ```bash
@@ -108,6 +120,7 @@ npm run start     # 部署运行，前置 npm run build
 | `review/store.py` | `predictions` 表的存档、赛后评分（`matches` 无赛果时先用 `fotmob_results`，`reconcile_results` 待 football-data 到达后核对重评）；亚盘评分 `ah_settle` / `ah_scores`：同场所有模型都用存档时的市场亚盘线（本行 `odds.ah_line`，否则同场同档最早一行），旧行自动回填 |
 | `review/scorecard.py` | 实盘成绩单（同场对比 `market_avg`，含亚盘列，只作参考）、`promotion_check`（只看 1X2）、`horizon_report` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
+| `agent/`（仓库根目录，**还没有代码**） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。`football_prediction/model_nn/`（同样还没有代码）是 PyTorch 预测网络，过 G1 之前不进实盘（`docs/ml-stack.md`） |
 | `server/`（仓库根目录） | FastAPI 只读接口 `/api/matches`（含最近已开球场次 `recent`）、`/api/matches/{id}`、`/api/review`；只调 `services`，不写 SQL；无鉴权，默认只听 127.0.0.1 |
 | `live.py` | 实盘入口，只有参数、打印和调用 `services`；编排规则见 [`docs/modules.md`](docs/modules.md) |
 | `explain.py` | 单场说明入口。同上 |
@@ -148,16 +161,18 @@ npm run start     # 部署运行，前置 npm run build
 
 ## 两人协作：Mac 与 Windows
 
-环境（各自建，`.venv` 和 `.venv-scrape` 都不进版本库）：
+环境（各自建，`.venv`、`.venv-ml` 和 `.venv-scrape` 都不进版本库）：
 
 | | Windows | Mac |
 |---|---|---|
 | 主环境 | `python -m venv .venv` → `.venv\Scripts\python -m pip install -r requirements.txt` | `python3 -m venv .venv` → `.venv/bin/python -m pip install -r requirements.txt` |
+| Agent / 训练环境（可选） | `python -m venv .venv-ml` → `.venv-ml\Scripts\python -m pip install -r requirements.txt -r requirements-ml.txt -c constraints-ml.txt`（Windows 上尚未实测安装） | 同左，路径换成 `.venv-ml/bin/` |
 | 爬虫环境（可选） | `python -m venv .venv-scrape` → `.venv-scrape\Scripts\python -m pip install oddsharvester==0.20.0` → `.venv-scrape\Scripts\playwright install chromium` | 同左，路径换成 `.venv-scrape/bin/` |
 
 - Mac 上导入 lightgbm 报缺 `libomp` 时，`brew install libomp`；不装也能跑实盘和测试（相关测试 skip）。
 - 没有爬虫环境时，`data.oddsportal` 打印提示后只显示已有数据，`live` 不受影响。
 - 不需要改 `core.autocrlf` 或 `core.symlinks`：行尾由 `.gitattributes` 管，技能目录是普通文件。
+- Windows 实盘机第一次拉到 Agent 模块 P0（有 `requirements-ml.txt`）后，先按 `docs/agent-dev.md` 第 3 节「Windows 实盘机拉取后自行核对」核对本机 Python 版本、架构和 `.venv`；Python 3.12 / AMD64 是暂定值，未在那台机器上核对。
 
 谁写什么：
 
