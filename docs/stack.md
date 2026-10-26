@@ -36,6 +36,8 @@ Mac、Windows 统一 Node.js 24 LTS（`.nvmrc`、`package.json engines`），npm
 
 开发：在 web 执行 `npm ci`、`npm run dev`，默认仅监听 localhost。生产：`npm run build` 后 `npm run start`，由 HTTPS 反向代理转发至 Next.js，配置 `SITE_URL` 为实际域名。首轮不购买或部署云服务。环境变量示例在 `web/.env.example`；密钥不得放进 NEXT_PUBLIC 变量或客户端代码。
 
+群友访问（2026-10-26 定）：走 Tailscale 组网，不加访问口令，只靠网络限制。`run_site.bat` 先 `npm run build`，再 `next start` 只监听本机的 Tailscale IPv4（100.x）端口 3000，不监听局域网和公网网卡；`setup_site.ps1` 另加防火墙规则，3000 端口只放行 100.64.0.0/10。接口 `run_api.bat` 始终只听 127.0.0.1:8000，没有防火墙规则。两个脚本崩溃后 30 秒重启，日志写到 `logs/api.log`、`logs/site.log`（gitignore）。`setup_site.ps1` 要用管理员 PowerShell 跑一次，注册开机任务 `FootballSiteApi` / `FootballSiteWeb`（当前用户 S4U，不存密码），`-Remove` 撤销。Tailscale 的安装、登录和把本机共享给群友由用户在 Tailscale 里做；共享时只共享这台机器。站点运行时不要在 `web/` 里另跑 `npm run build` 或 e2e，它们会改写正在服务的 `.next`。
+
 SITE_URL 在生产构建前设置，静态页面 metadata 会使用构建时域名。进程管理器负责重启和日志，反向代理不缓存动态比赛及错误响应。WEB_TEST_CONTROL_FILE 只用于本机故障注入，正式运行不设置。演示成功结果仅有进程内缓存，重启后不保留；真实接入时改由后端提供持久的最近有效结果。
 
 ## 后端与后续数据接入

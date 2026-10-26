@@ -169,7 +169,8 @@ npm run start     # 部署运行，前置 npm run build
 
 - Windows 任务计划程序有两个任务：`FootballPredictDaily_1807` 和 `FootballPredictDaily_2337`，每天执行 `run_daily.bat`（先跑 `live`，再跑 `oddsportal --hours 30`，最后 `data.fotmob` 抓即将开赛的阵容 / 伤停），日志写到 `logs/daily.log`。
 - `run_near.bat` 跑 `live --near`，日志 `logs/near.log`。计划任务 `FootballPredictNear` 每天 18:13 起每 30 分钟执行一次到 05:43（单次上限 40 分钟，上一轮未完则跳过）；开赛时段电脑需开机、不睡眠。与每日任务同时写库时 `init_db` 会等锁 120 秒（`loader.BUSY_TIMEOUT`，见 `docs/issues.md`）。
-- `run_daily.bat`、`run_near.bat` 必须保持纯 ASCII + CRLF：cmd 按 GBK 解析，含 UTF-8 中文会出错。CRLF 由 `.gitattributes` 保证（`*.bat eol=crlf`），与各人的 `core.autocrlf` 无关。
+- 给群友的网站：`run_api.bat`（接口只听 127.0.0.1:8000）+ `run_site.bat`（`next start` 只听本机 Tailscale IPv4 的 3000 端口），由 `setup_site.ps1`（管理员跑一次，`-Remove` 撤销）注册开机任务 `FootballSiteApi` / `FootballSiteWeb` 和只放行 100.64.0.0/10 的防火墙规则。走 Tailscale、无口令，细节见 `docs/stack.md`。站点运行时不要在 `web/` 里另跑 build 或 e2e。
+- `run_daily.bat`、`run_near.bat`、`run_api.bat`、`run_site.bat` 必须保持纯 ASCII + CRLF：cmd 按 GBK 解析，含 UTF-8 中文会出错。CRLF 由 `.gitattributes` 保证（`*.bat eol=crlf`），与各人的 `core.autocrlf` 无关。`setup_site.ps1` 同样保持纯 ASCII（Windows PowerShell 5.1 按系统代码页读无 BOM 文件）。
 - 定时任务只在 Windows 这台机器上跑。Mac 上手动跑 `python -m football_prediction.live`；`data/oddsportal.py` 会按系统找 `.venv-scrape/bin` 或 `.venv-scrape\Scripts` 下的 OddsHarvester。
 - 行尾：仓库里一律存 LF（`.gitattributes` 的 `* text=auto`），检出按平台转换。
 

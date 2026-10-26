@@ -29,3 +29,7 @@ web/.env*
 !web/.env.example
 web/*.tsbuildinfo
 web/.test-control.json
+
+# 常驻网站与接口的访问日志（run_site.bat / run_api.bat），只增不减，不作备份
+logs/api.log
+logs/site.log

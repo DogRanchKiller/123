@@ -29,8 +29,10 @@
 - `server/`：FastAPI 只读接口 `GET /api/matches`（快照里尚未开球的场次 + `recent`：最近 `recent_days` 天（默认 3，上限 14）已开球、有首次存档的场次和比分）、`/api/matches/{id}`（快照看法 + 首次存档与赛后评分）、`/api/review`（快照成绩单）。只调 `services`；库以只读方式打开，无快照 503，未知比赛 404。没有鉴权，默认 127.0.0.1。依赖 fastapi 0.149.0、pydantic 2.14.1、uvicorn 0.54.0，测试用 httpx 0.28.1。
 - `services/match_read.py`：读函数从 `live_round.py` 移出；`read_recent` 给列表附带最近已开球场次；`open_readonly` 在 `fotmob.db` 存在时只读挂上，football-data 赛果没到时用 `fotmob_results` 的比分（与评分同一顺序，`score_source` 标来源）。之前详情页只读 `football.db`，FotMob 先评分的场次比分为空。赛程表 `fixtures` 每次刷新整表替换，所以赛前存档的 extra 里另记对阵 `match`（联赛、主客队、日期；只是元数据，概率不变），matches / fixtures 都查不到时从存档取；记对阵之前的旧存档若已被换掉仍查不到，列表里跳过。快照每场加 `model_name` / `model_version` / `recommended`（市场线且亚盘信心高或中）/ `recommendation_note`。
 - 网站：`web/openapi.json` → `src/api/schema.d.ts`（openapi-typescript）；`API_URL` 有值时各页经服务端读取接口并转成展示契约，标「本机实盘」与本轮生成时间，否则仍是演示样本（e2e 走演示模式）。关注页和「进行中 / 已完赛」筛选用 `recent`；关注里超出窗口的场次提示场数。`API_URL` 无效时报出地址错误；接口不可用时首页仍标「本机实盘」。快照替换在 Windows 上被读取占用时重试 5 次。TanStack Query 暂缓，见 `docs/stack.md`。
+- 常驻脚本：`run_api.bat`（接口只听 127.0.0.1:8000）、`run_site.bat`（build 后 `next start` 只听本机 Tailscale IPv4，`SITE_BIND` 可覆盖），崩溃后 30 秒重启；`setup_site.ps1`（管理员跑一次）注册开机任务和只放行 100.64.0.0/10 的防火墙规则。已在本机验证：接口脚本起服务、杀进程后自动重启；网站脚本在没装 Tailscale 时等待并写日志，`SITE_BIND=127.0.0.1` 时 build + start 约 12 秒后页面显示本机实盘。`setup_site.ps1` 只做了语法检查，没有管理员权限，未注册。
 - 临场档写快照：`live --near` 在 1.5 小时窗口内有场次时，存档之后用 `refresh_snapshot` 按最新赔率重算全部未开赛场次并重写快照（窗口内多为多家中位数，成绩单按现有评分重算；不存档、不写报告 CSV）。窗口内没场次时不动快照。真实库副本上 6 场约 10 秒。之前快照只在每日两次 `live` 时更新，网站看不到开球前的多家赔率。
 - 两份存档：`read_match` 和 `read_recent` 另给主模型临场档 `near_archived`（`market_implied_t1`，开球前 1.5 小时内的多家中位数；`horizon` / `n_books` / `hours_to_ko`），两份存档都不计开球后才存的行。网站开球后卡片优先显示临场档，没有时用首次存档，并标明是哪一份；详情页两份都列出，临场档的「盘口变动」写出首次存档 → 临场的亚盘线变化（按让球方说：主队让球加深 / 变浅、受让变多 / 变少、让球方换边）。官方评分仍只看首次存档。真实库上最近 3 天 53 场已开球场次里有 40 场有临场档。
+- 中文显示与队徽：网站把本库队名换成中文名（`web/src/features/match/teams.ts`，11 个联赛 2627 赛季 204 队），模型名换成中文（`web/src/lib/models.ts`，原名放在 title；后端提示里的模型名和 pp 一并换），页面上的英文标签都换成中文。队徽由 `_diag/web_crests.py` 从 FotMob 当前赛季赛程页取球队 id（只抓 HTML，间隔 `fotmob.DELAY`），一次性下载 150px 图到 `web/public/crests/`（204 张，约 2.2 MB），`crests.json` 记队名 → id；没有队徽的队显示中文名前两个字。只改显示，接口与预测都不变。新升班马要重跑脚本并在 `teams.ts` 补中文名。
 
 ### 中间层 services（2026-10-26，预测版本不变）
 
@@ -88,7 +90,7 @@
 - 实时比分与比赛状态：未接入。
 - 滚球预测（inplay）：未实现，需独立模型与数据链路，不能复用赛前结果冒充。
 - 正式部署与搜索收录：尚未上线；真实数据上线后才开放指定页面并建立 sitemap。
-- 接口鉴权与部署：`server/` 没有鉴权，给群友内网访问前要在网络层限制范围或加鉴权；接口和网站都还没有常驻进程或计划任务。
+- 网站上线给群友：`run_api.bat`、`run_site.bat`、`setup_site.ps1` 已写好（Tailscale、无口令，见 `docs/stack.md`），还要用户装好并登录 Tailscale、把本机共享给群友，再用管理员 PowerShell 跑一次 `setup_site.ps1`。开机任务和防火墙规则尚未注册；S4U 任务能否正常找到 node / python 未验证。
 - `football_prediction/model_nn/`：还没有神经网络。`requirements.txt` 里还没有 `torch`。
 - 亚盘研究（第 3 步）：在 `research.db` 上看哪些信息能改进市场线上的赢盘概率（盘口与水位变动、Pinnacle 对平均、四分之一线结算形状），沿用同场配对与 2526 留出规则。
 - Pinnacle 亚盘（第 4 步）：先核对本机能否看到、服务条款与 robots.txt，允许才接入；不绕过反爬。
