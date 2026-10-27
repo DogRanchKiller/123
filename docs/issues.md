@@ -48,6 +48,15 @@
 
 ## 已解决
 
+### `.venv-ml` 里 `pytest tests` 在 model_nn 的 torch 测试处段错误
+
+- 状态：已解决（未升版本，只改测试）
+- 日期：2026-10-27
+- 现象：Mac 上 `.venv-ml/bin/python -m pytest tests` 跑到 `test_model_nn.py` 第一个 torch 测试时进程退出（139，`Fatal Python error: Segmentation fault`，没有栈）。单独跑 `test_model_nn.py` 通过；先跑 `test_agent_kb.py` 里任一个建索引的测试再跑它就复现。`.venv` 不受影响（torch 测试跳过）。
+- 原因：未完全查清。`OMP_NUM_THREADS=1` 时不崩，`KMP_DUPLICATE_LIB_OK=TRUE` 仍崩；`.venv-ml` 里 torch、sklearn、faiss 各带一份 `libomp.dylib`。只建一个 Milvus Lite 集合再跑 torch 的最小脚本不崩，所以与知识库测试里具体哪一步有关没有定位。
+- 处理：`tests/test_model_nn.py` 加 autouse fixture，torch 测试前 `torch.set_num_threads(1)`；`.venv-ml` 440 passed。选参和留出脚本不加载 Milvus，照常多线程。以后别的测试在同一进程里同时用 Milvus 和 torch 时同样处理。
+- 位置：`tests/test_model_nn.py`
+
 ### 知识库检索偶尔返回「正在被另一个进程使用」
 
 - 状态：已解决（未升版本，`agent/` 不在 `LAYER_VERSIONS` 里）

@@ -26,9 +26,10 @@ live.py / main.py  --------^
 
 服务函数不直接 `print`，进度通过参数 `log`（默认 `print`）交给调用方；命令行传 `print`，接口可以传日志函数或空操作。
 
-现有的一处例外，不要新增同类引用：
+现有的两处例外，不要新增同类引用：
 
 - `model_market/implied.py` 引用 `output/derive.py` 的亚盘结算函数（`margin_pmf`、`ah_outcome`、`ah_fair_prob`）来拟合市场隐含 λ。
+- `model_nn/` 引用 `model_market/implied.py`（`fit_lambdas`、`fair_probs`、`dc_matrix`、`DEFAULT_RHO`）：变体 B 的输入是市场隐含 λ，比分矩阵也用同一个 DC 矩阵（用户 2026-10-27 定）。`model_nn` 不引用别的模型族，Elo 等特征在 `model_nn/dataset.py` 里自己算。
 
 ## Agent 模块
 
