@@ -65,7 +65,7 @@ P0 环境与规范 ──→ P1 工具层 + MCP ──→ P1.5 框架概念验�
 | 决定（方案 §12） | 谁要用 | 没定时 |
 |---|---|---|
 | 1 环境方案 | P0 | 你已经通过方案，按方案 §5 做 |
-| 4 Windows 实盘机的 Python 版本和机器架构 | P0 的 Windows wheel 检查 | 只做这一项时停下等你；其余 P0 项照做。**暂定 3.12 / AMD64**（用户 2026-10-27 告知，未在那台机器上核对），P0 按它解析；那台机器拉取后按下面「Windows 实盘机拉取后自行核对」处理 |
+| 4 Windows 实盘机的 Python 版本和机器架构 | P0 的 Windows wheel 检查 | 只做这一项时停下等你；其余 P0 项照做。**已核对 3.12 / AMD64**（2026-10-27 在 Windows 实盘机上运行：`3.12.10 ... [MSC v.1943 64 bit (AMD64)] AMD64`；那台机器没有 `.venv`，定时任务用的是系统 Python `C:\Users\93589\AppData\Local\Programs\Python\Python312\python.exe`），P0 的解析结果不用重跑 |
 | 6 中文队名表放哪 | P1 的 `resolve_team` | 先只用 `TEAM_ALIASES`，中文名留空，交接里注明 |
 | 2 默认云端模型和密钥 | P1.5、P3 | **已定**（2026-10-27）：OpenAI 兼容中转站 + `DeepSeek-v4.1-flash-1017`，密钥在本机 `.env` |
 | 8 下载 bge-m3 / 重排模型 / Qwen | P2、P5 | 对应阶段不能开始 |
@@ -76,7 +76,7 @@ P0 环境与规范 ──→ P1 工具层 + MCP ──→ P1.5 框架概念验�
 
 ### Windows 实盘机拉取后自行核对
 
-决定 4 现在是暂定值。Windows 实盘机第一次拉取含 P0 的提交后，在那台机器上由 Agent（或人）按顺序做，不用先问 Mac 那边：
+决定 4 已于 2026-10-27 核对（见上表第 4 行）；以下是当时的步骤。Windows 实盘机第一次拉取含 P0 的提交后，在那台机器上由 Agent（或人）按顺序做，不用先问 Mac 那边：
 
 1. 在仓库根目录运行 `.venv\Scripts\python -c "import sys, platform; print(sys.version, platform.machine())"`。
 2. 判断：
