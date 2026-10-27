@@ -19,7 +19,7 @@ import json
 import pathlib
 import sqlite3
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from typing import Annotated, Any, TypedDict
 
@@ -210,10 +210,23 @@ def max_input(lim) -> int:
     return base + lim.tool_rounds * lim.tool_tokens + lim.answers * lim.max_tokens * 2
 
 
-def ask(app, question: str, now: datetime, thread_id: str | None = None) -> dict:
-    """跑一轮，返回结束时的状态。没有 checkpointer 时 thread_id 只记进用量库。"""
-    conf = {"configurable": {"thread_id": thread_id or "-"}, "recursion_limit": 60}
-    return app.invoke(start(question, now, thread_id), conf)
+def ask(app, question: str, now: datetime, thread_id: str | None = None, *, key: str | None = None,
+        on_step: Callable[[str, dict], None] | None = None) -> dict:
+    """跑一轮，返回结束时的状态。没有 checkpointer 时 thread_id 只记进用量库。
+    key：checkpointer 里的对话键，默认同 thread_id（网站对话用「site:用户:thread_id」，各人只能续自己的对话）。
+    on_step(节点名, 这个节点的更新)：每个节点结束时回调（网站对话的进度）。"""
+    conf = {"configurable": {"thread_id": key or thread_id or "-"}, "recursion_limit": 60}
+    inp = start(question, now, thread_id)
+    if on_step is None:
+        return app.invoke(inp, conf)
+    last: dict = {}
+    for mode, chunk in app.stream(inp, conf, stream_mode=["updates", "values"]):
+        if mode == "values":
+            last = chunk
+        else:
+            for node, update in chunk.items():
+                on_step(node, update or {})
+    return last
 
 
 @contextlib.contextmanager

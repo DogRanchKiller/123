@@ -73,6 +73,8 @@ python -m venv .venv-ml   # Mac 用 python3.14 等与 .venv 同版本的解释�
 .venv-ml/bin/python -m agent.kb --rebuild   # 知识库完整重建（约 1 分钟，需 checkpoints/bge-m3）；--update 增量，--stats 统计，--eval 检索评测
 .venv-ml/bin/python -m agent "Arsenal 下一场亚盘怎么看？"   # 真实调模型、花钱：每个数字都核对过来源的回答；--thread ID 追问，--check 只看配置与最坏花费，--usage 今日用量
 .venv-ml/bin/python -m agent.eval.agent --estimate   # Agent 评测集预计花费；--run 真实跑（花钱，先告诉用户预计金额）
+.venv-ml/bin/python -m agent.access add alice   # 网站问答的邀请码（只打印一次，库里存哈希）；revoke NAME 吊销，list 列出
+.venv-ml/bin/python -m agent.serve   # 网站对话服务，只听 127.0.0.1:8100（run_agent.bat）；真实调模型、花钱，需 .env 的 AGENT_SERVICE_TOKEN
 ```
 
 - `requirements-ml.txt` 只写直接依赖并钉 `==`；`constraints-ml.txt` 里与 `requirements.txt` 重叠的包必须等于 `.venv` 的实际版本。改了 `requirements.txt` 或 `.venv` 的版本时，同步改 `constraints-ml.txt`。
@@ -94,7 +96,7 @@ npm run test:e2e   # 自动启动构建后的 next start，含 HTTP 与 Chromium
 npm run start     # 部署运行，前置 npm run build
 ```
 
-网站服务端读环境变量 `API_URL`（如 `http://127.0.0.1:8000`）时显示接口里的实盘数据，不设时显示演示样本；e2e 不设 `API_URL`。
+网站服务端读环境变量 `API_URL`（如 `http://127.0.0.1:8000`）时显示接口里的实盘数据，不设时显示演示样本；e2e 不设 `API_URL`。设了 `AGENT_SERVE_URL` 和 `AGENT_SERVICE_TOKEN` 时显示问答页 `/chat`（对话转发路由 `/api/chat` 是唯一的 Route Handler，规则见 `docs/modules.md`）；e2e 用 `web/tests/fake-agent.mjs` 假装 `agent.serve`，不调模型。
 
 前端验收包括 360/390/768/1440 视口、SSR 正文与 metadata、404/5xx、演示 noindex、关注与筛选恢复、首页预测刷新，以及登录表单在服务未接入时的提示。桌面 Safari/Chrome 响应式可用于人工验收，未做真机测试要明确。根目录仍执行 `python -m pytest tests`；不运行 live、不触碰实盘库。
 
@@ -127,7 +129,7 @@ npm run start     # 部署运行，前置 npm run build
 | `review/scorecard.py` | 实盘成绩单（同场对比 `market_avg`，含亚盘列，只作参考）、`promotion_check`（只看 1X2）、`horizon_report` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
 | `services/team_read.py` | 按队名的读函数（Agent 工具层用）：`league_code`、`resolve_team_name`、`read_team_recent`、`read_next_fixture`、`read_lineups`、`read_grading`；知识库建块用的 `read_archived_ids`、`read_scores` |
-| `agent/`（仓库根目录） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。现有 P1：`config.py`、`tools/`（7 个比赛工具 + `kb_search`，返回块）、`mcp_server.py`；P2：`kb/`（Milvus Lite 向量知识库，用户选定替代 Chroma：白名单、按 git 提交时间切块、比赛类块、bge-m3 + BM25 + RRF、按 `as_of` 过滤）、`eval/retrieval.py`（检索评测）；P3（LangGraph）：`facts/`（结构化事实的校验与渲染）、`llm.py`、`budget.py` + `prices.toml`（每次请求预留再结算、个人日额度，唯一写 SQL 的文件，只碰 `agent_data/usage.db`）、`graph.py`、`prompts.py`、`__main__.py`、`eval/agent.py`；对话服务还没有代码。`football_prediction/model_nn/`（P4：`dataset.py` 逐场时点特征、`net.py`、`train.py`、`model.py`；选参与留出脚本在 `_diag/model_nn/`）是 PyTorch 预测网络，过 G1 之前不进实盘、不存档（`docs/ml-stack.md`） |
+| `agent/`（仓库根目录） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。现有 P1：`config.py`、`tools/`（7 个比赛工具 + `kb_search`，返回块）、`mcp_server.py`；P2：`kb/`（Milvus Lite 向量知识库，用户选定替代 Chroma：白名单、按 git 提交时间切块、比赛类块、bge-m3 + BM25 + RRF、按 `as_of` 过滤）、`eval/retrieval.py`（检索评测）；P3（LangGraph）：`facts/`（结构化事实的校验与渲染）、`llm.py`、`budget.py` + `prices.toml`（每次请求预留再结算、个人与网站两档额度、并发占用，只碰 `agent_data/usage.db`）、`graph.py`、`prompts.py`、`__main__.py`、`eval/agent.py`；P6：`access.py`（邀请码与会话，只写 `agent_data/access.db`）、`serve.py`（网站对话服务，FastAPI，只听 127.0.0.1:8100，额度走网站一档）。`football_prediction/model_nn/`（P4：`dataset.py` 逐场时点特征、`net.py`、`train.py`、`model.py`；选参与留出脚本在 `_diag/model_nn/`）是 PyTorch 预测网络，过 G1 之前不进实盘、不存档（`docs/ml-stack.md`） |
 | `server/`（仓库根目录） | FastAPI 只读接口 `/api/matches`（含最近已开球场次 `recent`）、`/api/matches/{id}`、`/api/review`；只调 `services`，不写 SQL；无鉴权，默认只听 127.0.0.1 |
 | `live.py` | 实盘入口，只有参数、打印和调用 `services`；编排规则见 [`docs/modules.md`](docs/modules.md) |
 | `explain.py` | 单场说明入口。同上 |

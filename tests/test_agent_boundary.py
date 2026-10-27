@@ -2,9 +2,9 @@
 - football_prediction/ 和 server/ 不 import agent；
 - agent/ 只 import 标准库、football_prediction.services / version、agent 自己、mcp、dotenv、
   pymilvus、sentence_transformers、LangGraph / LangChain 和模型 SDK，不 import 领域包；
-- agent/ 里没有 SQL 字符串，也不调用 .execute 系列（读库一律走 services）。唯一例外是 agent/budget.py：
-  它只读写自己的用量库 agent_data/usage.db（BEGIN IMMEDIATE 原子预留，docs/agent-plan.md 第 10.3 节），
-  不打开 football.db / fotmob.db。"""
+- agent/ 里没有 SQL 字符串，也不调用 .execute 系列（读库一律走 services）。例外两个：agent/budget.py
+  只读写自己的用量库 agent_data/usage.db（BEGIN IMMEDIATE 原子预留，docs/agent-plan.md 第 10.3 节）；
+  agent/access.py 只读写网站对话的访问库 agent_data/access.db（P6）。都不打开 football.db / fotmob.db。"""
 import ast
 import pathlib
 import sys
@@ -13,8 +13,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 AGENT_THIRD_PARTY = {"mcp", "dotenv",
                      "pymilvus", "sentence_transformers",                     # 知识库（agent/kb）
                      "langgraph", "langchain_core", "langchain_openai", "langchain_anthropic",
-                     "openai", "anthropic", "httpx"}                         # 图和模型连接（P3）
-SQL_ALLOWED = {"agent/budget.py"}
+                     "openai", "anthropic", "httpx",                         # 图和模型连接（P3）
+                     "fastapi", "uvicorn"}                                   # 网站对话服务（P6，agent/serve.py）
+SQL_ALLOWED = {"agent/budget.py", "agent/access.py"}
 SQL_WORDS = ("SELECT ", "INSERT ", "UPDATE ", "DELETE ", "CREATE TABLE", "DROP ", "ATTACH ", "PRAGMA ")
 EXEC_CALLS = {"execute", "executemany", "executescript"}
 
@@ -85,6 +86,22 @@ def test_budget_sql_touches_only_usage_db():
     for word in ("football.db", "fotmob.db", "ATTACH", "open_readonly", "db_path", "fotmob_path"):
         assert word not in src, word
     assert src.count("sqlite3.connect(") == 1 and "_tx(self.cfg.usage_path)" in src
+
+
+def test_access_sql_touches_only_access_db():
+    """access.py 只开 cfg.access_path，不碰实盘库、FotMob 库和用量库。"""
+    src = (ROOT / "agent" / "access.py").read_text(encoding="utf-8")
+    for word in ("football.db", "fotmob.db", "ATTACH", "open_readonly", "db_path", "fotmob_path", "usage_path"):
+        assert word not in src, word
+    assert src.count("sqlite3.connect(") == 1 and "sqlite3.connect(cfg.access_path" in src
+
+
+def test_only_serve_imports_web_framework():
+    """fastapi / uvicorn 只在 agent/serve.py 里出现。"""
+    bad = [p.relative_to(ROOT).as_posix() for p in _files("agent")
+           for m, _, _ in _imports(ast.parse(p.read_text(encoding="utf-8")))
+           if m.split(".")[0] in ("fastapi", "uvicorn") and p.name != "serve.py"]
+    assert bad == []
 
 
 def test_scanners_catch_violations():

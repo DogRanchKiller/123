@@ -38,6 +38,8 @@ Mac、Windows 统一 Node.js 24 LTS（`.nvmrc`、`package.json engines`），npm
 
 群友访问（2026-10-26 定）：走 Tailscale 组网，不加访问口令，只靠网络限制。`run_site.bat` 先 `npm run build`，再 `next start` 只监听本机的 Tailscale IPv4（100.x）端口 3000，不监听局域网和公网网卡；`setup_site.ps1` 另加防火墙规则，3000 端口只放行 100.64.0.0/10。接口 `run_api.bat` 始终只听 127.0.0.1:8000，没有防火墙规则。两个脚本崩溃后 30 秒重启，日志写到 `logs/api.log`、`logs/site.log`（gitignore）。`setup_site.ps1` 要用管理员 PowerShell 跑一次，注册开机任务 `FootballSiteApi` / `FootballSiteWeb`（当前用户 S4U，不存密码），`-Remove` 撤销。Tailscale 的安装、登录和把本机共享给群友由用户在 Tailscale 里做；共享时只共享这台机器。站点运行时不要在 `web/` 里另跑 `npm run build` 或 e2e，它们会改写正在服务的 `.next`。
 
+问答（P6，2026-10-27 定做法 A）：`run_agent.bat` 跑 `.venv-ml` 里的 `python -m agent.serve`，只听 127.0.0.1:8100，没有防火墙规则，日志 `logs/agent.log`；还没有登记开机任务（`setup_site.ps1` 未改），要手动起或另加任务。浏览器只访问 Next.js：登录和退出是 Server Action，对话走唯一的转发路由 `/api/chat`，Next.js 在服务端带服务令牌转给 `agent.serve`。群友凭邀请码登录（`.venv-ml` 的 `python -m agent.access add 名字` 打印一次邀请码，库里只存哈希；`revoke` 吊销其全部会话），会话 Cookie `fp_chat` 是 `HttpOnly`、`SameSite=Strict`、`Path=/`、14 天，站点是 http 所以不带 `Secure`，传输安全靠 Tailscale。根目录 `.env` 和 `web/.env.local` 填同一个 `AGENT_SERVICE_TOKEN`（至少 32 个字符，由用户生成填写）；`run_site.bat` 默认设 `AGENT_SERVE_URL=http://127.0.0.1:8100`，两者都有才显示问答。对话路由和登录按 `SITE_URL` 核对 `Origin` 与 `Host`：`run_site.bat` 不设时取 `http://<Tailscale IPv4>:3000`，群友要用别的地址（如 MagicDNS 名）打开时，在启动前的环境变量里设 `SITE_URL`（进程环境变量优先于 `web/.env.local`），否则问答会回 403。额度和并发见 `docs/agent-plan.md` 第 10.3 节，配置在 `.env`。
+
 SITE_URL 在生产构建前设置，静态页面 metadata 会使用构建时域名。进程管理器负责重启和日志，反向代理不缓存动态比赛及错误响应。WEB_TEST_CONTROL_FILE 只用于本机故障注入，正式运行不设置。演示成功结果仅有进程内缓存，重启后不保留；真实接入时改由后端提供持久的最近有效结果。
 
 ## 后端与后续数据接入

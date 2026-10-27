@@ -57,6 +57,15 @@
 
 ## 已解决
 
+### Mac 上默认的 Node 26 跑 Vitest 全部失败
+
+- 状态：已解决（不改代码）
+- 日期：2026-10-27
+- 现象：在 `web/` 用 shell 默认的 `node`（v26.8.2，`~/.local/bin/node`）跑 `npx vitest run`，12 个文件 60 项全部失败，报 `localStorage` 为 undefined（`tests/setup.ts` 的 `localStorage.clear()`）。
+- 原因：项目要求 Node 24 LTS（`package.json` 的 `engines` 为 `>=24 <25`）；Node 25 起自带的全局 `localStorage` 遮住了 jsdom 的实现。
+- 处理：用 Node 24 跑前端检查，Mac 上是 `PATH=/opt/homebrew/opt/node@24/bin:$PATH`（v24.22.1）；换成 Node 24 后 60 项全部通过。不为 Node 26 改测试。
+- 位置：`web/package.json`、`web/tests/setup.ts`
+
 ### `.venv-ml` 里 `pytest tests` 在 model_nn 的 torch 测试处段错误
 
 - 状态：已解决（未升版本，只改测试）

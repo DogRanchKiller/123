@@ -28,6 +28,7 @@ const paths = {
   ),
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
   check: <path d="m5 12 4 4L19 6" />,
+  chat: <path d="M4 5h16v11H9l-5 4Z" />,
 };
 
 export function Icon({

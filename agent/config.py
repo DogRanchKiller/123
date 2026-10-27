@@ -1,6 +1,6 @@
 """
 agent/config.py  Agent 的配置：库路径、快照路径、FotMob 库路径、知识库目录、向量模型目录、用量库、
-对话状态库、价格表、单轮上限与额度（Limits）和时钟。
+对话状态库、价格表、网站对话的访问库、单轮上限与额度（Limits）和时钟。
 从仓库根目录的 .env 读（只读 KEYS / LIMIT_KEYS 里的键，环境变量优先），没写或为空时用默认值。
 相对路径按仓库根目录解析，所以 MCP 客户端从别的目录启动也能找到库。
 测试用 override() 换路径、上限、时钟和向量函数（embedder，测试注入假的），不读 .env。
@@ -21,18 +21,22 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env"
 KEYS = {"db_path": "AGENT_DB_PATH", "snapshot_path": "AGENT_SNAPSHOT_PATH",
         "fotmob_path": "AGENT_FOTMOB_PATH", "kb_path": "AGENT_KB_PATH", "embed_model": "AGENT_EMBED_MODEL",
-        "usage_path": "AGENT_USAGE_PATH", "state_path": "AGENT_STATE_PATH", "prices_path": "AGENT_PRICES_PATH"}
+        "usage_path": "AGENT_USAGE_PATH", "state_path": "AGENT_STATE_PATH", "prices_path": "AGENT_PRICES_PATH",
+        "access_path": "AGENT_ACCESS_PATH"}
 KB_PATH = "agent_data/kb"              # Milvus Lite 数据目录（gitignore）
 EMBED_MODEL = "checkpoints/bge-m3"     # BAAI/bge-m3 本地目录（gitignore），见 docs/stack.md
-USAGE_PATH = "agent_data/usage.db"     # 用量与额度预留（agent/budget.py）
+USAGE_PATH = "agent_data/usage.db"     # 用量与额度预留、并发占用（agent/budget.py）
 STATE_PATH = "agent_data/state.db"     # 对话状态（LangGraph SqliteSaver）
+ACCESS_PATH = "agent_data/access.db"   # 网站对话的邀请码与会话（agent/access.py），只存哈希
 PRICES_PATH = "agent/prices.toml"      # 单价表，用户手工维护
 
 
 @dataclass(frozen=True)
 class Limits:
-    """单轮上限（docs/agent-plan.md 第 8.1 节）与个人额度（第 10.3 节，命令行 / MCP 一档）。
-    budget_personal_daily：美元，北京时间按日切；2026-10-27 用户定为 2。"""
+    """单轮上限（docs/agent-plan.md 第 8.1 节）与额度（第 10.3 节），金额都是美元、北京时间按日 / 月切。
+    budget_personal_daily：命令行 / MCP 一档，2026-10-27 用户定为 2。
+    budget_user_daily / budget_site_daily / budget_site_monthly / concurrency：网站对话一档（agent/serve.py），
+    2026-10-27 用户定为 2 / 10 / 100 美元、全站并发 3（每人固定 1，budget.USER_CONCURRENCY）。"""
     model_calls: int = 6
     tool_rounds: int = 4
     answers: int = 2
@@ -43,12 +47,18 @@ class Limits:
     turn_timeout: float = 300.0     # 单轮总时长，秒；预留在这之后再过 RESERVE_GRACE 秒过期
     tool_tokens: int = 12000        # 一轮工具返回的总量（估计 token），超出的调用不交给模型，让它缩小范围
     budget_personal_daily: float = 2.0
+    budget_user_daily: float = 2.0
+    budget_site_daily: float = 10.0
+    budget_site_monthly: float = 100.0
+    concurrency: int = 3
 
 
 LIMIT_KEYS = {"model_calls": "AGENT_MAX_MODEL_CALLS", "tool_rounds": "AGENT_MAX_TOOL_ROUNDS",
               "answers": "AGENT_MAX_ANSWERS", "http": "AGENT_MAX_HTTP", "max_tokens": "AGENT_MAX_TOKENS",
               "request_timeout": "AGENT_REQUEST_TIMEOUT", "turn_timeout": "AGENT_TURN_TIMEOUT",
-              "tool_tokens": "AGENT_MAX_TOOL_TOKENS", "budget_personal_daily": "AGENT_BUDGET_PERSONAL_DAILY"}
+              "tool_tokens": "AGENT_MAX_TOOL_TOKENS", "budget_personal_daily": "AGENT_BUDGET_PERSONAL_DAILY",
+              "budget_user_daily": "AGENT_BUDGET_USER_DAILY", "budget_site_daily": "AGENT_BUDGET_SITE_DAILY",
+              "budget_site_monthly": "AGENT_BUDGET_SITE_MONTHLY", "concurrency": "AGENT_MAX_CONCURRENCY"}
 
 
 def _utcnow() -> datetime:
@@ -65,6 +75,7 @@ class AgentConfig:
     usage_path: str = field(default_factory=lambda: _abs(USAGE_PATH))
     state_path: str = field(default_factory=lambda: _abs(STATE_PATH))
     prices_path: str = field(default_factory=lambda: _abs(PRICES_PATH))
+    access_path: str = field(default_factory=lambda: _abs(ACCESS_PATH))
     limits: Limits = field(default_factory=Limits)
     clock: Callable[[], datetime] = field(default=_utcnow, compare=False)
     embedder: Any = field(default=None, compare=False)    # None：按 embed_model 加载 bge-m3（agent/kb/embed.py）
@@ -140,7 +151,7 @@ def connect() -> Iterator[sqlite3.Connection]:
 @contextlib.contextmanager
 def override(**kw) -> Iterator[AgentConfig]:
     """临时换配置（测试用）：override(db_path=..., snapshot_path=..., fotmob_path=None, kb_path=..., clock=...,
-    embedder=..., usage_path=..., state_path=..., prices_path=..., limits=Limits(...))。"""
+    embedder=..., usage_path=..., state_path=..., prices_path=..., access_path=..., limits=Limits(...))。"""
     cfg = replace(_defaults(), **kw)
     _stack.append(cfg)
     try:

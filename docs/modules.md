@@ -54,6 +54,8 @@ live.py / main.py  --------^
 | `agent/budget.py` `prices.toml` | 用量库 `agent_data/usage.db`：每次请求 `BEGIN IMMEDIATE` 预留，结算为 settled / failed / usage_unknown；`model_calls`、HTTP 请求数和个人日额度三道上限；价格表按 provider + 模型名 + 生效日取，带高峰倍率时段 |
 | `agent/graph.py` `prompts.py` | LangGraph 图（agent ⇄ tools → verify → render / degrade → finish）、四个计数各自判定、单轮超时；`agent_data/state.db` 存对话，每轮只留问题和最终输出。系统提示含北京时间和字段表 |
 | `agent/__main__.py` | `python -m agent "问题" [--thread ID] [--check] [--usage]` |
+| `agent/access.py` | 网站对话的邀请码与会话：`agent_data/access.db` 只存邀请码和会话 id 的 SHA-256；会话 14 天、可吊销；CSRF 令牌是绑定会话的 HMAC（密钥存在同一库里），24 小时过期；`python -m agent.access add / revoke / list` |
+| `agent/serve.py` | 网站对话服务（FastAPI，只听 127.0.0.1:8100）：服务令牌 → 会话 → CSRF → 请求体 → 并发占用 → 一轮；NDJSON 流式返回；记账走 `budget.SITE`（每人当日、全站当日、全站当月），并发每人 1、全站 `AGENT_MAX_CONCURRENCY` |
 | `agent/eval/agent.py` `agent.jsonl` | Agent 评测集（26 题）：`--estimate` 预计花费，`--run` 真实跑并算一次通过率、降级率、措辞与 `kind` 不符、放行表打回率和花费 |
 
 工具是普通函数（类型注解 + 中文说明），不 import `mcp`；MCP 和以后的编排框架包装同一个函数，不写两份。
@@ -63,8 +65,8 @@ agent  -->  football_prediction.services  -->  领域包
 ```
 
 - `agent/` 只调 `football_prediction.services` 的公开函数和 `version`，不直接 import 领域包，不写 SQL，库一律用 `open_readonly` 打开，不写 `football.db` / `fotmob.db`。需要的新读法加到 `services`（和接口共用）。
-- `football_prediction/` 和 `server/` 都不 import `agent`。`server/` 仍只 import `services` / `version`；对话服务是 `agent/serve.py` 单独一个进程，不挂在 `server/` 上。这两条和「`agent/` 里没有 SQL 字符串、不调用 `.execute`」由 `tests/test_agent_boundary.py`（AST 扫描）检查。唯一的例外是 `agent/budget.py`：它只写自己的用量库 `agent_data/usage.db`，测试检查它不碰别的库。
-- 前端「不建 `app/api` 或代理」的规则暂不变。网站对话需要的那一个转发路由，等 P6 决定做网站对话时再在这里写成例外。
+- `football_prediction/` 和 `server/` 都不 import `agent`。`server/` 仍只 import `services` / `version`；对话服务是 `agent/serve.py` 单独一个进程，不挂在 `server/` 上。这两条和「`agent/` 里没有 SQL 字符串、不调用 `.execute`」由 `tests/test_agent_boundary.py`（AST 扫描）检查。例外只有两个：`agent/budget.py` 只写用量库 `agent_data/usage.db`，`agent/access.py` 只写邀请码库 `agent_data/access.db`，测试检查它们不碰别的库。FastAPI / uvicorn 只有 `agent/serve.py` 引用。
+- 网站对话只有一个转发路由 `web/src/app/api/chat/route.ts`（见「前端文件」）；只读接口仍不经 Next.js 转发。
 
 ## 领域包
 
@@ -116,14 +118,14 @@ server/routes/<资源>.py  一个资源一个文件，例如 report、review
 
 ```text
 web/src/app/          Next.js 路由、布局、metadata、Provider；页面只组装
-web/src/features/     entry、auth、predictions、match、following、review；按业务分模块
+web/src/features/     entry、auth、predictions、match、following、review、chat；按业务分模块
 web/src/components/   多模块共用展示组件
 web/src/lib/          按职责命名的基础能力；服务端模块标明 server-only
 web/src/styles/       主题变量、全局样式
 web/src/api/          OpenAPI 生成物 schema.d.ts（npm run api:types），禁止手改，ESLint 忽略
 ```
 
-前端不创建 web/src/app/api 或 /api 代理。服务端组件经 `features/*/read.server.ts` 取数：未配置 `API_URL` 时读演示样本，配置后由 `lib/api.server.ts` 在服务端请求只读接口，再由各功能的 `api-adapter.ts`（纯函数）把生成类型转成展示契约；序列化后交给客户端组件，只传页面所需的公开数据。浏览器不直接访问接口。
+前端只有一个 Route Handler：`web/src/app/api/chat/route.ts`，只收 POST，把对话转发给只听本机的 `agent.serve`（`features/chat/forward.server.ts`）。它先查 `Origin` 等于 `SITE_URL`、`Host` 是 `SITE_URL` 的主机和端口、`Content-Type` 是 JSON、带 `X-CSRF` 头、有会话 Cookie，任何一项不过都不转发；只转发 `question` 和 `thread_id`，带服务令牌（`AGENT_SERVICE_TOKEN`）、会话 id 和 CSRF 头，用户和 CSRF 由 `agent.serve` 核对。登录和退出是 `features/chat/actions.ts` 里的 Server Action（Next.js 自带 Origin / Host 比对，另按 `SITE_URL` 再查一遍），不另建路由。不要再加别的 `app/api` 路由或代理只读接口。服务端组件经 `features/*/read.server.ts` 取数：未配置 `API_URL` 时读演示样本，配置后由 `lib/api.server.ts` 在服务端请求只读接口，再由各功能的 `api-adapter.ts`（纯函数）把生成类型转成展示契约；序列化后交给客户端组件，只传页面所需的公开数据。浏览器不直接访问接口。
 
 调用方向：app 组装 features / components；features 可以使用 components / lib；components 不反向引用 features。跨功能调用仅使用模块公开入口，其他模块内部文件通过 ESLint 禁止引用。app 只负责页面组合与路由语义；业务交互放功能组件和 hook。Provider 只在实际使用时创建。
 
