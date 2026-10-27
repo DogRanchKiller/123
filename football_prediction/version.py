@@ -17,7 +17,6 @@ LAYER_VERSIONS = {
     "model_lineup":  "1.1.0",   # 合并规则：系数分 COEF_PRE / COEF_POST，按赔率与首发先后选用（仍为 0）（1.0.0：阵容调整乘到市场 λ 上，只用于 lineup_t1）
     "model_blend":   "1.0.0",  # dc_xg 0.77 + Elo 0.23 的 1X2 融合（确认期 −0.0046±0.0013）
     "model_lgbm":    "1.1.0",   # 滚动 OOS，训练样本翻倍；修复重名方法 bug
-    "model_nn":      "0.1.0",   # PyTorch 表格网络（研究中，未过 G1，不进实盘、不存档；docs/agent-plan.md 9.1）
     "calibration":   "1.0.0",   # Platt scaling；2425 验证无增益（±0.005），不进主流程
     "output":        "1.7.0",   # 自研兜底与亚盘同线对照改为 dc_market，无赔率胜平负不再用 blend，MODEL_TIERS 按 dc_market 重标定（1.6.0：每场结论 + 把握：亚盘稳妥线（赢盘 ≥ 65% 的最近一条线）、重点标记（胜平负市场档高）、亚盘中档标签 0.60（1.5.0：亚盘为主：报告 / explain 先列市场线亚盘（数字盘口、五种结算、赢盘信心档、盘口与水位变动、dc_xg 同线分歧），AH_LINES 扩到 ±4（1.4.0：报告 / explain 优先用多家中位数赔率（≥3 家、24h 内），列赔率来源（1.3.0：Shin 信心档 + 本场估计；1.2.0：判断流程 + explain）））
     "validation":    "1.1.0",   # + 市场基准 run_market_backtest、同场配对 paired_compare

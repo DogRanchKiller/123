@@ -4,14 +4,11 @@ rem Tailscale IPv4 (100.x), not on LAN or public interfaces; the firewall rule f
 rem setup_site.ps1 also only allows 100.64.0.0/10. Reads the API at 127.0.0.1:8000.
 rem SITE_BIND overrides the address (e.g. set SITE_BIND=127.0.0.1 for a local check).
 rem Builds once at start (picks up code after git pull), restarts after a crash.
-rem SITE_URL defaults to http://ADDR:3000 (chat checks Origin/Host against it); the
-rem chat service token AGENT_SERVICE_TOKEN goes in web\.env.local.
 rem Log: logs\site.log. Started at boot by the FootballSiteWeb task (setup_site.ps1).
 cd /d "%~dp0"
 if not exist logs mkdir logs
 set "PATH=%ProgramFiles%\Tailscale;%PATH%"
 set API_URL=http://127.0.0.1:8000
-if not defined AGENT_SERVE_URL set AGENT_SERVE_URL=http://127.0.0.1:8100
 set NEXT_TELEMETRY_DISABLED=1
 set PORT=3000
 set WAITED=
@@ -27,7 +24,6 @@ ping -n 31 127.0.0.1 > nul
 goto addr
 
 :build
-if not defined SITE_URL set SITE_URL=http://%ADDR%:%PORT%
 echo bind %ADDR%:%PORT% >> logs\site.log
 cd web
 call npm run build >> ..\logs\site.log 2>&1

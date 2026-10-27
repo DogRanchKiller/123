@@ -26,47 +26,9 @@ live.py / main.py  --------^
 
 服务函数不直接 `print`，进度通过参数 `log`（默认 `print`）交给调用方；命令行传 `print`，接口可以传日志函数或空操作。
 
-现有的两处例外，不要新增同类引用：
+现有的一处例外，不要新增同类引用：
 
 - `model_market/implied.py` 引用 `output/derive.py` 的亚盘结算函数（`margin_pmf`、`ah_outcome`、`ah_fair_prob`）来拟合市场隐含 λ。
-- `model_nn/` 引用 `model_market/implied.py`（`fit_lambdas`、`fair_probs`、`dc_matrix`、`DEFAULT_RHO`）：变体 B 的输入是市场隐含 λ，比分矩阵也用同一个 DC 矩阵（用户 2026-10-27 定）。`model_nn` 不引用别的模型族，Elo 等特征在 `model_nn/dataset.py` 里自己算。
-
-## Agent 模块
-
-`agent/` 在仓库根目录，与 `server/` 并列，按 [agent-dev.md](agent-dev.md) 分阶段写。它只在 `.venv-ml` 里运行（见 [stack.md](stack.md)）。现有（P1、P2、P3）：
-
-| 文件 | 做什么 |
-|---|---|
-| `agent/config.py` | 库、快照、FotMob 库、知识库目录、向量模型目录与时钟；环境变量 > `.env` 的 `AGENT_DB_PATH` / `AGENT_SNAPSHOT_PATH` / `AGENT_FOTMOB_PATH` / `AGENT_KB_PATH` / `AGENT_EMBED_MODEL` > 默认值，相对路径按仓库根目录；`connect()` 只读打开；测试用 `override()`（可注入假的向量函数） |
-| `agent/tools/blocks.py` | 把 `services` 的返回包成块（开头 `scope`、主体键、`kind`、`at`）；开球后的快照看法改标 `last_pre_kickoff`，快照不早于开球的整块丢弃 |
-| `agent/tools/matches.py` | 比赛类只读工具：`list_upcoming`、`get_match`、`recent_results`、`explain_fixture`、`scorecard`、`resolve_team`、`team_news` |
-| `agent/tools/knowledge.py` | `kb_search`：调 `agent/kb/index.py` 检索，结果包成块；缺 pymilvus、索引没建或正在重建时返回空块和说明 |
-| `agent/mcp_server.py` | 用 MCP（stdio）注册 `agent.tools.TOOLS` 里的同一批函数，`ValueError` 转成工具错误 |
-| `agent/kb/whitelist.toml` `whitelist.py` | 入库文件白名单（四级 `authority`）和它的核对（路径、不收名单、研究文件的 `cited_in` / `basis` / `generated_by` / 锚点、有提交） |
-| `agent/kb/sources.py` | 白名单文件按 git 提交历史切块（每块的可见与被替代时间取提交时间，未提交的改动不收） |
-| `agent/kb/match_chunks.py` | 比赛类块（看法、存档、比分、评分、阵容），只经 `services` 的读函数取 |
-| `agent/kb/embed.py` | 预切词（中文字二元）、bge-m3 向量函数、测试用的假向量函数 |
-| `agent/kb/index.py` | Milvus Lite 索引：建库、增量（替代时间、评分指纹）、按 `as_of` 过滤的向量 + BM25 + RRF 检索、来源标签 |
-| `agent/kb/build.py` `__main__.py` | 收齐资料交给 index；`python -m agent.kb --rebuild / --update / --stats / --eval` |
-| `agent/eval/retrieval.py` `retrieval.jsonl` | 检索评测集与脚本：三种方式的 recall@5 / MRR 和泄漏检查 |
-| `agent/facts/` | 结构化事实：`numbers.py`（第 1 条，数字写法「默认拦、放行表放」）、`units.py`（字段 → 单位对照表与比对）、`verify.py`（第 1–8 条）、`render.py`（占位换成工具结果里的值、来源标签、降级表）。纯 Python，不 import LangChain |
-| `agent/llm.py` | 按 `AGENT_PROVIDER` 建模型（SDK 重试设为 0）；`Caller` 每次 HTTP 请求先预留、再调用、再结算，只对超时、429、5xx 重试 1 次 |
-| `agent/budget.py` `prices.toml` | 用量库 `agent_data/usage.db`：每次请求 `BEGIN IMMEDIATE` 预留，结算为 settled / failed / usage_unknown；`model_calls`、HTTP 请求数和个人日额度三道上限；价格表按 provider + 模型名 + 生效日取，带高峰倍率时段 |
-| `agent/graph.py` `prompts.py` | LangGraph 图（agent ⇄ tools → verify → render / degrade → finish）、四个计数各自判定、单轮超时；`agent_data/state.db` 存对话，每轮只留问题和最终输出。系统提示含北京时间和字段表 |
-| `agent/__main__.py` | `python -m agent "问题" [--thread ID] [--check] [--usage]` |
-| `agent/access.py` | 网站对话的邀请码与会话：`agent_data/access.db` 只存邀请码和会话 id 的 SHA-256；会话 14 天、可吊销；CSRF 令牌是绑定会话的 HMAC（密钥存在同一库里），24 小时过期；`python -m agent.access add / revoke / list` |
-| `agent/serve.py` | 网站对话服务（FastAPI，只听 127.0.0.1:8100）：服务令牌 → 会话 → CSRF → 请求体 → 并发占用 → 一轮；NDJSON 流式返回；记账走 `budget.SITE`（每人当日、全站当日、全站当月），并发每人 1、全站 `AGENT_MAX_CONCURRENCY` |
-| `agent/eval/agent.py` `agent.jsonl` | Agent 评测集（26 题）：`--estimate` 预计花费，`--run` 真实跑并算一次通过率、降级率、措辞与 `kind` 不符、放行表打回率和花费 |
-
-工具是普通函数（类型注解 + 中文说明），不 import `mcp`；MCP 和以后的编排框架包装同一个函数，不写两份。
-
-```
-agent  -->  football_prediction.services  -->  领域包
-```
-
-- `agent/` 只调 `football_prediction.services` 的公开函数和 `version`，不直接 import 领域包，不写 SQL，库一律用 `open_readonly` 打开，不写 `football.db` / `fotmob.db`。需要的新读法加到 `services`（和接口共用）。
-- `football_prediction/` 和 `server/` 都不 import `agent`。`server/` 仍只 import `services` / `version`；对话服务是 `agent/serve.py` 单独一个进程，不挂在 `server/` 上。这两条和「`agent/` 里没有 SQL 字符串、不调用 `.execute`」由 `tests/test_agent_boundary.py`（AST 扫描）检查。例外只有两个：`agent/budget.py` 只写用量库 `agent_data/usage.db`，`agent/access.py` 只写邀请码库 `agent_data/access.db`，测试检查它们不碰别的库。FastAPI / uvicorn 只有 `agent/serve.py` 引用。
-- 网站对话只有一个转发路由 `web/src/app/api/chat/route.ts`（见「前端文件」）；只读接口仍不经 Next.js 转发。
 
 ## 领域包
 
@@ -97,8 +59,7 @@ agent  -->  football_prediction.services  -->  领域包
 |---|---|
 | `services/live_round.py` | 实盘一轮：更新数据、赛后评分、未开赛预测存档、主模型报告、成绩单、替换检查；每轮写快照 `reports/latest_round.json`；读函数 `read_current` / `read_match` / `read_scorecard` |
 | `services/near_round.py` | 临场档：开球前 1.5 小时内抓阵容和多家赔率，存 `*_t1`（0.6 小时内另存 `*_t2`）并给最终看法 |
-| `services/match_analysis.py` | 单场判断的取数与拟合：`ModelCache`、`latest_odds`、`analyse_match`，以及报告（`build_report`）和 explain（`explain_detail`，带赔率获取时间；`explain_inputs` 是它的元组版）共用的串联 |
-| `services/team_read.py` | 按队名的只读用例（Agent 工具层用，接口也可用）：`league_code`、`resolve_team_name`（原样 → 别名表 → 部分匹配 → 近似拼写）、`read_team_recent`、`read_next_fixture`、`read_lineups`（只读挂上的 `fotmob.db`）、`read_grading`（评分行，含 `result_src` 与指标列）；知识库建块用的 `read_archived_ids`（有开球前存档的场次）、`read_scores`（按来源分开的比分，各带获取时间） |
+| `services/match_analysis.py` | 单场判断的取数与拟合：`ModelCache`、`latest_odds`、`analyse_match`，以及报告（`build_report`）和 explain（`explain_inputs`）共用的串联 |
 | `services/backtest_run.py` | 回测演示：原 `main.py` 里的串联 |
 
 读接口只送出这一轮已经算好的结果，不按请求拟合模型：实盘一轮把每场看法（亚盘在前）和成绩单原子写进快照，`read_current` 剔除快照后已开球的场次，`read_match` 把快照里的本轮看法、`predictions` 里主模型的首次存档（没有时用兜底 dc_market）和赛果拼在一起。快照字段改名或删字段时升 `live_round.SNAPSHOT_SCHEMA`，并同时改路由和测试。`live_round.py` 超过下面的行数上限，或出现第二种读法时，把读函数拆到新的用例文件。
@@ -118,14 +79,14 @@ server/routes/<资源>.py  一个资源一个文件，例如 report、review
 
 ```text
 web/src/app/          Next.js 路由、布局、metadata、Provider；页面只组装
-web/src/features/     entry、auth、predictions、match、following、review、chat；按业务分模块
+web/src/features/     entry、auth、predictions、match、following、review；按业务分模块
 web/src/components/   多模块共用展示组件
 web/src/lib/          按职责命名的基础能力；服务端模块标明 server-only
 web/src/styles/       主题变量、全局样式
 web/src/api/          OpenAPI 生成物 schema.d.ts（npm run api:types），禁止手改，ESLint 忽略
 ```
 
-前端只有一个 Route Handler：`web/src/app/api/chat/route.ts`，只收 POST，把对话转发给只听本机的 `agent.serve`（`features/chat/forward.server.ts`）。它先查 `Origin` 等于 `SITE_URL`、`Host` 是 `SITE_URL` 的主机和端口、`Content-Type` 是 JSON、带 `X-CSRF` 头、有会话 Cookie，任何一项不过都不转发；只转发 `question` 和 `thread_id`，带服务令牌（`AGENT_SERVICE_TOKEN`）、会话 id 和 CSRF 头，用户和 CSRF 由 `agent.serve` 核对。登录和退出是 `features/chat/actions.ts` 里的 Server Action（Next.js 自带 Origin / Host 比对，另按 `SITE_URL` 再查一遍），不另建路由。不要再加别的 `app/api` 路由或代理只读接口。服务端组件经 `features/*/read.server.ts` 取数：未配置 `API_URL` 时读演示样本，配置后由 `lib/api.server.ts` 在服务端请求只读接口，再由各功能的 `api-adapter.ts`（纯函数）把生成类型转成展示契约；序列化后交给客户端组件，只传页面所需的公开数据。浏览器不直接访问接口。
+前端不创建 web/src/app/api 或 /api 代理。服务端组件经 `features/*/read.server.ts` 取数：未配置 `API_URL` 时读演示样本，配置后由 `lib/api.server.ts` 在服务端请求只读接口，再由各功能的 `api-adapter.ts`（纯函数）把生成类型转成展示契约；序列化后交给客户端组件，只传页面所需的公开数据。浏览器不直接访问接口。
 
 调用方向：app 组装 features / components；features 可以使用 components / lib；components 不反向引用 features。跨功能调用仅使用模块公开入口，其他模块内部文件通过 ESLint 禁止引用。app 只负责页面组合与路由语义；业务交互放功能组件和 hook。Provider 只在实际使用时创建。
 

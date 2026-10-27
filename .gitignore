@@ -17,13 +17,6 @@ server_watchdog.log
 # 虚拟环境（各人本机自建）
 .venv/
 .venv-scrape/
-.venv-ml/
-.venv-poc*/
-
-# Agent 与训练模块（docs/agent-plan.md 第 5 节）：密钥只在本机 .env；索引、对话状态、用量库；权重与冻结副本
-.env
-agent_data/
-checkpoints/
 
 # 系统生成文件
 .DS_Store

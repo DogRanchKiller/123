@@ -166,7 +166,7 @@ for (const width of [360, 390, 768, 1023, 1024, 1440]) {
       await expect(page.getByRole("navigation")).toBeVisible();
       await expect
         .poll(() => page.locator(".nav-link").evaluateAll((links) => links.map((link) => Math.round(link.getBoundingClientRect().height))))
-        .toEqual([44, 44, 44, 44, 44]);
+        .toEqual([44, 44, 44, 44]);
       await page.getByRole("link", { name: "比赛预测", exact: true }).click();
       await expect(page.getByRole("navigation")).not.toBeVisible();
     } else {
