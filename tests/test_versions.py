@@ -26,6 +26,10 @@ MODULES = {
     "football_prediction.model_lineup.adjust":   "model_lineup",
     "football_prediction.model_blend.blend":     "model_blend",
     "football_prediction.model_lgbm.lgbm_model": "model_lgbm",
+    "football_prediction.model_nn.dataset":      "model_nn",
+    "football_prediction.model_nn.net":          "model_nn",
+    "football_prediction.model_nn.train":        "model_nn",
+    "football_prediction.model_nn.model":        "model_nn",
     "football_prediction.calibration.platt":     "calibration",
     "football_prediction.output.derive":         "output",
     "football_prediction.output.report":         "output",
@@ -52,6 +56,8 @@ def test_model_classes_report_own_version():
     assert XgDixonColesModel.MODEL_VER == version.get("model_xg")
     from football_prediction.model_dc.market_dc import MarketDixonColesModel
     assert MarketDixonColesModel.MODEL_VER == version.get("model_dc_market")
+    from football_prediction.model_nn.model import NNModel   # 顶层不 import torch，.venv 里也能读
+    assert NNModel.MODEL_VER == version.get("model_nn")
 
 
 def test_live_docstring_version():

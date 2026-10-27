@@ -19,12 +19,23 @@
 
 ## 新模型落点
 
-第一个神经网络放在 `football_prediction/model_nn/`。同一改动里：
+第一个神经网络放在 `football_prediction/model_nn/`，在独立环境 `.venv-ml` 里研究和训练（`requirements-ml.txt`，受 `constraints-ml.txt` 约束；见 [stack.md](stack.md)）。现有 `.venv` 不加任何包。
 
-- 按 `AGENTS.md` 的「改一层时」登记 `LAYER_VERSION`。
-- 把 `torch` 写进 `requirements.txt`。用到 Transformers 时再加 `transformers`。在此之前不要加这两项，实盘和 `pytest tests` 保持现有依赖可跑。
-- 权重目录用 `checkpoints/`，并把它加入 `.gitignore`。权重不进版本库。
-- 默认设备：有 CUDA 用 CUDA，否则 CPU。不把 GPU 写成运行前提。
+- 按 `AGENTS.md` 的「改一层时」登记 `LAYER_VERSION`。只研究、没过 G1 时不升 `SYSTEM_VERSION`。
+- 模块顶层不 import torch：`version.py` 和 `tests/test_versions.py` 在 `.venv` 里读它的 `LAYER_VERSION` 不能失败。用到 torch 的测试用 `pytest.importorskip("torch")`。
+- `torch` 只有在 `model_nn` 通过门槛 G1、要在实盘并行存档时，才写进 `requirements.txt`；那次改动另开分支，在 Windows 实盘机上装好并跑一轮 `live` 作为验收。在此之前 `requirements.txt` 不加 `torch` 和 `transformers`。
+- 权重目录用 `checkpoints/`（已 gitignore）。权重不进版本库。
+- 默认设备：有 CUDA 用 CUDA，Mac 上可以用 MPS，否则 CPU。不把 GPU 写成运行前提。
+
+### 门槛 G1 的检验
+
+细节在 [agent-plan.md](agent-plan.md) 第 9.1 节，这里只列规则：
+
+- 选参（2425）和留出（2526）都在 `football.db` 的冻结副本上做：用 SQLite backup 接口复制到 `checkpoints/g1/`，只读打开，md5 写进预注册。`research.db` 只用于探索，它的结论不作 G1 证据，也不在它上面评估 2526。
+- 训练历史从 2122 起，与实盘一致。窗口规则、联赛是否合并训练、特征来源都是配置的一部分，上线时原样使用。
+- 每场样本的特征按这一场自己的 cutoff 生成（只用 `match_date <` 该场日期的比赛）。
+- 跑 2526 之前先写 `_diag/model_nn/prereg.md` 并单独提交，登记全部确认性检验；2526 只跑一次。
+- 一个留出集只有一份显著性预算（单侧 2.28%，按登记的检验数做 Bonferroni），在预注册时一次分完，之后不再在这个留出集上登记新检验。新预算只给 `model_nn` 从没评估过的新留出集；每次评估都在 `_diag/model_nn/eval_log.md` 记一行（副本 md5、日期范围、配置、提交号）。
 
 ## 预测契约
 
@@ -44,4 +55,4 @@
 
 输入是每场比赛的数值特征时，模型是 `torch.nn.Module`，训练循环用 PyTorch。此时不引入 `transformers`。已有表格模型继续用 LightGBM，不改写成神经网络。
 
-输入是文本或序列，或要加载预训练 checkpoint 时，用 Transformers。适配用 PEFT 的 LoRA；显存不够时用 QLoRA。监督微调用 TRL 的 SFT，有偏好标签时用 DPO。不新写 P-Tuning 或 PET。权重来自本地目录，或来自用户本次明确要求的下载。下载前说明仓库和体积。checkpoint 放进 `checkpoints/`，不放进 `大模型项目/模型/`。
+输入是文本或序列，或要加载预训练 checkpoint 时，用 Transformers（同样只在 `.venv-ml` 里）。适配用 PEFT 的 LoRA；显存不够时用 QLoRA。监督微调用 TRL 的 SFT，有偏好标签时用 DPO。不新写 P-Tuning 或 PET。权重来自本地目录，或来自用户本次明确要求的下载。下载前说明仓库和体积。checkpoint 放进 `checkpoints/`，不放进 `大模型项目/模型/`。

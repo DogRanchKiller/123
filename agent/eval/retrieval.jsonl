@@ -1,0 +1,100 @@
+{"id": "r01", "query": "加一个新联赛需要在哪几处登记", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "布局"}], "note": "LEAGUES、LEAGUE_IDS、LEAGUE_SLUGS 与 add_live_leagues"}
+{"id": "r02", "query": "Mac 和 Windows 两台机器谁可以提交 football.db", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "两人协作：Mac 与 Windows"}, {"path": "docs/modules.md", "heading": "两人协作"}], "note": ""}
+{"id": "r03", "query": "改了一个模块的算法，版本号要怎么改", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "改一层时"}], "note": ""}
+{"id": "r04", "query": "每天的定时任务几点跑，做了哪些事", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "运行环境"}, {"path": "docs/handover.md", "heading": "日常运行"}, {"path": "docs/progress.md", "heading": "当前"}], "note": ""}
+{"id": "r05", "query": "批处理文件为什么不能写中文", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "运行环境"}, {"path": "docs/issues.md", "heading": "每日任务批处理含中文时 cmd 解析出错"}], "note": ""}
+{"id": "r06", "query": "什么条件下可以把主模型换掉", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "预测规则"}], "note": "promotion_check、PROMOTE_MIN_N"}
+{"id": "r07", "query": "能不能把更早的历史赛季导进实盘数据库", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "数据规则"}, {"path": "docs/handover.md", "heading": "不能做的事（摘要，全文见 AGENTS.md）"}], "note": ""}
+{"id": "r08", "query": "OddsPortal 抓不到历史赔率的原因", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "数据规则"}], "note": "robots.txt 禁归档与 ajax"}
+{"id": "r09", "query": "抓 FotMob 页面的请求间隔和禁止访问的路径", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "数据规则"}], "note": ""}
+{"id": "r10", "query": "同一场比赛重复预测会覆盖之前的存档吗", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "预测规则"}, {"path": "docs/api.md", "heading": "ArchivedPrediction：首次存档"}], "note": ""}
+{"id": "r11", "query": "跑单条测试的命令", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "命令"}], "note": ""}
+{"id": "r12", "query": "为什么不能直接运行 pytest 不带路径", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "命令"}, {"path": "docs/issues.md", "heading": "裸跑 pytest 会收集参考目录并失败"}], "note": ""}
+{"id": "r13", "query": "会话结束时交接记录写在哪、文件名怎么起", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "会话交接（始终启用）"}], "note": ""}
+{"id": "r14", "query": "大模型项目这个目录在系统里起什么作用", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "足球预测系统"}], "note": "文件开头一段，标题就是文件标题"}
+{"id": "r15", "query": "技能文件改完以后怎么同步到 Claude 那边", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "检索"}], "note": "sync_skills.py"}
+{"id": "r16", "query": "回测能用随机 KFold 吗，哪个赛季是留出的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "预测规则"}], "note": ""}
+{"id": "r17", "query": "ML 环境的约束文件里版本要和谁保持一致", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "命令"}, {"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": "constraints-ml.txt"}
+{"id": "r18", "query": "OddsPortal 新球队名字对不上怎么办", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "数据规则"}], "note": "NAME_ALIASES"}
+{"id": "r19", "query": "群友怎么访问网站，有没有密码", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "渲染、SEO 与部署"}, {"path": "AGENTS.md", "heading": "运行环境"}], "note": "Tailscale、无口令"}
+{"id": "r20", "query": "网站的配色和移动端适配要求", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "展示与手机适配"}], "note": ""}
+{"id": "r21", "query": "后端用什么框架，接口能不能直接写 SQL", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "后端与后续数据接入"}, {"path": "docs/modules.md", "heading": "后端文件"}], "note": ""}
+{"id": "r22", "query": "训练为什么用 Python 而不是 TypeScript", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "训练"}], "note": ""}
+{"id": "r23", "query": "Agent 的 API 密钥放在哪里", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": ".env、.env.example"}
+{"id": "r24", "query": "大语言模型会不会直接给出胜平负的概率", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": ""}
+{"id": "r25", "query": "比赛页面用静态生成还是动态渲染，404 怎么处理", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "渲染、SEO 与部署"}], "note": ""}
+{"id": "r26", "query": "一个 Python 文件写到多少行就该拆", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "单文件尺度"}], "note": ""}
+{"id": "r27", "query": "新写的函数应该放进哪个文件", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "新代码放哪"}], "note": ""}
+{"id": "r28", "query": "路由函数里允许做哪些事情", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "后端文件"}], "note": ""}
+{"id": "r29", "query": "web、server、services 之间的调用方向", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "三层"}], "note": ""}
+{"id": "r30", "query": "跨包引用下划线开头的私有函数可以吗", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "公开表面"}], "note": ""}
+{"id": "r31", "query": "agent 目录可以 import 哪些包，能不能写库", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "Agent 模块"}, {"path": "AGENTS.md", "heading": "布局"}], "note": ""}
+{"id": "r32", "query": "中间层每个文件负责什么用例", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "中间层的文件"}], "note": ""}
+{"id": "r34", "query": "领域包之间哪些可以互相引用", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "领域包"}, {"path": "docs/modules.md", "heading": "三层"}], "note": ""}
+{"id": "r35", "query": "前端演示数据每场比赛要有哪些字段", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "演示契约与状态"}], "note": ""}
+{"id": "r36", "query": "神经网络模型的输出格式要求", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "预测契约"}], "note": "p_home_win 三项和为 1"}
+{"id": "r37", "query": "log loss 和 Brier 用哪个函数算", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "分析"}], "note": ""}
+{"id": "r38", "query": "第一个神经网络放在哪个目录、在哪个环境训练", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "新模型落点"}], "note": ""}
+{"id": "r39", "query": "神经网络进实盘前要过的门槛怎么检验", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "门槛 G1 的检验"}], "note": ""}
+{"id": "r40", "query": "NumPy、PyTorch、Transformers 各自用在什么地方", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "可行性"}], "note": ""}
+{"id": "r41", "query": "输入是表格数值特征时网络该怎么搭", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "框架选择"}], "note": ""}
+{"id": "r42", "query": "怎么启动只读接口，默认监听哪个端口", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/api.md", "heading": "启动与访问"}], "note": ""}
+{"id": "r43", "query": "拿最近几天已经开球的比赛用哪个接口参数", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/api.md", "heading": "`GET /api/matches?recent_days=3`"}], "note": ""}
+{"id": "r44", "query": "单场详情接口返回哪些部分", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/api.md", "heading": "`GET /api/matches/{match_id}`"}], "note": ""}
+{"id": "r45", "query": "成绩单接口按什么排序", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/api.md", "heading": "`GET /api/review`"}, {"path": "docs/api.md", "heading": "ScorecardRow：成绩单"}], "note": ""}
+{"id": "r46", "query": "接口里亚盘的 line_source 是市场线还是公平线", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/api.md", "heading": "`asian`（主队方向）"}], "note": ""}
+{"id": "r47", "query": "接口返回的时间是什么时区", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/api.md", "heading": "通用约定"}], "note": ""}
+{"id": "r48", "query": "前端的 TypeScript 类型怎么从接口生成", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/api.md", "heading": "前端生成类型"}, {"path": "AGENTS.md", "heading": "命令"}], "note": ""}
+{"id": "r49", "query": "最可能的几个比分在接口里叫什么字段", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/api.md", "heading": "MatchView：本轮看法"}], "note": "likely_scores"}
+{"id": "r50", "query": "换一台新电脑从零把项目跑起来", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/handover.md", "heading": "新机器从零跑起来"}], "note": ""}
+{"id": "r51", "query": "一场比赛从数据进库到出预测经过哪些步骤", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/handover.md", "heading": "一场比赛怎么变成预测"}], "note": ""}
+{"id": "r52", "query": "想改信心档的阈值要动哪个文件", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/handover.md", "heading": "改东西从哪里下手"}], "note": ""}
+{"id": "r53", "query": "亚盘选边的长期命中率大概多少", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/handover.md", "heading": "接手前要知道的事"}], "note": ""}
+{"id": "r54", "query": "哪些东西不在版本库里需要自己建", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/handover.md", "heading": "包里有什么"}], "note": ""}
+{"id": "r55", "query": "现在的系统版本是多少", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "项目进度"}, {"path": "docs/progress.md", "heading": "1.12.0（当前）"}], "note": ""}
+{"id": "r56", "query": "Agent 模块的工具层做完了没有", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "已约定，尚未写代码"}], "note": "P1 完成，提交 8b93a82"}
+{"id": "r57", "query": "Agent 编排最后选了哪个框架", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "已约定，尚未写代码"}, {"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": "LangGraph"}
+{"id": "r58", "query": "没有赔率时的兜底模型为什么换成 dc_market", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "兜底换 dc_market、第二临场档、只用亚盘的对照研究（2026-10-26，1.12.0）"}, {"path": "docs/progress.md", "heading": "1.12.0（当前）"}, {"path": "_diag/fallback/result.txt", "heading": ""}], "note": ""}
+{"id": "r59", "query": "亚盘稳妥线是怎么定出来的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.11.0"}], "note": ""}
+{"id": "r60", "query": "坏赔率是怎么检查和剔除的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.11.1"}, {"path": "docs/issues.md", "heading": "football-data 2526 起部分场次的赛前平均亚盘客队水位错误"}], "note": "clean_odds / bad_market"}
+{"id": "r61", "query": "赛果还没出来时用 FotMob 比分评分是哪一版加的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.8.0"}, {"path": "docs/issues.md", "heading": "football-data 赛果晚几天，实盘评分一直落后"}], "note": ""}
+{"id": "r62", "query": "信心档改用 Shin 去水重新标定", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.6.0"}], "note": ""}
+{"id": "r63", "query": "临场档开球后才存档的问题怎么修的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.10.1"}, {"path": "docs/issues.md", "heading": "临场档在开球后才存档，多家赔率的抓取时间记早了"}], "note": "round_clock"}
+{"id": "r64", "query": "实盘从五个联赛扩到十一个是哪一版", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.9.0"}], "note": ""}
+{"id": "r65", "query": "报告优先用多家公司中位数赔率", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.7.0"}, {"path": "docs/api.md", "heading": "MatchView：本轮看法"}], "note": ""}
+{"id": "r66", "query": "分析重心改成亚盘是哪个版本", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.10.0"}], "note": ""}
+{"id": "r68", "query": "网站演示骨架用了什么前端技术，测过哪些浏览器", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "网站演示骨架（web 0.1.0）"}], "note": ""}
+{"id": "r69", "query": "临场档的信心档还要核对什么", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "已约定，尚未写代码"}], "note": ""}
+{"id": "r70", "query": "understat 的 robots.txt 允许抓取吗", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "understat robots.txt 为 `Disallow: /`，FotMob 使用条款未核验"}], "note": ""}
+{"id": "r71", "query": "升级球队的攻防参数为什么会跑飞", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "升级队 Dixon-Coles 攻防参数发散"}], "note": ""}
+{"id": "r73", "query": "联赛多了以后每日任务要跑多久", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "联赛增加后每日任务和临场档的抓取时间变长"}], "note": ""}
+{"id": "r74", "query": "临场档和每日任务同时写库会锁住吗", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "临场档依赖电脑开机，且可能与每日任务争 SQLite 锁"}, {"path": "AGENTS.md", "heading": "运行环境"}], "note": "BUSY_TIMEOUT"}
+{"id": "r75", "query": "阵容调整系数最后定成多少", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "阵容调整系数还没有定"}, {"path": "_diag/explore/lineup_fotmob_eval.log", "heading": ""}], "note": ""}
+{"id": "r76", "query": "意甲法甲的信心档命中率数字是哪来的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "意甲 / 法甲的信心档命中率是三联赛标定的"}], "note": ""}
+{"id": "r77", "query": "老赛季 CSV 只有射门没有射正导致报错", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "CSV 只有射门没有射正时 `load_season` 报 KeyError"}], "note": ""}
+{"id": "r78", "query": "从详情页返回列表后滚动位置丢了", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "返回预测列表时滚动恢复被路由重置"}], "note": ""}
+{"id": "r79", "query": "Mac 上接口测试被跳过", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "Mac 的 `.venv` 没装 httpx，接口测试被跳过"}], "note": ""}
+{"id": "r80", "query": "新增六个联赛没有 xG 对模型有什么影响", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版"}], "note": ""}
+{"id": "r81", "query": "dc_market 减 blend 的同场 log loss 差值", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "_diag/fallback/result.txt", "heading": ""}], "note": "研究日志"}
+{"id": "r82", "query": "兜底模型信心档高中低三档的命中率标定", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "_diag/fallback/tiers.txt", "heading": ""}], "note": ""}
+{"id": "r83", "query": "只用亚盘和大小球反推与现行做法的对照结果", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "_diag/ah_only/result.txt", "heading": ""}, {"path": "docs/progress.md", "heading": "兜底换 dc_market、第二临场档、只用亚盘的对照研究（2026-10-26，1.12.0）"}], "note": ""}
+{"id": "r84", "query": "比分矩阵 rho 取多少更好", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "_diag/explore/score_shape.log", "heading": ""}, {"path": "docs/progress.md", "heading": "1.6.0"}], "note": ""}
+{"id": "r85", "query": "各亚盘线上主队等效赢盘概率和实际命中对比", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "_diag/explore/ah_confidence_line.log", "heading": ""}], "note": ""}
+{"id": "r86", "query": "剔除坏行以后稳妥线命中率复核", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "_diag/explore/ah_clean_recheck.log", "heading": ""}, {"path": "docs/progress.md", "heading": "1.11.0"}], "note": ""}
+{"id": "L01", "query": "Agent 编排最后选了哪个框架", "as_of": "2026-10-27T03:30:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "已约定，尚未写代码"}], "forbid": ["用户选定 LangGraph"], "note": "泄漏：P1.5 提交（04:16）之前还没选定"}
+{"id": "L02", "query": "没有赔率的场次回退到哪个模型", "as_of": "2026-10-26T12:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "预测规则"}], "forbid": ["`dc_market` / `model_dc_market`"], "note": "泄漏：1.12.0 合并到 main（10-26 23:08）之前兜底还是 dc_xg"}
+{"id": "L03", "query": "现在的系统版本是多少", "as_of": "2026-10-25T18:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "项目进度"}], "forbid": ["系统版本：1.9.0", "系统版本：1.12.0"], "note": "泄漏：当时是 1.7.0"}
+{"id": "L04", "query": "现在的系统版本是多少", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "项目进度"}], "forbid": ["系统版本：1.4.0", "系统版本：1.9.0"], "note": "反向：已被替代的旧版本号不能再出现"}
+{"id": "L05", "query": "亚盘稳妥线怎么选", "as_of": "2026-10-26T12:00:00+08:00", "gold": [], "forbid": ["稳妥线"], "note": "泄漏：1.11.0 合并之前没有稳妥线"}
+{"id": "L06", "query": "群友访问网站要不要口令", "as_of": "2026-10-26T12:00:00+08:00", "gold": [], "forbid": ["Tailscale"], "note": "泄漏：访问方式 10-26 合并时才写进文档"}
+{"id": "L07", "query": "坏赔率入库前怎么检查", "as_of": "2026-10-26T12:00:00+08:00", "gold": [], "forbid": ["clean_odds"], "note": "泄漏"}
+{"id": "L08", "query": "第二临场档什么时候存", "as_of": "2026-10-26T12:00:00+08:00", "gold": [], "forbid": ["_t2"], "note": "泄漏"}
+{"id": "L09", "query": "赛果未到时用 FotMob 比分先评分", "as_of": "2026-10-25T18:00:00+08:00", "gold": [], "forbid": ["fotmob_results"], "note": "泄漏：1.8.0 在 10-25 20:34 提交"}
+{"id": "L10", "query": "Agent 的依赖怎么装，ML 环境用哪个文件", "as_of": "2026-10-27T02:00:00+08:00", "gold": [], "forbid": ["requirements-ml"], "note": "泄漏：P0 在 02:43 提交"}
+{"id": "L11", "query": "按队名查某队最近几场的服务函数", "as_of": "2026-10-27T03:00:00+08:00", "gold": [], "forbid": ["team_read"], "note": "泄漏：P1 在 03:17 提交"}
+{"id": "L12", "query": "存档前怎么判断是否已经开球", "as_of": "2026-10-26T12:00:00+08:00", "gold": [], "forbid": ["round_clock"], "note": "泄漏：1.10.1"}
+{"id": "L13", "query": "Mac 上接口测试为什么被跳过", "as_of": "2026-10-26T12:00:00+08:00", "gold": [], "forbid": ["httpx"], "note": "泄漏"}
+{"id": "L14", "query": "dc_market 和 blend 谁更好", "as_of": "2026-10-26T12:00:00+08:00", "gold": [], "forbid": ["dc_market − blend"], "note": "泄漏：研究日志随 10-26 合并提交"}
+{"id": "L15", "query": "实盘有哪些联赛", "as_of": "2026-10-25T12:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "足球预测系统"}], "forbid": ["荷甲"], "note": "泄漏：六个新联赛 10-25 20:34 才加"}
+{"id": "L16", "query": "阵容模型用在哪个临场档", "as_of": "2026-10-25T06:00:00+08:00", "gold": [], "forbid": ["lineup_t1"], "note": "泄漏：阵容模型 10-25 13:58 提交"}
+{"id": "L17", "query": "实盘信心档用的是哪种去水", "as_of": "2026-10-25T06:00:00+08:00", "gold": [], "forbid": ["MARKET_TIERS"], "note": "泄漏：1.6.0 Shin 重标随 10-25 13:58 提交"}

@@ -19,6 +19,15 @@
 
 ## 未解决
 
+### model_nn 评估时个别场次的候选比分矩阵是 NaN
+
+- 状态：未解决
+- 日期：2026-10-27
+- 现象：G1 留出 T1（五联赛 B）候选 1747 场有 1X2 log loss，对照 1752 场；运行时 `model_market/implied.py:32` 报一次 `invalid value encountered in divide`。
+- 原因：未查清。推断是候选输出的 λ 与 rho 让 `dc_matrix` 的 DC 修正项为负或矩阵和为 0：训练损失 `net.dc_nll` 把 tau 截断在 1e-6 以上，评估与 `NNModel.score_matrix` 用的 `dc_matrix` 没有截断。
+- 处理：未处理。这几场被 `paired_compare` 的配对剔除，只会让候选看起来更好，T1 不通过的结论不变。下次在新留出集上评估前，先让评估和训练用同一套截断（或限制 rho 使修正项恒为正），并让 NaN 计为失败而不是剔除；这属于改算法，要升 `model_nn` 的 `LAYER_VERSION`。
+- 位置：`football_prediction/model_nn/model.py`、`football_prediction/model_nn/net.py`、`_diag/model_nn/evaluate.py`
+
 ### 联赛增加后每日任务和临场档的抓取时间变长
 
 - 状态：未解决
@@ -56,6 +65,42 @@
 - 原因：`team_map` 的相似度低于 `TEAM_MIN` 0.9：Sheffield Wednesday / Sheffield Weds 0.84、AVS Futebol SAD / AVS 0.38、Saint-Étienne / St Etienne 0.86、Adana Demirspor / Ad. Demirspor 0.88、Bodrum FK / Bodrumspor 0.67、RWDM Brussels / RWD Molenbeek 0.50、Cova da Piedade SAD / Belenenses（football-data 2122 的叫法）0.23。
 - 处理：在 `FOTMOB_ALIASES` 补这 7 个。补后剩 103 场配不上，都是 FotMob 有、football-data 没有的场次（比甲附加赛每季 24 场，英冠 / 荷甲升级附加赛每季 3–7 场），不用配。
 - 位置：`football_prediction/data/fotmob_parse.py`
+
+### Mac 上默认的 Node 26 跑 Vitest 全部失败
+
+- 状态：已解决（不改代码）
+- 日期：2026-10-27
+- 现象：在 `web/` 用 shell 默认的 `node`（v26.8.2，`~/.local/bin/node`）跑 `npx vitest run`，12 个文件 60 项全部失败，报 `localStorage` 为 undefined（`tests/setup.ts` 的 `localStorage.clear()`）。
+- 原因：项目要求 Node 24 LTS（`package.json` 的 `engines` 为 `>=24 <25`）；Node 25 起自带的全局 `localStorage` 遮住了 jsdom 的实现。
+- 处理：用 Node 24 跑前端检查，Mac 上是 `PATH=/opt/homebrew/opt/node@24/bin:$PATH`（v24.22.1）；换成 Node 24 后 60 项全部通过。不为 Node 26 改测试。
+- 位置：`web/package.json`、`web/tests/setup.ts`
+
+### `.venv-ml` 里 `pytest tests` 在 model_nn 的 torch 测试处段错误
+
+- 状态：已解决（未升版本，只改测试）
+- 日期：2026-10-27
+- 现象：Mac 上 `.venv-ml/bin/python -m pytest tests` 跑到 `test_model_nn.py` 第一个 torch 测试时进程退出（139，`Fatal Python error: Segmentation fault`，没有栈）。单独跑 `test_model_nn.py` 通过；先跑 `test_agent_kb.py` 里任一个建索引的测试再跑它就复现。`.venv` 不受影响（torch 测试跳过）。
+- 原因：未完全查清。`OMP_NUM_THREADS=1` 时不崩，`KMP_DUPLICATE_LIB_OK=TRUE` 仍崩；`.venv-ml` 里 torch、sklearn、faiss 各带一份 `libomp.dylib`。只建一个 Milvus Lite 集合再跑 torch 的最小脚本不崩，所以与知识库测试里具体哪一步有关没有定位。
+- 处理：`tests/test_model_nn.py` 加 autouse fixture，torch 测试前 `torch.set_num_threads(1)`；`.venv-ml` 440 passed。选参和留出脚本不加载 Milvus，照常多线程。以后别的测试在同一进程里同时用 Milvus 和 torch 时同样处理。
+- 位置：`tests/test_model_nn.py`
+
+### 知识库检索偶尔返回「正在被另一个进程使用」
+
+- 状态：已解决（未升版本，`agent/` 不在 `LAYER_VERSIONS` 里）
+- 日期：2026-10-27
+- 现象：P3 第一轮真实评测里 `kb_search` 两次返回「知识库正在被另一个进程使用」，当时没有 `--rebuild` / `--update` 在跑；同一轮紧接着的另一次检索正常。日志里同时有 gRPC `GOAWAY ... too_many_pings` 和 `Fail connecting to server on 127.0.0.1`。
+- 原因：Milvus Lite 在本进程里起本地服务，客户端的 gRPC 连接偶尔被对端以 `too_many_pings` 断开，新建 `MilvusClient` 时重连失败抛 `MilvusException`；`_client` 把所有打开失败都当成「另一进程锁着目录」。
+- 处理：打开失败隔 1 秒重试一次（`OPEN_ATTEMPTS`、`OPEN_WAIT`），两次都失败才报 `KBBusy`；测试模拟第一次失败、第二次成功。第二轮评测 gRPC 断开仍出现 3 次，都由重试接住，没有再返回这句说明。
+- 位置：`agent/kb/index.py`、`tests/test_agent_kb.py`
+
+### Mac 的 `.venv` 没装 httpx，接口测试被跳过
+
+- 状态：已解决（依赖未变，只补装本机 `.venv`）
+- 日期：2026-10-27
+- 现象：Mac 上 `.venv/bin/python -m pytest tests -q` 是 210 passed、1 skipped，跳过原因 `tests/test_server.py:11: could not import 'httpx'`，`test_server.py` 的 8 项都没跑。同一份测试在装齐 `requirements.txt` 的 `.venv-ml` 里是 218 passed。
+- 原因：`requirements.txt` 的 `httpx==0.28.1` 是 2026-10-26 提交 `7f2aba5` 加的；Mac 的 `.venv` 建于 2026-10-24（`pyvenv.cfg` 修改时间），之后没按新的 `requirements.txt` 重装。Windows 实盘机的 `.venv` 有没有装，未核对。
+- 处理：2026-10-27 经用户同意，`.venv/bin/python -m pip install -r requirements.txt -c <当时的 pip freeze>`（锁住已有包的版本），只多装了 httpx 0.28.1 和 httpcore 1.0.9，`pip check` 无冲突。Mac 上 `.venv` 和 `.venv-ml` 都是 218 passed。`.venv` 里有一条 Starlette 的弃用提示（`starlette.testclient` 建议用 `httpx2`），不影响结果。Windows 实盘机拉取后自行核对，见 `docs/agent-dev.md` 第 3 节。
+- 位置：`.venv`（本机）、`requirements.txt`、`tests/test_server.py`、`constraints-ml.txt`
 
 ### 新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版
 
