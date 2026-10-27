@@ -19,6 +19,15 @@
 
 ## 未解决
 
+### model_nn 评估时个别场次的候选比分矩阵是 NaN
+
+- 状态：未解决
+- 日期：2026-10-27
+- 现象：G1 留出 T1（五联赛 B）候选 1747 场有 1X2 log loss，对照 1752 场；运行时 `model_market/implied.py:32` 报一次 `invalid value encountered in divide`。
+- 原因：未查清。推断是候选输出的 λ 与 rho 让 `dc_matrix` 的 DC 修正项为负或矩阵和为 0：训练损失 `net.dc_nll` 把 tau 截断在 1e-6 以上，评估与 `NNModel.score_matrix` 用的 `dc_matrix` 没有截断。
+- 处理：未处理。这几场被 `paired_compare` 的配对剔除，只会让候选看起来更好，T1 不通过的结论不变。下次在新留出集上评估前，先让评估和训练用同一套截断（或限制 rho 使修正项恒为正），并让 NaN 计为失败而不是剔除；这属于改算法，要升 `model_nn` 的 `LAYER_VERSION`。
+- 位置：`football_prediction/model_nn/model.py`、`football_prediction/model_nn/net.py`、`_diag/model_nn/evaluate.py`
+
 ### 联赛增加后每日任务和临场档的抓取时间变长
 
 - 状态：未解决

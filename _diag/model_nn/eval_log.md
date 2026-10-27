@@ -160,3 +160,7 @@
 | 2026-10-27 01:18 | 741fe073a526afce46fb55e50420904a | 2024-08-15 – 2024-09-30 | D1,E0,F1,I1,SP1 | smoke T2 A/full h128-64 d0.1 wd0.0001 lr0.0003 group s0 vs dc_market | 78b3e6e+dirty |
 | 2026-10-27 01:18 | 741fe073a526afce46fb55e50420904a | 2024-07-26 – 2024-09-30 | B1,E1,N1,P1,SC0,T1 | smoke T3 B/no_xg h32 d0.3 wd0.0001 lr0.001 group s0 vs market_implied | 78b3e6e+dirty |
 | 2026-10-27 01:19 | 741fe073a526afce46fb55e50420904a | 2024-07-26 – 2024-09-30 | B1,E1,N1,P1,SC0,T1 | smoke T4 A/no_xg h64-32 d0.1 wd0.0001 lr0.001 group s0 vs dc_market | 78b3e6e+dirty |
+| 2026-10-27 01:31 | 741fe073a526afce46fb55e50420904a | 2025-08-15 – 2026-05-24 | D1,E0,F1,I1,SP1 | holdout T1 B/no_xg h32 d0.3 wd0.0001 lr0.001 group s0 vs market_implied | 94d7205+dirty |
+| 2026-10-27 01:32 | 741fe073a526afce46fb55e50420904a | 2025-08-15 – 2026-05-24 | D1,E0,F1,I1,SP1 | holdout T2 A/full h128-64 d0.1 wd0.0001 lr0.0003 group s0 vs dc_market | 94d7205+dirty |
+| 2026-10-27 01:32 | 741fe073a526afce46fb55e50420904a | 2025-07-25 – 2026-05-24 | B1,E1,N1,P1,SC0,T1 | holdout T3 B/no_xg h32 d0.3 wd0.0001 lr0.001 group s0 vs market_implied | 94d7205+dirty |
+| 2026-10-27 01:33 | 741fe073a526afce46fb55e50420904a | 2025-07-25 – 2026-05-24 | B1,E1,N1,P1,SC0,T1 | holdout T4 A/no_xg h64-32 d0.1 wd0.0001 lr0.001 group s0 vs dc_market | 94d7205+dirty |
