@@ -5,7 +5,7 @@ SYSTEM_VERSION = "1.12.0"
 
 LAYER_VERSIONS = {
     "data":          "1.9.0",   # 入库前剔除隐含概率之和 < 1 的赔率组（亚盘连线一起），旧行不改（1.8.0: book_odds.fetched_at 记每组抓回时刻，抓回时已开球的不入库（1.7.0:+ E1/N1/P1/SC0/B1/T1 实盘（2122–2627）与 OddsPortal 队名、understat US_LEAGUES（v1.6.0: 意甲 I1 / 法甲 F1 实盘（2122–2627）与 OddsPortal / FotMob 队名（v1.5.0: 多家公司赔率 book_odds；v1.4.0: 亚盘/Pinnacle/赛程大小球、快照表；v1.3.0: xG；v1.2.0: 射正；v1.1.0: 赔率、赛程））））
-    "data_fotmob":   "1.2.0",   # + 六个新联赛的 FotMob 联赛 id 与队名（1.1.0：联赛页完赛比分 fotmob_results（只用于先评分）（1.0.0：FotMob 阵容 / 伤停 / 球员 xG / 射门（HTML 页，不用 /api/）；understat 缺时补 match_xg））
+    "data_fotmob":   "1.2.1",   # + 历史赛季队名别名（1.2.0：六个新联赛的 FotMob 联赛 id 与队名（1.1.0：联赛页完赛比分 fotmob_results（只用于先评分）（1.0.0：FotMob 阵容 / 伤停 / 球员 xG / 射门（HTML 页，不用 /api/）；understat 缺时补 match_xg）））
     "features":      "1.0.0",
     "model_elo":     "1.1.0",   # 净胜球加权更新 + 有序 logit（v1.0.0 融合无增益）
     "model_dc":      "1.3.0",   # + 单队参数收缩 shrink=0.5（修复升级队参数发散）

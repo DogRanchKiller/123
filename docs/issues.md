@@ -48,6 +48,15 @@
 
 ## 已解决
 
+### FotMob 历史赛季有 7 个队名配不上
+
+- 状态：已解决（data_fotmob 1.2.1）
+- 日期：2026-10-27
+- 现象：11 联赛 2122–2526 的 FotMob 赛程 16064 场完赛里 632 场配不上 match_id，集中在英冠（每季约 50 场）、葡超、法甲、比甲、土超。
+- 原因：`team_map` 的相似度低于 `TEAM_MIN` 0.9：Sheffield Wednesday / Sheffield Weds 0.84、AVS Futebol SAD / AVS 0.38、Saint-Étienne / St Etienne 0.86、Adana Demirspor / Ad. Demirspor 0.88、Bodrum FK / Bodrumspor 0.67、RWDM Brussels / RWD Molenbeek 0.50、Cova da Piedade SAD / Belenenses（football-data 2122 的叫法）0.23。
+- 处理：在 `FOTMOB_ALIASES` 补这 7 个。补后剩 103 场配不上，都是 FotMob 有、football-data 没有的场次（比甲附加赛每季 24 场，英冠 / 荷甲升级附加赛每季 3–7 场），不用配。
+- 位置：`football_prediction/data/fotmob_parse.py`
+
 ### 新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版
 
 - 状态：已解决（output 1.7.0 / 系统 1.12.0）

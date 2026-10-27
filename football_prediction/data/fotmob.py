@@ -1,5 +1,5 @@
 """
-data/fotmob.py  v1.2.0（数据层的一部分）
+data/fotmob.py  v1.2.1（数据层的一部分）
 FotMob 阵容与球员 xG：只抓 HTML 页面（robots.txt 允许），不调用 /api/（robots.txt 禁止），每次请求间隔 ≥3 秒。
   fotmob_matches：FotMob 场次 ↔ match_id、全队 xG；lineups：每次抓取一个批次（预测阵容 / 正式阵容 / 伤停）；
   player_match：赛后球员分钟、xG、xA、npxG；fotmob_shots：逐脚射门（分钟、xG）。
@@ -11,6 +11,7 @@ FotMob 阵容与球员 xG：只抓 HTML 页面（robots.txt 允许），不调�
 - backfill_xg：understat 拿不到时，用 FotMob 全队 xG 补 match_xg 里缺的场次（us_match_id 记为 "fotmob:{id}"）。
 v1.1.0: collect_results：当前赛季联赛赛程页（每联赛 1 页）里的完赛比分 → fotmob_results（判负场次不写）。
 v1.2.0: 命令行 --leagues 默认取 fotmob_parse.LEAGUE_IDS 全部联赛（新增六个联赛）。
+v1.2.1: 与 fotmob_parse 同步（历史赛季队名别名），本文件行为不变。
   football-data 赛果通常晚几天，review 层在 matches 还没有赛果时用它先评分；matches 与模型拟合不受影响。
   match_id 用 loader 同一算法（本库队名 + 日期），日期按 0 / -1 / +1 天依次试，优先取库里已有的 id。
 修改此文件后请同步更新 version.py 中 "data_fotmob" 的版本号。
@@ -24,7 +25,7 @@ from football_prediction.data.fotmob_parse import (
     LEAGUE_IDS, compact_match, league_matches, next_data, pair_matches, season_param, team_map)
 from football_prediction.data.loader import _make_match_id, season_of
 
-LAYER_VERSION = "1.2.0"
+LAYER_VERSION = "1.2.1"
 
 BASE = "https://www.fotmob.com"
 UA = "Mozilla/5.0 (football-prediction research; low-frequency)"

@@ -1,5 +1,5 @@
 """
-data/fotmob_parse.py  v1.2.0
+data/fotmob_parse.py  v1.2.1
 FotMob 页面解析（纯函数，不联网、不读库）。数据来自 HTML 页里的 <script id="__NEXT_DATA__">，
 不调用 /api/（robots.txt 禁止）。
   league_matches：联赛赛程页 → 每场 FotMob id、页面地址、主客队、开球时间、状态、完赛比分、是否判负。
@@ -9,6 +9,8 @@ FotMob 页面解析（纯函数，不联网、不读库）。数据来自 HTML �
 v1.1.0: league_matches 增加 awarded 与 score（完赛比分，供 fotmob.collect_results 提前评分）。
 v1.2.0: LEAGUE_IDS 加英冠 E1 / 荷甲 N1 / 葡超 P1 / 苏超 SC0 / 比甲 B1 / 土超 T1（2026-10-25 用 2627 赛程核对），
         FOTMOB_ALIASES 补 QPR、Sittard、Sporting、Hearts、OH Leuven、Basaksehir。
+v1.2.1: FOTMOB_ALIASES 补历史赛季队名（2026-10-27 用 11 联赛 2122–2526 赛程核对）：Sheffield Wednesday、
+        AVS、Saint-Étienne、Adana Demirspor、Bodrum、RWDM、Cova da Piedade（football-data 记为 Belenenses）。
 修改此文件后请同步更新 version.py 中 "data_fotmob" 的版本号。
 """
 import json
@@ -17,7 +19,7 @@ from datetime import date
 
 from football_prediction.data.oddsportal_parse import name_sim, norm_name
 
-LAYER_VERSION = "1.2.0"
+LAYER_VERSION = "1.2.1"
 
 # football-data 联赛代码 -> (FotMob 联赛 id, 页面 slug)；2026-10-25 核对过（I1 / F1 用 2627 赛程核对，
 # PSG 靠 oddsportal_parse.NAME_ALIASES 配上）
@@ -34,6 +36,10 @@ FOTMOB_ALIASES = {   # 2026-10-25 用 E0/D1/SP1 2324–2627 全部球队核对�
     "atleticomadrid": "athmadrid", "deportivoacoruna": "lacoruna",
     "queensparkrangers": "qpr", "fortunasittard": "forsittard", "sportingcp": "splisbon",
     "heartofmidlothian": "hearts", "ohleuven": "oudheverleeleuven", "basaksehir": "buyuksehyr",
+    # 2026-10-27 用 11 联赛 2122–2526 赛程核对补上
+    "sheffieldwednesday": "sheffieldweds", "avsfutebolsad": "avs", "saintetienne": "stetienne",
+    "adanademirspor": "addemirspor", "bodrumfk": "bodrumspor", "rwdmbrussels": "rwdmolenbeek",
+    "covadapiedadesad": "belenenses",
 }
 
 _NEXT_RE = re.compile(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S)

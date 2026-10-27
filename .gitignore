@@ -27,6 +27,8 @@ research.db
 
 # FotMob 阵容 / 球员库（可由 python -m football_prediction.data.fotmob --history ... 与 --reload-pre 从 _cache/fotmob 重建）
 fotmob.db
+# FotMob 历史赛季研究库（_diag/lineup_research/scrape_history.py 写，可从 _cache/fotmob 重建）
+fotmob_hist.db
 
 # 前端依赖、本机配置与生成物
 web/node_modules/
