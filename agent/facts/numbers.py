@@ -36,8 +36,12 @@ EN_NUM = re.compile(r"(?<![A-Za-z])(?:" + "|".join(sorted(_EN_WORDS, key=len, re
 ROMAN = re.compile(r"(?<![A-Za-z])[IVXLC]{2,}(?![A-Za-z])")
 
 
+# unicodedata 不认、但表示数量的字：「两 / 兩」到 Unicode 15.1 才有数值，Python 3.12 的 15.0 里没有
+_EXTRA_NUM = frozenset("半两兩")
+
+
 def _is_num(ch: str) -> bool:
-    return ch == "半" or unicodedata.numeric(ch, None) is not None
+    return ch in _EXTRA_NUM or unicodedata.numeric(ch, None) is not None
 
 
 def mask_entities(text: str, entities: set[str]) -> str:
