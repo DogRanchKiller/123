@@ -57,15 +57,6 @@
 
 ## 已解决
 
-### Windows 上 Agent 数字校验放过「两成」「两倍」
-
-- 状态：已解决（未升版本，`agent/` 不在 `LAYER_VERSIONS` 里）
-- 日期：2026-10-27
-- 现象：Windows 实盘机合并 PR #4 后，`python -m pytest tests` 有 3 项失败：`test_agent_facts.py` 的 `test_number_spellings_rejected[两成]`、`test_allow_list_does_not_hide_quantities[两档-两]`、`[两倍标准误-两]`，`find_numbers` 对含「两」的数量返回空。Mac 上同一份测试通过。
-- 原因：`_is_num` 靠 `unicodedata.numeric` 判断数值字符。这台机器是 Python 3.12.10（Unicode 15.0），`unicodedata.numeric("两")` 报 not a numeric character；Mac 的 `.venv-ml` 是 Python 3.14（Unicode 更新，「两」有数值）。结果是 Agent 回答里「两成」这类没走事实的数量在 3.12 上不会被打回。
-- 处理：`agent/facts/numbers.py` 把「两 / 兩」和「半」一起列进 `_EXTRA_NUM`，不再依赖 Unicode 版本。修后本机 395 passed、12 skipped。
-- 位置：`agent/facts/numbers.py`、`tests/test_agent_facts.py`
-
 ### FotMob 历史赛季有 7 个队名配不上
 
 - 状态：已解决（data_fotmob 1.2.1）
