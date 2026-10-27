@@ -1,14 +1,20 @@
 """Agent 的模块边界（docs/modules.md、docs/agent-dev.md 第 5 节），用 AST 扫描：
 - football_prediction/ 和 server/ 不 import agent；
 - agent/ 只 import 标准库、football_prediction.services / version、agent 自己、mcp、dotenv、
-  pymilvus、sentence_transformers，不 import 领域包；
-- agent/ 里没有 SQL 字符串，也不调用 .execute 系列（读库一律走 services）。"""
+  pymilvus、sentence_transformers、LangGraph / LangChain 和模型 SDK，不 import 领域包；
+- agent/ 里没有 SQL 字符串，也不调用 .execute 系列（读库一律走 services）。唯一例外是 agent/budget.py：
+  它只读写自己的用量库 agent_data/usage.db（BEGIN IMMEDIATE 原子预留，docs/agent-plan.md 第 10.3 节），
+  不打开 football.db / fotmob.db。"""
 import ast
 import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-AGENT_THIRD_PARTY = {"mcp", "dotenv", "pymilvus", "sentence_transformers"}   # 后两个是知识库（agent/kb）
+AGENT_THIRD_PARTY = {"mcp", "dotenv",
+                     "pymilvus", "sentence_transformers",                     # 知识库（agent/kb）
+                     "langgraph", "langchain_core", "langchain_openai", "langchain_anthropic",
+                     "openai", "anthropic", "httpx"}                         # 图和模型连接（P3）
+SQL_ALLOWED = {"agent/budget.py"}
 SQL_WORDS = ("SELECT ", "INSERT ", "UPDATE ", "DELETE ", "CREATE TABLE", "DROP ", "ATTACH ", "PRAGMA ")
 EXEC_CALLS = {"execute", "executemany", "executescript"}
 
@@ -67,9 +73,18 @@ def test_agent_imports_only_services_and_version():
 
 
 def test_agent_has_no_sql():
-    bad = {str(p.relative_to(ROOT)): h for p in _files("agent")
-           if (h := sql_hits(ast.parse(p.read_text(encoding="utf-8"))))}
+    bad = {p.relative_to(ROOT).as_posix(): h for p in _files("agent")
+           if p.relative_to(ROOT).as_posix() not in SQL_ALLOWED
+           and (h := sql_hits(ast.parse(p.read_text(encoding="utf-8"))))}
     assert bad == {}
+
+
+def test_budget_sql_touches_only_usage_db():
+    """budget.py 的 SQL 只针对 requests 表，不出现别的库和表；连接只开 cfg.usage_path。"""
+    src = (ROOT / "agent" / "budget.py").read_text(encoding="utf-8")
+    for word in ("football.db", "fotmob.db", "ATTACH", "open_readonly", "db_path", "fotmob_path"):
+        assert word not in src, word
+    assert src.count("sqlite3.connect(") == 1 and "_tx(self.cfg.usage_path)" in src
 
 
 def test_scanners_catch_violations():

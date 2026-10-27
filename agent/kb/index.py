@@ -5,13 +5,15 @@ agent/kb/index.py  Milvus Lite 索引（docs/agent-plan.md 第 7 节）：建库
 - 每块：正文 text、预切词 terms（BM25 由 Milvus 的 BM25 函数从 terms 生成）、bge-m3 向量 dense、
   available_us / superseded_us（UTC 微秒；没被替代时 NEVER）、meta（JSON：路径、标题、提交、比赛数据、指纹）。
 - 检索：两路各取前 ROUTE_K，在 Python 里做 RRF（k=RRF_K）取前 k；过滤 available_us <= as_of < superseded_us。
-- 读写都按次打开、用完关闭。另一进程正在用索引时打不开，抛 KBBusy。
+- 读写都按次打开、用完关闭。打开失败隔 OPEN_WAIT 秒重试一次（同进程 gRPC 连接偶发断开）；
+  另一进程正在用索引时两次都打不开，抛 KBBusy。
 """
 import json
 import os
 import pathlib
 import re
 import shutil
+import time
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -33,6 +35,7 @@ LATEST_WINS = ("view", "score", "team_news")   # 同一 key 出现新块时，�
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _MATCH_ID = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 _FIELDS = ("chunk_id", "family", "key", "authority", "match_id", "text", "available_us", "superseded_us", "meta")
+OPEN_ATTEMPTS, OPEN_WAIT = 2, 1.0   # 打开索引失败时重试一次（见 _client）
 
 
 class KBUnavailable(RuntimeError):
@@ -71,10 +74,16 @@ def read_meta(kb_path: str) -> dict | None:
 def _client(kb_path: str) -> Iterator[MilvusClient]:
     db, _ = _paths(kb_path)
     db.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        c = MilvusClient(str(db))
-    except MilvusException as e:
-        raise KBBusy("知识库正在被另一个进程使用（多半是正在 --rebuild / --update），稍后再试") from e
+    for attempt in range(OPEN_ATTEMPTS):
+        try:
+            c = MilvusClient(str(db))
+            break
+        except MilvusException as e:
+            # 同进程里 Milvus Lite 的 gRPC 连接偶尔被对端以 too_many_pings 断开，重开一次就好；
+            # 另一进程锁着目录时两次都失败
+            if attempt + 1 == OPEN_ATTEMPTS:
+                raise KBBusy("知识库正在被另一个进程使用（多半是正在 --rebuild / --update），稍后再试") from e
+            time.sleep(OPEN_WAIT)
     try:
         # 新进程打开时集合是 released 状态，要先 load 才能查（同一进程里建完是已加载的）
         if c.has_collection(COLLECTION) and "Loaded" not in str(c.get_load_state(COLLECTION)["state"]):

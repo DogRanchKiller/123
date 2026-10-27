@@ -71,11 +71,14 @@ python -m venv .venv-ml   # Mac 用 python3.14 等与 .venv 同版本的解释�
 .venv-ml/bin/python -m pytest tests   # 与 .venv 的 pytest tests 都要通过
 .venv-ml/bin/python -m agent.mcp_server   # 只读工具的 MCP 服务（stdio，给 Claude Code / Desktop 注册用；库路径见 agent/config.py）
 .venv-ml/bin/python -m agent.kb --rebuild   # 知识库完整重建（约 1 分钟，需 checkpoints/bge-m3）；--update 增量，--stats 统计，--eval 检索评测
+.venv-ml/bin/python -m agent "Arsenal 下一场亚盘怎么看？"   # 真实调模型、花钱：每个数字都核对过来源的回答；--thread ID 追问，--check 只看配置与最坏花费，--usage 今日用量
+.venv-ml/bin/python -m agent.eval.agent --estimate   # Agent 评测集预计花费；--run 真实跑（花钱，先告诉用户预计金额）
 ```
 
 - `requirements-ml.txt` 只写直接依赖并钉 `==`；`constraints-ml.txt` 里与 `requirements.txt` 重叠的包必须等于 `.venv` 的实际版本。改了 `requirements.txt` 或 `.venv` 的版本时，同步改 `constraints-ml.txt`。
 - 用到 torch、pymilvus、mcp 等 ML 包的测试用 `pytest.importorskip`，在 `.venv` 里跳过。
 - 知识库只手动跑，不接进 `run_daily.bat`。索引 `agent_data/kb/` 和权重 `checkpoints/` 都不进版本库；`--rebuild` / `--update` 进行中时索引被锁，`kb_search` 返回说明。改了切块规则或字段要加 `agent/kb/index.py` 的 `LAYOUT`，旧索引会要求 `--rebuild`。
+- `python -m agent` 的密钥和中转站地址只放仓库根目录 `.env`（变量名见 `.env.example`），由用户填写；协作的 Agent 不读取、不打印它的内容。每次请求先在 `agent_data/usage.db` 预留再结算，个人日额度默认 2 美元（北京日，`AGENT_BUDGET_PERSONAL_DAILY`）；单价在 `agent/prices.toml`，没登记的模型拒绝调用。对话状态在 `agent_data/state.db`。
 
 前端使用 Node.js 24 LTS（Mac/Windows 同主版本），在 `web/` 执行：
 
@@ -124,7 +127,7 @@ npm run start     # 部署运行，前置 npm run build
 | `review/scorecard.py` | 实盘成绩单（同场对比 `market_avg`，含亚盘列，只作参考）、`promotion_check`（只看 1X2）、`horizon_report` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
 | `services/team_read.py` | 按队名的读函数（Agent 工具层用）：`league_code`、`resolve_team_name`、`read_team_recent`、`read_next_fixture`、`read_lineups`、`read_grading`；知识库建块用的 `read_archived_ids`、`read_scores` |
-| `agent/`（仓库根目录） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。现有 P1：`config.py`、`tools/`（7 个比赛工具 + `kb_search`，返回块）、`mcp_server.py`；P2：`kb/`（Milvus Lite 向量知识库，用户选定替代 Chroma：白名单、按 git 提交时间切块、比赛类块、bge-m3 + BM25 + RRF、按 `as_of` 过滤）、`eval/retrieval.py`（检索评测）；编排框架已定 LangGraph（P1.5），编排和对话服务还没有代码。`football_prediction/model_nn/`（同样还没有代码）是 PyTorch 预测网络，过 G1 之前不进实盘（`docs/ml-stack.md`） |
+| `agent/`（仓库根目录） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。现有 P1：`config.py`、`tools/`（7 个比赛工具 + `kb_search`，返回块）、`mcp_server.py`；P2：`kb/`（Milvus Lite 向量知识库，用户选定替代 Chroma：白名单、按 git 提交时间切块、比赛类块、bge-m3 + BM25 + RRF、按 `as_of` 过滤）、`eval/retrieval.py`（检索评测）；P3（LangGraph）：`facts/`（结构化事实的校验与渲染）、`llm.py`、`budget.py` + `prices.toml`（每次请求预留再结算、个人日额度，唯一写 SQL 的文件，只碰 `agent_data/usage.db`）、`graph.py`、`prompts.py`、`__main__.py`、`eval/agent.py`；对话服务还没有代码。`football_prediction/model_nn/`（同样还没有代码）是 PyTorch 预测网络，过 G1 之前不进实盘（`docs/ml-stack.md`） |
 | `server/`（仓库根目录） | FastAPI 只读接口 `/api/matches`（含最近已开球场次 `recent`）、`/api/matches/{id}`、`/api/review`；只调 `services`，不写 SQL；无鉴权，默认只听 127.0.0.1 |
 | `live.py` | 实盘入口，只有参数、打印和调用 `services`；编排规则见 [`docs/modules.md`](docs/modules.md) |
 | `explain.py` | 单场说明入口。同上 |

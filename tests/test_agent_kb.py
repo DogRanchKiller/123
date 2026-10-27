@@ -233,6 +233,18 @@ def test_kb_search_unavailable_busy_and_bad_ids(kbw, monkeypatch):
     with kb(kbw, LATER):
         assert visible(kb_search("口径")) and index.stats(kbw["kb"])["rows"]
 
+    monkeypatch.setattr(index, "OPEN_WAIT", 0)
+    real, opened = index.MilvusClient, []
+
+    def flaky(*a, **k):                     # 第一次打开失败（P3 评测里 gRPC too_many_pings），重试成功
+        opened.append(1)
+        if len(opened) == 1:
+            raise MilvusException(message="Fail connecting to server")
+        return real(*a, **k)
+    monkeypatch.setattr(index, "MilvusClient", flaky)
+    with kb(kbw, LATER):
+        assert visible(kb_search("口径")) and len(opened) == 2
+
     def locked(*a, **k):
         raise MilvusException(message="Open local milvus failed")
     monkeypatch.setattr(index, "MilvusClient", locked)

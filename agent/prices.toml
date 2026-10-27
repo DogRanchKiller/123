@@ -1,0 +1,16 @@
+# Agent 模型单价表（docs/agent-plan.md 第 10.3 节），由用户手工维护。agent/budget.py 读它。
+# - 单价是美元 / 每百万 token：input 输入、output 输出、cache_read 缓存命中的输入（不写时按 input 算）。
+# - 同一 provider + name 可以有多条，按 effective（北京时间日期）取「生效日期 ≤ 当天」里最新的一条；
+#   换价时追加一条新的，不改旧的，旧调用的金额仍按当时的价格。
+# - 表里没有的模型拒绝调用。本地模型（如 Ollama）照样写一条，单价写 0：记 token，金额为 0。
+# - peak：倍率时段，days 是星期（1 = 周一 … 7 = 周日），hours 是北京时间 "HH:MM-HH:MM"（含起点、不含终点）。
+#   只按星期判断，法定节假日和调休没有处理。
+
+[[model]]
+provider = "openai_compat"
+name = "DeepSeek-v4.1-flash-1017"
+effective = "2026-10-27"
+input = 0.400
+output = 1.60
+cache_read = 0.0080
+peak = [{ multiplier = 2.0, days = [1, 2, 3, 4, 5], hours = ["09:00-12:00", "14:00-18:00"] }]

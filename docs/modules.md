@@ -32,7 +32,7 @@ live.py / main.py  --------^
 
 ## Agent 模块
 
-`agent/` 在仓库根目录，与 `server/` 并列，按 [agent-dev.md](agent-dev.md) 分阶段写。它只在 `.venv-ml` 里运行（见 [stack.md](stack.md)）。现有（P1、P2）：
+`agent/` 在仓库根目录，与 `server/` 并列，按 [agent-dev.md](agent-dev.md) 分阶段写。它只在 `.venv-ml` 里运行（见 [stack.md](stack.md)）。现有（P1、P2、P3）：
 
 | 文件 | 做什么 |
 |---|---|
@@ -48,6 +48,12 @@ live.py / main.py  --------^
 | `agent/kb/index.py` | Milvus Lite 索引：建库、增量（替代时间、评分指纹）、按 `as_of` 过滤的向量 + BM25 + RRF 检索、来源标签 |
 | `agent/kb/build.py` `__main__.py` | 收齐资料交给 index；`python -m agent.kb --rebuild / --update / --stats / --eval` |
 | `agent/eval/retrieval.py` `retrieval.jsonl` | 检索评测集与脚本：三种方式的 recall@5 / MRR 和泄漏检查 |
+| `agent/facts/` | 结构化事实：`numbers.py`（第 1 条，数字写法「默认拦、放行表放」）、`units.py`（字段 → 单位对照表与比对）、`verify.py`（第 1–8 条）、`render.py`（占位换成工具结果里的值、来源标签、降级表）。纯 Python，不 import LangChain |
+| `agent/llm.py` | 按 `AGENT_PROVIDER` 建模型（SDK 重试设为 0）；`Caller` 每次 HTTP 请求先预留、再调用、再结算，只对超时、429、5xx 重试 1 次 |
+| `agent/budget.py` `prices.toml` | 用量库 `agent_data/usage.db`：每次请求 `BEGIN IMMEDIATE` 预留，结算为 settled / failed / usage_unknown；`model_calls`、HTTP 请求数和个人日额度三道上限；价格表按 provider + 模型名 + 生效日取，带高峰倍率时段 |
+| `agent/graph.py` `prompts.py` | LangGraph 图（agent ⇄ tools → verify → render / degrade → finish）、四个计数各自判定、单轮超时；`agent_data/state.db` 存对话，每轮只留问题和最终输出。系统提示含北京时间和字段表 |
+| `agent/__main__.py` | `python -m agent "问题" [--thread ID] [--check] [--usage]` |
+| `agent/eval/agent.py` `agent.jsonl` | Agent 评测集（26 题）：`--estimate` 预计花费，`--run` 真实跑并算一次通过率、降级率、措辞与 `kind` 不符、放行表打回率和花费 |
 
 工具是普通函数（类型注解 + 中文说明），不 import `mcp`；MCP 和以后的编排框架包装同一个函数，不写两份。
 
@@ -56,7 +62,7 @@ agent  -->  football_prediction.services  -->  领域包
 ```
 
 - `agent/` 只调 `football_prediction.services` 的公开函数和 `version`，不直接 import 领域包，不写 SQL，库一律用 `open_readonly` 打开，不写 `football.db` / `fotmob.db`。需要的新读法加到 `services`（和接口共用）。
-- `football_prediction/` 和 `server/` 都不 import `agent`。`server/` 仍只 import `services` / `version`；对话服务是 `agent/serve.py` 单独一个进程，不挂在 `server/` 上。这两条和「`agent/` 里没有 SQL 字符串、不调用 `.execute`」由 `tests/test_agent_boundary.py`（AST 扫描）检查。
+- `football_prediction/` 和 `server/` 都不 import `agent`。`server/` 仍只 import `services` / `version`；对话服务是 `agent/serve.py` 单独一个进程，不挂在 `server/` 上。这两条和「`agent/` 里没有 SQL 字符串、不调用 `.execute`」由 `tests/test_agent_boundary.py`（AST 扫描）检查。唯一的例外是 `agent/budget.py`：它只写自己的用量库 `agent_data/usage.db`，测试检查它不碰别的库。
 - 前端「不建 `app/api` 或代理」的规则暂不变。网站对话需要的那一个转发路由，等 P6 决定做网站对话时再在这里写成例外。
 
 ## 领域包

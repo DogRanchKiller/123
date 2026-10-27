@@ -48,6 +48,15 @@
 
 ## 已解决
 
+### 知识库检索偶尔返回「正在被另一个进程使用」
+
+- 状态：已解决（未升版本，`agent/` 不在 `LAYER_VERSIONS` 里）
+- 日期：2026-10-27
+- 现象：P3 第一轮真实评测里 `kb_search` 两次返回「知识库正在被另一个进程使用」，当时没有 `--rebuild` / `--update` 在跑；同一轮紧接着的另一次检索正常。日志里同时有 gRPC `GOAWAY ... too_many_pings` 和 `Fail connecting to server on 127.0.0.1`。
+- 原因：Milvus Lite 在本进程里起本地服务，客户端的 gRPC 连接偶尔被对端以 `too_many_pings` 断开，新建 `MilvusClient` 时重连失败抛 `MilvusException`；`_client` 把所有打开失败都当成「另一进程锁着目录」。
+- 处理：打开失败隔 1 秒重试一次（`OPEN_ATTEMPTS`、`OPEN_WAIT`），两次都失败才报 `KBBusy`；测试模拟第一次失败、第二次成功。第二轮评测 gRPC 断开仍出现 3 次，都由重试接住，没有再返回这句说明。
+- 位置：`agent/kb/index.py`、`tests/test_agent_kb.py`
+
 ### Mac 的 `.venv` 没装 httpx，接口测试被跳过
 
 - 状态：已解决（依赖未变，只补装本机 `.venv`）
