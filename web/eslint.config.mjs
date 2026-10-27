@@ -2,7 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
-const features = ["predictions", "match", "following", "review", "entry", "auth"];
+const features = ["predictions", "match", "following", "review", "entry", "auth", "chat"];
 
 export default defineConfig([
   ...nextVitals,

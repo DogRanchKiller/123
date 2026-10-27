@@ -28,10 +28,11 @@
 | `logs/` | 每日任务与临场档日志 |
 | `_diag/` | 研究脚本与结果（`result.txt` / `.log`）；逐场 CSV 可重跑生成，不在包里 |
 | `docs/` | 文档；`docs/handoff/` 是每次会话的操作记录 |
+| `requirements-ml.txt`、`constraints-ml.txt`、`.env.example` | Agent / 训练的依赖钉版本和变量名。密钥写在本机 `.env`，不进版本库 |
 | `*.bat` `setup_site.ps1` | Windows 定时任务与网站常驻脚本 |
 | `大模型项目/` | 只作训练写法参考，不参与预测，不要改 |
 
-不在包里：`.venv`、`.venv-scrape`、`web/node_modules`、`web/.next`、`*.bak*` 备份库、`server_watchdog.log`。
+不在包里：`.venv`、`.venv-ml`、`.venv-poc*`、`.venv-scrape`、`.env`、`agent_data/`、`checkpoints/`、`web/node_modules`、`web/.next`、`*.bak*` 备份库、`server_watchdog.log`。
 
 ## 新机器从零跑起来
 
@@ -45,6 +46,13 @@ set PYTHONIOENCODING=utf-8
 ```
 
 不要跑不带路径的 `pytest`（会收集 `大模型项目/` 里依赖 torch 的测试而失败）。lightgbm 缺 `libomp` 时相关测试会 skip，不影响实盘。
+
+实盘、接口和上面这套测试只用 `.venv`。Agent 和 `model_nn` 还不参与实盘，要在本机做这两块时再另建环境（体积大约 1.8 GB；知识库还要下载 bge-m3，约 2.1 GB，见 [`stack.md`](stack.md)）。Windows 实盘机第一次拉到这份提交后先不要建 `.venv-ml`，按 [`agent-dev.md`](agent-dev.md) 第 3 节「Windows 实盘机拉取后自行核对」核对本机 Python 和现有 `.venv`。Python 3.12 / AMD64 目前是暂定值。
+
+```bat
+python -m venv .venv-ml
+.venv-ml\Scripts\python -m pip install -r requirements.txt -r requirements-ml.txt -c constraints-ml.txt
+```
 
 可选的爬虫环境（抓多家赔率，没有时其余功能照常）：
 
@@ -96,7 +104,7 @@ python -m server
 5. **评分**：赛果到了（football-data 晚几天时先用 FotMob 比分，之后核对重评）就算 log loss、Brier、亚盘五种结算 log loss 与选边命中。
 6. **出口**：`reports/预测_YYYY-MM-DD.csv`、快照 `reports/latest_round.json` → 接口 → 网站。
 
-调用方向只有一个：`web --HTTP--> server --> services --> 领域包`，命令行入口 `live.py` / `explain.py` / `main.py` 也只调 `services`。细节见 [`modules.md`](modules.md)。
+调用方向：`web --HTTP--> server --> services --> 领域包`，命令行入口 `live.py` / `explain.py` / `main.py` 也只调 `services`。`agent/`（P1 起有只读工具层与 MCP）同样只调 `services`。细节见 [`modules.md`](modules.md)。
 
 ## 改东西从哪里下手
 
@@ -130,6 +138,7 @@ python -m server
 - 后六个联赛（E1/N1/P1/SC0/B1/T1）没有 understat xG，`dc_xg` 在这些联赛基本等于进球版。
 - OddsPortal 在本机美国出口 IP 下只看到 5 家美国公司。
 - 阵容模型的 `COEF_PRE` / `COEF_POST` 还是 0，研究未确认前不生效。
+- Agent 模块完成了 P0（独立环境 `.venv-ml` 和规范）；P1（`agent/` 的只读工具层与 MCP，`python -m agent.mcp_server`）已验收；P1.5 定了编排框架 LangGraph，依赖已写进 `requirements-ml.txt`；P2 向量知识库（Milvus Lite + bge-m3，`python -m agent.kb --rebuild`）代码已写，待验收。还不接大模型，`requirements.txt` 里也没有 torch。实盘定时任务继续只用 `.venv`。
 - 未解决问题（抓取时间变长、临场档依赖开机和锁、understat / FotMob 条款未核验）见 [`issues.md`](issues.md)「未解决」。
 
 ## 其他文档
@@ -141,5 +150,7 @@ python -m server
 | [`stack.md`](stack.md) | 前后端与训练选型、网站展示与部署 |
 | [`modules.md`](modules.md) | 模块边界、调用方向、单文件尺度 |
 | [`ml-stack.md`](ml-stack.md) | 训练与分析的实现规则 |
+| [`agent-plan.md`](agent-plan.md) | Agent 与训练的设计（第 5 稿，2026-10-27 通过） |
+| [`agent-dev.md`](agent-dev.md) | 分阶段做法：P0–P6 的入口、任务、验证 |
 | [`progress.md`](progress.md) / [`issues.md`](issues.md) | 当前进度 / 问题记录（唯一来源） |
 | `docs/handoff/` | 每次会话的操作与证据 |

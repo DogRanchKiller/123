@@ -1,0 +1,27 @@
+# ML 环境 .venv-ml 的直接依赖（Agent、MCP、知识库、model_nn、LoRA）。现有 .venv 不装这些。
+# 安装：python -m venv .venv-ml
+#       .venv-ml/bin/python -m pip install -r requirements.txt -r requirements-ml.txt -c constraints-ml.txt
+# 编排框架：P1.5 概念验证后用户选定 LangGraph（2026-10-27），版本与概念验证 .venv-poc 实测的一致。
+
+# 向量知识库与检索（P2 用户选定 Milvus Lite，替代原方案的 Chroma；BM25 用 Milvus 自带的 BM25 函数，不另装）
+pymilvus==3.0.2
+milvus-lite==3.2.2
+sentence-transformers==6.2.0
+
+# Agent 编排（LangGraph）与模型接口（OpenAI 兼容接口 / Claude）
+langgraph==1.2.17
+langgraph-checkpoint-sqlite==3.1.2
+langchain-core==1.7.0
+langchain-openai==1.7.2
+langchain-anthropic==1.7.6
+
+# 工具协议与配置
+mcp==2.3.0
+python-dotenv==1.2.4
+
+# 训练（model_nn、LoRA）
+torch==2.14.1
+transformers==5.20.2
+peft==0.21.2
+trl==1.16.0
+datasets==5.1.0

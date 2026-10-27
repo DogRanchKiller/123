@@ -10,6 +10,7 @@ const navigation = [
   { href: "/predictions", label: "比赛预测", icon: "grid" },
   { href: "/following", label: "我的关注", icon: "star" },
   { href: "/review", label: "赛后成绩单", icon: "chart" },
+  { href: "/chat", label: "问答", icon: "chat" },
 ] as const;
 
 export function Navigation() {

@@ -7,6 +7,7 @@ output/report.build_report 挪到这里，行为不变：
   否则用赛程表快照；存档（live_round.predict_upcoming）仍用赛程表赔率。
 - analyse_match 另取赛程表首条快照作亚盘初盘（只有一条快照时也有），给亚盘轨迹用。
 - 自研兜底（无赔率 / 缺大小球盘时的比分与胜平负、亚盘同线对照）为 dc_market（output 1.7.0）。
+- explain_detail 另给赔率获取时间（Agent 工具层给现算结果标时点用）；explain_inputs 是它的元组形式，行为不变。
 """
 import sqlite3
 from datetime import datetime, timedelta
@@ -99,10 +100,8 @@ def fixture_odds(row: dict) -> dict:
     return {c: row.get(c) for c in FIXTURE_ODDS}
 
 
-def latest_odds(conn: sqlite3.Connection, row: dict, now: datetime) -> tuple[dict, str]:
-    """报告 / explain 用的最新赔率与来源说明。
-    多家中位数（book_consensus）满足：≥ BOOK_MIN 家、有胜平负与大小 2.5、BOOK_FRESH_H 小时内抓到，
-    就用它（OddsPortal 临场抓取，比约每周更新的 fixtures.csv 新）；否则用赛程表快照。"""
+def _pick_odds(conn: sqlite3.Connection, row: dict, now: datetime) -> tuple[dict, str, str | None]:
+    """(赔率, 来源说明, 获取时间)：多家中位数取抓取时间，赛程表快照取 fixtures.fetched_at。"""
     try:
         cons = book_consensus(conn, row["match_id"])
     except sqlite3.OperationalError:          # 库里还没有 book_odds 表
@@ -112,8 +111,15 @@ def latest_odds(conn: sqlite3.Connection, row: dict, now: datetime) -> tuple[dic
             and now - datetime.fromisoformat(cons["fetched_at"]) <= timedelta(hours=BOOK_FRESH_H):
         at = datetime.fromisoformat(cons["fetched_at"]).astimezone(_BJ)
         return ({c: cons[c] for c in FIXTURE_ODDS},
-                f"多家中位数（{cons['n_books']} 家，北京 {at:%m-%d %H:%M} 抓取）")
-    return fixture_odds(row), "赛程表快照（football-data）"
+                f"多家中位数（{cons['n_books']} 家，北京 {at:%m-%d %H:%M} 抓取）", cons["fetched_at"])
+    return fixture_odds(row), "赛程表快照（football-data）", row.get("fetched_at")
+
+
+def latest_odds(conn: sqlite3.Connection, row: dict, now: datetime) -> tuple[dict, str]:
+    """报告 / explain 用的最新赔率与来源说明。
+    多家中位数（book_consensus）满足：≥ BOOK_MIN 家、有胜平负与大小 2.5、BOOK_FRESH_H 小时内抓到，
+    就用它（OddsPortal 临场抓取，比约每周更新的 fixtures.csv 新）；否则用赛程表快照。"""
+    return _pick_odds(conn, row, now)[:2]
 
 
 def analyse_match(conn: sqlite3.Connection, cache: ModelCache, league: str,
@@ -165,9 +171,10 @@ def build_report(conn: sqlite3.Connection, league_names: dict[str, str], now: da
         .reset_index(drop=True)
 
 
-def explain_inputs(conn: sqlite3.Connection, league: str, home: str, away: str,
-                   manual: dict | None, now: datetime) -> tuple[dict | None, dict | None, str, dict]:
-    """explain 的取数与判断：(赛程行, 定价赔率, 赔率来源, 判断结果)。只读，不存档。
+def explain_detail(conn: sqlite3.Connection, league: str, home: str, away: str,
+                   manual: dict | None, now: datetime) -> dict:
+    """explain 的取数与判断：{fixture 赛程行, odds 定价赔率, odds_source 来源说明,
+    odds_fetched_at 赔率获取时间（手动输入或无赔率时 None）, analysis 判断结果}。只读，不存档。
     manual 为手动输入的赔率（fixtures 列名），有它时不取盘口变动。"""
     conn.row_factory = sqlite3.Row
     try:
@@ -176,12 +183,20 @@ def explain_inputs(conn: sqlite3.Connection, league: str, home: str, away: str,
     finally:
         conn.row_factory = None
     fx = dict(fx) if fx else None
+    at = None
     if manual:
         odds, src = dict(manual), "手动输入"
     elif fx:
-        odds, src = latest_odds(conn, fx, now)
+        odds, src, at = _pick_odds(conn, fx, now)
     else:
         odds, src = None, "无（不在赛程表，未输入）"
     a = analyse_match(conn, ModelCache(conn, now.date().isoformat()), league, home, away,
                       odds, fx["match_id"] if fx and not manual else None)
-    return fx, odds, src, a
+    return {"fixture": fx, "odds": odds, "odds_source": src, "odds_fetched_at": at, "analysis": a}
+
+
+def explain_inputs(conn: sqlite3.Connection, league: str, home: str, away: str,
+                   manual: dict | None, now: datetime) -> tuple[dict | None, dict | None, str, dict]:
+    """explain 命令行用的元组形式：(赛程行, 定价赔率, 赔率来源, 判断结果)，见 explain_detail。"""
+    d = explain_detail(conn, league, home, away, manual, now)
+    return d["fixture"], d["odds"], d["odds_source"], d["analysis"]
