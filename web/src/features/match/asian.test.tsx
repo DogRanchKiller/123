@@ -72,6 +72,14 @@ describe("亚盘区块", () => {
     expect(within(block).getAllByText("暂无数据")).toHaveLength(2);
   });
 
+  it("市场同线赢盘只作对照，有值时显示", () => {
+    render(<AsianBlock asian={{ ...market, marketHomeCover: 0.48 }} />);
+    const block = screen.getByRole("group", { name: "亚盘" });
+    expect(within(block).getByText("市场同线主队赢盘（对照）")).toBeInTheDocument();
+    expect(within(block).getByText("48%")).toBeInTheDocument();
+    expect(within(block).getAllByText("暂无数据")).toHaveLength(1);
+  });
+
   it("没有亚盘时不伪造线和概率", () => {
     render(<AsianBlock asian={null} />);
     expect(screen.getByRole("heading", { name: "亚盘" })).toBeInTheDocument();

@@ -1,8 +1,8 @@
 """
-output/report.py  v1.7.0（输出层的一部分）
-预测报告：对未开赛场次，按判断流程（output/analysis.py）用【最新】赔率现算，
-给出胜平负概率（市场为底）、倾向与双选、信心档（附历史命中率）、预期进球、最可能比分、
-大 2.5 / 双方进球 / 亚盘、自研模型对照、盘口变动、风险提示。
+output/report.py  v2.0.0（输出层的一部分）
+预测报告：对未开赛场次，按判断流程（output/analysis.py）现算，
+给出胜平负概率（主模型 dc_dyn）、倾向与双选、信心档（附历史命中率）、预期进球、最可能比分、
+大 2.5 / 双方进球 / 亚盘（最新赔率的市场线）、市场对照、其他自研模型对照、盘口变动、风险提示。
 报告是"当前看法"，随赔率更新；存档的预测记录（review 层）只保留首次，二者互不影响。
 报告写入 reports/预测_YYYY-MM-DD.csv（utf-8-sig，Excel 可直接打开）。
 v1.2.0: 改为市场为底的判断流程；信心档按市场概率重标定；新增亚盘、盘口变动、风险、自研对照。
@@ -12,6 +12,8 @@ v1.5.0: 亚盘为主：主客队之后依次为「亚盘」（数字线 + 赢 / 
         「亚盘信心」（档[历史命中]）、「亚盘变动」（线与水位轨迹）；控制台第一行是亚盘。
 v1.6.0: 新增列「亚盘稳妥」（选择方赢盘 ≥ 65% 的最近一条线）与「重点」（胜平负市场档为高时写「★」）。
 v1.7.0: 「自研 主/平/客」列改为 dc_market 与 blend（自研兜底改为 dc_market）。
+v2.0.0: 主模型 dc_dyn：概率、比分、信心档（PRIMARY_TIERS）都按 dc_dyn；新增列「市场 主/平/客」（去水，对照）；
+        「重点」改为 dc_dyn 档为高。
 拟合与取赔率的编排（原 build_report、pipeline）在 services/match_analysis.py；本文件只管行格式与写文件。
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 """
@@ -23,11 +25,11 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from football_prediction.output.analysis import (   # noqa: F401  confidence_tier 供外部/测试使用
-    confidence_tier, double_label as _double_label, MARKET_TIERS as CONFIDENCE_TIERS,
+    confidence_tier, double_label as _double_label, PRIMARY_TIERS as CONFIDENCE_TIERS,
     ah_pick_text, ah_text, safe_text,
 )
 
-LAYER_VERSION = "1.7.0"
+LAYER_VERSION = "2.0.0"
 
 REPORT_DIR = "reports"
 _BJ = ZoneInfo("Asia/Shanghai")
@@ -89,6 +91,7 @@ def report_row(r: dict, a: dict, league_names: dict[str, str]) -> dict:
         "最可能比分": " ".join(f"{s['score']}({s['prob']:.0%})" for s in mk["top5_scores"][:3]),
         "大2.5球": _pct(mk["over_2.5"]),
         "双方进球": _pct(mk["btts_yes"]),
+        "市场 主/平/客": "" if a["market"] is None else "/".join(f"{x:.0%}" for x in a["market"]),
         "自研 主/平/客": "  ".join(f"{k} " + "/".join(f"{x:.0%}" for x in md[k])
                                 for k in ("dc_market", "blend") if k in md),
         "盘口变动": a["move"],
@@ -114,7 +117,7 @@ def format_row(r: pd.Series) -> str:
          f"倾向 {r['倾向']}（双选 {r['双选']}）  信心 {r['信心']}[{r['历史命中(首选/双选)']}]"
          + (f" 本场[{r['本场估计(首选/双选)']}]" if r.get("本场估计(首选/双选)") else "") + "\n"
          f"      预期进球 {r['预期进球']}  比分 {r['最可能比分']}  大2.5 {r['大2.5球']}  "
-         f"双方进球 {r['双方进球']}  | 自研 {r['自研 主/平/客']}")
+         f"双方进球 {r['双方进球']}  | 市场 {r['市场 主/平/客'] or '无赔率'}  | 自研 {r['自研 主/平/客']}")
     if r["亚盘变动"]:
         s += f"\n      亚盘变动：{r['亚盘变动']}"
     if r["盘口变动"] and r["盘口变动"] != "平稳":

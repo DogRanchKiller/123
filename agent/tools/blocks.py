@@ -7,10 +7,24 @@ kind、at；后面是该块的内容字段。第 8 节的校验按块核对「�
 """
 from datetime import datetime, timezone
 
+from football_prediction import version
+
 MATCH_KEYS = ("league", "league_name", "home", "away", "kickoff_utc", "match_date")
 # 存档里属于赛后评分的字段：不放进存档块，评分单独成 grading 块（at = scored_at）
 _GRADE_KEYS = ("scored", "actual_outcome", "log_loss", "brier", "ou25_log_loss", "score_log_loss",
                "ah_log_loss", "ah_hit", "result_src", "scored_at")
+# services.read_match 给存档补的档位、历史命中率和稳妥线是按现在的规则现算的（存档行里没有），
+# 放进 at = generated_at 的存档块会把后来的规则说成存档时的看法。存档块只留存档时就有的数和由它们直接算出的选择方。
+_ARCHIVE_DERIVED = ("confidence", "historical_first_hit", "historical_double_hit")
+_AH_DERIVED = ("tier", "historical_hit", "safe_line", "safe_cover")
+
+
+def stored_only(archived: dict) -> dict:
+    """存档去掉按现行规则现算的字段（_ARCHIVE_DERIVED、asian 里的 _AH_DERIVED）。"""
+    out = {k: v for k, v in archived.items() if k not in _ARCHIVE_DERIVED}
+    if out.get("asian"):
+        out["asian"] = {k: v for k, v in out["asian"].items() if k not in _AH_DERIVED}
+    return out
 
 
 def parse_time(s: str) -> datetime:
@@ -53,10 +67,10 @@ def view_block(view: dict, generated_at: str, now: datetime, info: dict | None =
 
 
 def archive_block(match_id: str, archived: dict | None, kind: str, info: dict) -> dict | None:
-    """首次存档（first_archive）或临场存档（near_archive），去掉评分字段；没有存档时 None。"""
+    """首次存档（first_archive）或临场存档（near_archive），去掉评分字段和现算字段；没有存档时 None。"""
     if not archived:
         return None
-    body = {k: v for k, v in archived.items() if k not in _GRADE_KEYS}
+    body = {k: v for k, v in stored_only(archived).items() if k not in _GRADE_KEYS}
     return match_block(match_id, kind, archived["generated_at"], info, body)
 
 
@@ -73,10 +87,13 @@ def grading_blocks(match_id: str, rows: list[dict], info: dict) -> list[dict]:
     return [match_block(match_id, "grading", r["scored_at"], info, r) for r in rows]
 
 
-def scorecard_block(row: dict, generated_at: str) -> dict:
-    """成绩单一行 → scope=scorecard 块（主体键 model_name + model_ver，at = 快照 generated_at）。"""
+def scorecard_block(row: dict, generated_at: str, kind: str = "scorecard") -> dict:
+    """成绩单一行 → scope=scorecard 块（主体键 model_name + model_ver，at = 快照 generated_at）。
+    kind：scorecard（对同档市场基准，live_report 的行）或 closing（对收盘参照，closing_report 的行）。
+    is_primary 标出现在的主模型（version.PRIMARY_MODEL），模型不用靠知识库猜哪一行是主模型。"""
     return {"scope": "scorecard", "model_name": row["model_name"], "model_ver": row["model_ver"],
-            "kind": "scorecard", "at": generated_at, "generated_at": generated_at,
+            "kind": kind, "at": generated_at, "generated_at": generated_at,
+            "is_primary": row["model_name"] == version.PRIMARY_MODEL[0],
             **{k: v for k, v in row.items() if k not in ("model_name", "model_ver")}}
 
 

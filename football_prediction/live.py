@@ -1,5 +1,5 @@
 """
-football_prediction/live.py  v1.12.0
+football_prediction/live.py  v2.1.0
 实盘预测闭环：更新数据（含赔率快照）→ 赛后评分 → 对未开赛场次存档预测 → 预测报告 → 实盘成绩单。
 每轮比赛前后各跑一次即可（开赛前多跑几次可记录盘口变动）：
     python -m football_prediction.live
@@ -42,6 +42,18 @@ v1.12.0: 无赔率时的兜底改为 dc_market（output 1.7.0，此前比分 dc_
         对 blend −0.0060±0.0010）。--near 加第二临场档 *_t2：存档时离开球 T2_HOURS（0.6）小时内、
         且用本轮抓到的多家赔率（T2_FRESH_MIN 30 分钟内），只存三个市场模型；horizon_report 对赛前档与 _t1
         各配对一次（review 1.8.0）。有赔率场次的主模型概率不变。
+v1.13.0: 并行存档动态攻防 DC 两版（model_dc_dyn 1.0.0）：dc_dyn（历史赔率信号）与 dc_dyn_shots（射门信号，
+        不用赔率），只进成绩单与替换检查；报告、主模型、兜底与分歧提示不变。
+v2.0.0: 主模型改为 dc_dyn（用户决定，未经 promotion_check，依据见 version.py）：报告、快照、推荐都按 dc_dyn
+        （output 2.0.0），市场去水与市场隐含只作对照与分歧提示；dc_dyn 存档另记存档时的赛程表赔率（亚盘评分线）。
+        market_implied 及其临场档照常存档，在替换检查里作为挑战者。
+v2.1.0: 成绩单每行对同一档的市场基准（临场档对 market_avg_t1 / _t2，列「基准」；review 1.9.0），
+        新增 [5b] 对收盘参照（football-data 收盘平均赔率去水，只作参照，不进替换检查，快照 closing）；
+        一轮最后打印 [8] 实盘体检（services/monitor.py，只读）：评分卡住的场次、48 小时内缺赔率 / 缺主模型存档、
+        各联赛最近赛果、多家赔率抓取时间、近 30 天主模型对市场的同场差；体检出错只打印，不影响本轮。
+        --near 加 T24 档 *_t24：开球前 T24_LO–T24_HI（23–25）小时、只抓还没存过的场次的多家赔率，
+        存三个市场模型和自研 dc_dyn / dc_dyn_shots / dc_market（同一时刻），成绩单里自研对 market_avg_t24
+        即同一信息时点的对比（赛前档的赛程表赔率约每周才更新）。T24 档不进替换检查。
 """
 import argparse
 from datetime import datetime, timezone
@@ -50,27 +62,50 @@ from football_prediction import version
 from football_prediction.data import fotmob
 from football_prediction.data.loader import init_db
 from football_prediction.output.report import format_row
-from football_prediction.services import DB_PATH, LEAGUES, T1_HOURS, run_near, run_round
+from football_prediction.services import (
+    DB_PATH, LEAGUES, T1_HOURS, T24_HI, T24_LO, health_check, health_lines, run_near, run_round,
+)
 
 __all__ = ["LEAGUES", "main"]
 
 
 def _print_scorecard(rep) -> None:
-    print(f"  {'模型':<16}{'版本':<8}{'场数':>5}{'LogLoss':>9}{'Brier':>8}{'命中率':>7}"
-          f"{'同场':>6}{'差值':>9}{'SE':>8}{'大小2.5':>9}{'比分':>8}"
+    print(f"  {'模型':<18}{'版本':<8}{'场数':>5}{'LogLoss':>9}{'Brier':>8}{'命中率':>7}"
+          f"  {'基准':<14}{'同场':>5}{'差值':>9}{'SE':>8}{'大小2.5':>9}{'比分':>8}"
           f"{'亚盘场':>7}{'亚盘LL':>8}{'赢盘命中':>9}")
     for _, r in rep.iterrows():
-        print(f"  {r['model_name']:<16}{r['model_ver']:<8}{r['matches']:>5}"
+        print(f"  {r['model_name']:<18}{r['model_ver']:<8}{r['matches']:>5}"
               f"{r['log_loss']:>9.4f}{r['brier']:>8.4f}{r['hit_rate']:>7.1%}"
-              f"{r['paired_n']:>6}{r['diff_vs_base']:>+9.4f}{r['se']:>8.4f}"
+              f"  {r['base']:<14}{r['paired_n']:>5}{r['diff_vs_base']:>+9.4f}{r['se']:>8.4f}"
               f"{r['ou25_ll']:>9.4f}{r['score_ll']:>8.4f}"
               f"{r['ah_n']:>7}{r['ah_ll']:>8.4f}{r['ah_hit']:>9.1%}")
+
+
+def _print_closing(close) -> None:
+    print("\n>>> [5b] 对收盘参照（football-data 收盘平均赔率按比例去水；同场 log loss 差，负=比收盘好；"
+          "收盘在存档时还看不到，只作参照，不进替换检查）...")
+    if close is None or close.empty:
+        print("  已评分场次里还没有收盘赔率。")
+        return
+    for _, r in close.iterrows():
+        print(f"  {r['model_name']:<20}{r['model_ver']:<8}{r['paired_n']:>5} 场 LogLoss {r['log_loss']:.4f}"
+              f"  对收盘 {r['diff_vs_close']:+.4f}±{r['se']:.4f}")
+
+
+def _print_health(conn) -> None:
+    print("\n>>> [8] 实盘体检（只读；⚠ 为需要看一眼的项）...")
+    try:
+        for line in health_lines(health_check(conn, datetime.now(timezone.utc))):
+            print(f"  {line}")
+    except Exception as e:   # 体检只是提示，出错不影响本轮已完成的存档与报告
+        print(f"  体检失败：{type(e).__name__}: {e}")
 
 
 def main(argv: list[str] | None = None):
     ap = argparse.ArgumentParser(description="实盘预测闭环")
     ap.add_argument("--near", action="store_true",
-                    help=f"只跑临场档：开球前 {T1_HOURS} 小时内的多家赔率 + 阵容 → *_t1 存档（更近开球时另存 *_t2）")
+                    help=f"只跑临场档：开球前 {T1_HOURS} 小时内的多家赔率 + 阵容 → *_t1 存档（更近开球时另存 *_t2）；"
+                         f"开球前 {T24_LO:g}–{T24_HI:g} 小时另存 *_t24（市场与自研同一时点）")
     ns = ap.parse_args(argv)
     now = datetime.now(timezone.utc)
     print(f"系统版本: {version.SYSTEM_VERSION}  当前时间(UTC): {now:%Y-%m-%d %H:%M}")
@@ -84,7 +119,7 @@ def main(argv: list[str] | None = None):
 
     out = run_round(conn, now, DB_PATH)
     p_name, p_ver = out["primary"]
-    print("\n>>> [4] 预测报告（最新赔率；胜平负=市场去水，比分=市场隐含，自研模型作对照；"
+    print(f"\n>>> [4] 预测报告（主模型 {p_name}：胜平负与比分都按它；最新赔率给亚盘线与市场对照；"
           "信心档后为历史命中率 首选/双选）...")
     rpt = out["report"]
     if rpt.empty:
@@ -103,6 +138,7 @@ def main(argv: list[str] | None = None):
         print("  暂无已评分的实盘预测，比赛结束、数据源更新后再运行即可。")
     else:
         _print_scorecard(rep)
+        _print_closing(out["closing"])
         print(f"\n>>> [6] 主模型替换检查（主模型 {p_name} {p_ver}；"
               f"规则：同场 ≥ {version.PROMOTE_MIN_N} 场且 差值+2×SE < 0）...")
         for _, r in out["promotion"].iterrows():
@@ -114,6 +150,7 @@ def main(argv: list[str] | None = None):
             for _, r in hz.iterrows():
                 print(f"  {r['model_name']:<20}{r['model_ver']:<8} 对 {r['base']:<16}"
                       f"{r['paired_n']:>5} 场 {r['diff']:+.4f}±{r['se']:.4f}")
+    _print_health(conn)
     conn.close()
 
 

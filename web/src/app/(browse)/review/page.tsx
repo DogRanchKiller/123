@@ -11,6 +11,6 @@ export const metadata = pageMetadata(
 export const dynamic = "force-dynamic";
 
 export default async function ReviewPage() {
-  const { rows, source } = await readReview();
-  return <Review rows={rows} source={source} />;
+  const { rows, closing, source } = await readReview();
+  return <Review rows={rows} closing={closing} source={source} />;
 }

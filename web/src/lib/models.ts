@@ -3,6 +3,9 @@ const LABELS: Readonly<Record<string, string>> = {
   market_implied: "市场隐含",
   market_avg: "市场平均赔率",
   market_shin: "市场隐含（Shin 去水）",
+  closing_avg: "收盘平均赔率",
+  dc_dyn: "动态攻防模型",
+  dc_dyn_shots: "动态攻防（射门）",
   dc_market: "进球 + 赔率强度",
   dixon_coles: "进球模型",
   dc_sot: "射正模型",
@@ -15,13 +18,14 @@ const LABELS: Readonly<Record<string, string>> = {
   lineup_base: "阵容对照",
 };
 
-/** 临场档后缀：`_t1` 开球前 1.5 小时内，`_t2` 开球前 0.6 小时内。 */
+/** 临场档后缀：`_t24` 开球前约 24 小时，`_t1` 开球前 1.5 小时内，`_t2` 开球前 0.6 小时内。 */
 const HORIZONS: Readonly<Record<string, string>> = {
+  _t24: "（开球前 24 小时）",
   _t1: "（临场）",
   _t2: "（临场，近开球）",
 };
 
-/** 中文模型名；`_t1` / `_t2` 结尾的是临场档。表里没有时原样返回。 */
+/** 中文模型名；`_t24` / `_t1` / `_t2` 结尾的是临场档。表里没有时原样返回。 */
 export function modelLabel(name: string): string {
   const suffix = Object.keys(HORIZONS).find((s) => name.endsWith(s));
   const base = suffix ? name.slice(0, -suffix.length) : name;
@@ -31,15 +35,15 @@ export function modelLabel(name: string): string {
 }
 
 const TOKEN = new RegExp(
-  "\\b(" +
+  "(?:(?<=[\\u4e00-\\u9fff]) )?\\b(" +
     Object.keys(LABELS)
       .sort((a, b) => b.length - a.length)
       .join("|") +
-    ")(_t[12])?\\b(?: (?=[\\u4e00-\\u9fff]))?",
+    ")(_t24|_t[12])?\\b(?: (?=[\\u4e00-\\u9fff]))?",
   "g",
 );
 
-/** 后端提示文字里的模型名和 pp 换成中文；模型名后紧跟中文时去掉中间的空格。 */
+/** 后端提示文字里的模型名和 pp 换成中文；模型名前后紧挨中文时去掉中间的空格。 */
 export function zhText(text: string): string {
   return text
     .replace(TOKEN, (_, base: string, near?: string) => modelLabel(base + (near ?? "")))

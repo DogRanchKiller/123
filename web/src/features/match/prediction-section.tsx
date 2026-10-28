@@ -36,6 +36,13 @@ export function PredictionSection({
         </span>
       </div>
       <ProbabilityBar values={prediction.probabilities} />
+      {prediction.marketProbabilities && (
+        <p className="fine-print">
+          市场对照（去水）主 {percentage(prediction.marketProbabilities[0])} · 平{" "}
+          {percentage(prediction.marketProbabilities[1])} · 客{" "}
+          {percentage(prediction.marketProbabilities[2])}
+        </p>
+      )}
       <div className="stat-grid">
         <div className="stat">
           <p>赛果倾向</p>

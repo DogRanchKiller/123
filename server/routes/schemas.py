@@ -31,8 +31,10 @@ class AsianBase(BaseModel):
 
 
 class AsianCurrent(AsianBase):
+    # 同一条线的主队赢盘：self = 主模型 dc_dyn；market = 该线水位去水；implied = 市场隐含比分矩阵（没有大小球赔率时空）
     self_home_cover: float | None
     market_home_cover: float | None
+    implied_home_cover: float | None = None
     movement: str | None
 
 
@@ -62,6 +64,8 @@ class MatchView(BaseModel):
     odds_source: str | None
     asian: AsianCurrent
     probabilities: list[float]
+    # 市场去水的主 / 平 / 客（对照）；本场没有胜平负赔率时空
+    market_probabilities: list[float] | None = None
     probability_source: str
     score_source: str
     lean: str
@@ -93,7 +97,8 @@ class ArchivedOdds(BaseModel):
 
 
 class ArchivedPrediction(BaseModel):
-    """主模型（没有时兜底 dc_market）开赛前的首次存档与赛后评分；临场档同形状（horizon=t1）。"""
+    """开赛前的首次存档与赛后评分：主模型 dc_dyn，v2.0.0 之前的场次依次用市场隐含、dc_market；
+    临场档同形状（horizon=t1，市场隐含 market_implied_t1）。"""
     model_name: str
     model_version: str
     generated_at: str
@@ -149,7 +154,8 @@ class RecentMatch(BaseModel):
 
 
 class ScorecardRow(BaseModel):
-    """实盘成绩单一行（review/scorecard.live_report），按 log_loss 升序；同场对比 market_avg。"""
+    """实盘成绩单一行（review/scorecard.live_report），按 log_loss 升序；同场对比同一档的市场基准 base
+    （赛前档 market_avg，临场档 market_avg_t1 / market_avg_t2）。"""
     model_name: str
     model_ver: str
     matches: int
@@ -161,6 +167,18 @@ class ScorecardRow(BaseModel):
     ah_n: int | None = None
     ah_ll: float | None = None
     ah_hit: float | None = None
+    base: str | None = None
     paired_n: int | None = None
     diff_vs_base: float | None = None
     se: float | None = None
+
+
+class ClosingRow(BaseModel):
+    """对收盘参照一行（review/scorecard.closing_report），按 diff_vs_close 升序。首行 closing_avg 是收盘
+    平均赔率（按比例去水）自身。收盘在存档时还看不到，只作参照，不进替换检查。"""
+    model_name: str
+    model_ver: str
+    paired_n: int
+    log_loss: float | None
+    diff_vs_close: float | None
+    se: float | None

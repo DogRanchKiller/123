@@ -56,7 +56,7 @@ Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `f
 
 训练语言是 Python，和后端同一个解释器。2026 年工业界的训练默认仍是 Python：PyTorch 做神经网络，梯度提升树做表格数据。TypeScript 只出现在前端。
 
-本仓库的预测输入是每场比赛的数值特征，不是文本。默认方式按输入分开，主模型保持 `version.PRIMARY_MODEL`（现为市场隐含 `market_implied` / `model_market`，无赔率时回退 `dc_market` / `model_dc_market`）。
+本仓库的预测输入是每场比赛的数值特征，不是文本。默认方式按输入分开，主模型保持 `version.PRIMARY_MODEL`（2.0.0 起为动态攻防 `dc_dyn` / `model_dc_dyn`，有没有赔率都用它；市场隐含 `market_implied` 是 `version.MARKET_MODEL` 对照）。
 
 | 输入 | 方式 | 库 |
 |---|---|---|
@@ -87,6 +87,6 @@ Python 3.12+；FastAPI + Uvicorn + Pydantic v2，目录 `server/`，只调用 `f
 - 编排框架用 LangGraph（用户 2026-10-27 在 P1.5 概念验证后选定，不用 OpenAI Agents SDK；两者没有做对比实现）：图与状态用 `langgraph`，对话状态持久化用 `langgraph-checkpoint-sqlite`（存 `agent_data/`），模型接口用 `langchain-openai`（OpenAI 兼容接口：中转站、本地 Ollama）和 `langchain-anthropic`（Claude）。SDK 自带重试关掉，由我们自己的代码限次重试并逐个数 HTTP 请求。概念验证的代码在分支 `agent/p15-poc`，不合入 main；`.venv-poc` 已删。
 - 默认云端模型（决定 2）：OpenAI 兼容中转站上的 `DeepSeek-v4.1-flash-1017`，地址、模型名和密钥只写在本机 `.env`（`AGENT_PROVIDER` / `AGENT_MODEL` / `AGENT_BASE_URL` / `OPENAI_API_KEY`）。
 - 密钥只放仓库根目录 `.env`（gitignore），变量名见 `.env.example`；代码和日志里不出现密钥。知识库索引（`agent_data/kb/`）、对话状态、用量库放 `agent_data/`，权重放 `checkpoints/`，都不进版本库，也不写进 `football.db`。
-- 向量知识库用 Milvus Lite（用户 2026-10-27 在 P2 选定，替代原方案的 Chroma）：`pymilvus` 的 `MilvusClient` 打开本地数据目录 `agent_data/kb/milvus.db`，同一集合里存 bge-m3 稠密向量和 Milvus BM25 函数生成的稀疏向量，两路检索后在 Python 里做 RRF。数据目录有独占锁，`--rebuild` / `--update` 进行中时 `kb_search` 返回「正在被使用」的说明。纯 Python 包，Windows 未实测。
-- 向量模型 bge-m3 放 `checkpoints/bge-m3/`（约 2.1 GB），只从本地加载（`local_files_only`），路径可用 `AGENT_EMBED_MODEL` 改。下载：`huggingface_hub.snapshot_download("BAAI/bge-m3", revision="5617a9f61b028005a4858fdac845db406aefb181", local_dir="checkpoints/bge-m3")`，只取 sentence-transformers 需要的配置、分词器和 `pytorch_model.bin`（不取 ONNX 和 colbert / sparse 权重），再用 torch 转成 `model.safetensors`、删掉 `.bin`。另一台机器照此下载，或直接拷贝这个目录。
+- 向量知识库用 Milvus Lite（用户 2026-10-27 在 P2 选定，替代原方案的 Chroma）：`pymilvus` 的 `MilvusClient` 打开本地数据目录 `agent_data/kb/milvus.db`，同一集合里存 bge-m3 稠密向量和 Milvus BM25 函数生成的稀疏向量，两路检索后在 Python 里做 RRF。数据目录有独占锁，`--rebuild` / `--update` 进行中时 `kb_search` 返回「正在被使用」的说明。纯 Python 包，2026-10-27 在 Windows 实盘机实测可用（Python 3.12，CPU 上 `--rebuild` 约 8 分钟）。
+- 向量模型 bge-m3 放 `checkpoints/bge-m3/`（约 2.1 GB），只从本地加载（`local_files_only`），路径可用 `AGENT_EMBED_MODEL` 改。下载：`huggingface_hub.snapshot_download("BAAI/bge-m3", revision="5617a9f61b028005a4858fdac845db406aefb181", local_dir="checkpoints/bge-m3")`，只取 sentence-transformers 需要的配置、分词器和 `pytorch_model.bin`（不取 ONNX 和 colbert / sparse 权重），再用 torch 转成 `model.safetensors`、删掉 `.bin`。另一台机器照此下载，或直接拷贝这个目录。下载卡住不动时设 `HF_HUB_DISABLE_XET=1` 改走 HTTP（见 `docs/issues.md`）。
 - 模型权重（bge-m3、重排模型、Qwen 等）下载前先说明仓库和体积，经用户同意再下。

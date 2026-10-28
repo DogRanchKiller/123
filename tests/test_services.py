@@ -36,7 +36,7 @@ def test_run_round_writes_report_and_snapshot(league, tmp_path, monkeypatch):
     assert list(out["report"]["主队"]) == ["A", "C", "B"]
     assert pathlib.Path(out["report_path"]).exists()
     assert out["primary"] == (version.PRIMARY_MODEL[0], version.get(version.PRIMARY_MODEL[1]))
-    assert out["scorecard"].empty and out["promotion"] is None     # 还没有评分
+    assert out["scorecard"].empty and out["promotion"] is None and out["closing"] is None   # 还没有评分
     data = json.loads(pathlib.Path(snap).read_text(encoding="utf-8"))
     assert data["schema"] == live_round.SNAPSHOT_SCHEMA and data["system_version"] == version.SYSTEM_VERSION
     assert [m["match_id"] for m in data["matches"]] == ["soon", "late", "noodds"]
@@ -47,14 +47,16 @@ def test_run_round_writes_report_and_snapshot(league, tmp_path, monkeypatch):
     assert ah["line"] == -1.0 and ah["line_source"] == "市场线" and ah["side"] in ("主", "客")
     assert abs(sum(ah["outcome"].values()) - 1) < 1e-3 and ah["tier"] in ("高", "中", "低")
     assert m["odds_source"].startswith("赛程表") and abs(sum(m["probabilities"]) - 1) < 1e-3
-    assert m["probability_source"] == "市场" and m["score_source"] == "市场隐含"
+    assert m["probability_source"] == "dc_dyn" and m["score_source"] == "dc_dyn"
+    assert abs(sum(m["market_probabilities"]) - 1) < 1e-3 and m["asian"]["implied_home_cover"] is not None
     assert (m["model_name"], m["model_version"]) == out["primary"]
-    assert m["recommended"] == (m["confidence"] == "高")              # 重点 = 胜平负市场档高
+    assert m["recommended"] == (m["confidence"] == "高")              # 重点 = 胜平负 dc_dyn 档高
     assert (m["recommendation_note"] is None) != m["recommended"]
     side = 1 if ah["side"] == "主" else -1                           # 稳妥线从市场线向选择方退
     assert ah["safe_cover"] >= 0.65 and (ah["safe_line"] - ah["line"]) * side >= 0
-    n = data["matches"][2]                                          # 无赔率：公平线、不分档
-    assert n["model_name"] == version.FALLBACK_MODEL[0] and n["recommended"] is False
+    n = data["matches"][2]                                          # 无赔率：仍是 dc_dyn，公平线、亚盘不分档
+    assert n["model_name"] == version.PRIMARY_MODEL[0] and n["market_probabilities"] is None
+    assert n["recommended"] == (n["confidence"] == "高")
     assert n["odds_source"] is None and n["asian"]["line_source"] == "公平线"
     assert n["asian"]["tier"] == "-" and n["asian"]["historical_hit"] is None
     assert any("缺胜平负赔率" in h for h in n["hints"] + n["risks"])
@@ -173,7 +175,7 @@ def test_run_near_rewrites_snapshot_with_book_odds(league, tmp_path, monkeypatch
     # 两份存档：赛前首次存档（赛程表赔率）+ 临场档（多家中位数）
     d = services.read_match(conn, "near", snap)
     na = d["near_archived"]
-    assert (na["model_name"], na["horizon"], na["n_books"]) == (version.PRIMARY_MODEL[0] + "_t1", "t1", 3)
+    assert (na["model_name"], na["horizon"], na["n_books"]) == (version.MARKET_MODEL[0] + "_t1", "t1", 3)
     assert na["hours_to_ko"] == pytest.approx(0.67, abs=0.01) and na["asian"]["line_source"] == "市场线"
     assert d["archived"]["horizon"] == "pre" and d["archived"]["n_books"] is None
     assert rec["near_archived"]["generated_at"] == na["generated_at"]
@@ -202,28 +204,34 @@ def test_open_readonly_attaches_fotmob(tmp_path):
     assert not (tmp_path / "none.db").exists()
 
 
-def test_read_match_falls_back_to_dc_market(league, tmp_path):
+def test_read_match_archive_chain(league, tmp_path):
+    """首次存档按 dc_dyn → market_implied → dc_market 取：2.0.0 之前的场次没有 dc_dyn 行。"""
     conn, cutoff = league
     now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
     _fixture(conn, "noodds", (now + timedelta(hours=5)).isoformat(), "B", "E",
              avg_h=None, avg_d=None, avg_a=None, avg_over25=None, avg_under25=None, ah_line=None)
     services.predict_upcoming(conn, now)
-    ar = services.read_match(conn, "noodds", str(tmp_path / "none.json"))["archived"]
-    assert ar["model_name"] == version.FALLBACK_MODEL[0]
+    read = lambda: services.read_match(conn, "noodds", str(tmp_path / "none.json"))["archived"]
+    ar = read()
+    assert ar["model_name"] == version.PRIMARY_MODEL[0]
     assert ar["asian"]["line_source"] == "公平线" and ar["asian"]["tier"] == "-"   # 无市场线不分档
+    conn.execute("DELETE FROM predictions WHERE model_name=?", (version.PRIMARY_MODEL[0],))
+    assert read()["model_name"] == version.FALLBACK_MODEL[0]          # 无赔率没有市场隐含行
 
 
 def test_scorecard_rows_json_safe(tmp_path):
     rep = pd.DataFrame([{"model_name": "market_implied", "model_ver": "1.0.0", "matches": 12,
-                         "log_loss": 0.98765, "brier": float("nan"), "ah_n": 10, "paired_n": float("nan")}])
+                         "log_loss": 0.98765, "brier": float("nan"), "ah_n": 10, "base": "market_avg",
+                         "paired_n": float("nan")}])
     rows = live_round.scorecard_rows(rep)
     assert rows == [{"model_name": "market_implied", "model_ver": "1.0.0", "matches": 12,
-                     "log_loss": 0.9877, "brier": None, "ah_n": 10, "paired_n": None}]
+                     "log_loss": 0.9877, "brier": None, "ah_n": 10, "base": "market_avg", "paired_n": None}]
     assert live_round.scorecard_rows(pd.DataFrame()) == []
     p = str(tmp_path / "s.json")
     live_round.write_snapshot(p, datetime.now().astimezone(), [], rows)
     sc = services.read_scorecard(p)
     assert sc["scorecard"] == rows and sc["system_version"] == version.SYSTEM_VERSION
+    assert sc["closing"] == []
     assert not pathlib.Path(p + ".tmp").exists()                    # 原子替换后不留临时文件
     assert live_round._num(float("inf")) is None and live_round._num(math.nan) is None
 

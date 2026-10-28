@@ -71,7 +71,8 @@ def test_good_answer_passes_and_renders_tool_values():
     # 按工具结果的小数位比：少写一位（0.53）就不通过；渲染用工具结果里的值
     assert 4 in rules({"text": "赢盘 {f2}", "facts": [{**F_PROB, "value": 0.53}]})
     out = facts.render(GOOD, LOG, NOW)
-    assert "主-0.75（本轮看法，10-26 22:43）" in out and "53%（本轮看法，10-26 22:43）" in out
+    # 同一句里连着两个本轮看法的数，来源只标在后一个
+    assert "主-0.75，主队赢盘概率 53%（本轮看法，10-26 22:43）" in out
     assert "主-0.50（首次存档，10-25 18:07）" in out and "51（实盘成绩单，10-26 22:43）" in out
     assert "1000（项目文档 docs/progress.md，2026-10-26）" in out and out.endswith("（时间均为北京时间）")
 
@@ -191,9 +192,23 @@ def test_labels():
     assert facts.label(res, NOW) == "研究结论 _diag/x.log"
     old = {**LOG["c1"]["blocks"][0], "at": "2025-05-01T10:00:00+00:00"}
     assert facts.label(old, NOW) == "本轮看法，2025-05-01 18:00"
+    closing = {**LOG["c3"]["blocks"][0], "kind": "closing"}
+    assert facts.label(closing, NOW) == "对收盘参照，10-26 22:43"
+    assert units.field("scorecard", "/diff_vs_close") == ("ll_diff", "与收盘赔率的同场差值")
     score = fact("f1", "/blocks/0/score", "2-1", "score", "score", "2026-10-26T18:00:00+00:00", "m3", call="c2")
     out = facts.render({"text": "Augsburg 对 Freiburg {f1}", "facts": [score]}, LOG, NOW)
     assert out.startswith("Augsburg 对 Freiburg 2-1（比分，FotMob，待 football-data 核对）")
+
+
+def test_render_label_once_per_source_run():
+    f_at = fact("f1", "/blocks/0/at", SNAP, "datetime")
+    out = facts.render({"text": "看法生成于 {f1}。", "facts": [f_at]}, LOG, NOW)
+    assert out.startswith("看法生成于 10-26 22:43（本轮看法）。")             # 不再写两遍同一时间
+    # 句末标点隔开时各自标注；来源不同时各自标注
+    two = {"text": "市场线 {f1}。赢盘 {f2}，首次存档 {f3}", "facts": [F_LINE, F_PROB, F_ARCH]}
+    out = facts.render(two, LOG, NOW)
+    assert "主-0.75（本轮看法，10-26 22:43）。" in out and "53%（本轮看法，10-26 22:43）" in out
+    assert "主-0.50（首次存档，10-25 18:07）" in out
 
 
 def test_degrade_has_no_unverified_numbers():

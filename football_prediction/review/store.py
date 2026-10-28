@@ -21,6 +21,9 @@ v1.7.0: save_prediction 收生成时刻 at，extra 的开球时间不晚于 at �
 v1.8.0: 临场档分两档：_t1（开球前 1.5 小时内）与 _t2（开球前 0.6 小时内，live 1.12.0）。HORIZON_SUFFIXES
         列出两者，horizon_of 返回模型名的档；亚盘评分的参照线按（场次, 档）分组，_t2 与 _t1 各用自己最早的线。
         两档都不参加 promotion_check；horizon_report 里 _t2 同时对赛前档与 _t1 配对。
+v1.9.0: 加 T24 档 _t24（开球前约 24 小时，live 2.1.0），排在 _t1 之前（越往后越接近开球）：不进 promotion_check，
+        horizon_report 里 _t24 对赛前档、_t1 / _t2 也对 _t24 配对；成绩单每行对同一档的市场基准、
+        新增对收盘参照 closing_report（见 scorecard.py）。
 修改此文件后请同步更新 version.py 中 "review" 的版本号。
 """
 import sqlite3
@@ -30,9 +33,9 @@ from math import log
 
 import pandas as pd
 
-LAYER_VERSION = "1.8.0"
+LAYER_VERSION = "1.9.0"
 HORIZON_SUFFIX = "_t1"                          # 临场档模型名后缀（live --near 存档）
-HORIZON_SUFFIXES = ("_t1", "_t2")              # 临场各档后缀，越往后越接近开球
+HORIZON_SUFFIXES = ("_t24", "_t1", "_t2")      # 临场各档后缀，越往后越接近开球
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
@@ -123,7 +126,7 @@ def ah_scores(extra: dict, hg: int, ag: int, line) -> tuple[float | None, float 
 
 
 def horizon_of(model_name: str) -> str:
-    """模型名所属的档："" 为赛前档，否则为临场档后缀（"_t1" / "_t2"）。"""
+    """模型名所属的档："" 为赛前档，否则为临场档后缀（"_t24" / "_t1" / "_t2"）。"""
     return next((s for s in HORIZON_SUFFIXES if model_name.endswith(s)), "")
 
 

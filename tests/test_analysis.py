@@ -1,10 +1,12 @@
 """output 1.5.0 亚盘为主：数字盘口文字、选择方、盘口与水位变动、同线分歧、±4 线、报告列。
-output 1.6.0：亚盘稳妥线、重点标记。"""
+output 1.6.0：亚盘稳妥线、重点标记。
+output 2.0.0：主模型 dc_dyn 的矩阵给概率、亚盘与信心档；市场只作对照与分歧提示。"""
 import pytest
 
 from football_prediction.model_market.implied import dc_matrix
-from football_prediction.output.analysis import (AH_TIERS, SAFE_TARGET, ah_pick_text, ah_text, ah_tier,
-                                                 ah_trail, analyse, asian, safe_line, safe_text, _shift)
+from football_prediction.output.analysis import (AH_TIERS, PRIMARY_AH_TIERS, PRIMARY_NAME, PRIMARY_TIERS,
+                                                 SAFE_TARGET, ah_pick_text, ah_text, ah_tier, ah_trail, analyse,
+                                                 asian, confidence_tier, safe_line, safe_text, _shift)
 from football_prediction.output.derive import AH_LINES, derive_markets
 
 
@@ -26,8 +28,14 @@ def test_ah_pick_text_side():
 
 
 def test_ah_tier_bounds():
-    assert ah_tier(0.5)[0] == AH_TIERS[-1][1]
-    assert ah_tier(0.99)[0] == AH_TIERS[0][1]
+    assert ah_tier(0.5, AH_TIERS)[0] == AH_TIERS[-1][1]       # 旧市场存档的三档
+    assert ah_tier(0.99, AH_TIERS)[0] == AH_TIERS[0][1]
+    assert ah_tier(0.5) == ah_tier(0.99) == (PRIMARY_AH_TIERS[0][1], PRIMARY_AH_TIERS[0][2])   # dc_dyn 只一档
+
+
+def test_primary_tiers_bounds():
+    assert confidence_tier(0.34)[0] == "低" and confidence_tier(0.50)[0] == "中"
+    assert confidence_tier(0.61) == tuple(PRIMARY_TIERS[0][1:])
 
 
 @pytest.mark.parametrize("l0,l1,want", [
@@ -54,20 +62,24 @@ def test_ah_trail():
 
 
 def test_asian_market_line_and_divergence():
-    m = dc_matrix(2.0, 0.8)
+    m = dc_matrix(2.0, 0.8)                                # 主模型：主队明显强
     od = {"ah_line": -1.0, "ah_h": 1.9, "ah_a": 1.95}
-    ah, hints = asian(m, od, dc_matrix(1.2, 1.2), True)
+    ah, hints = asian(m, od, dc_matrix(1.2, 1.2))          # 市场隐含：接近五五
     assert ah["line"] == -1.0 and ah["line_src"] == "市场线" and ah["tier"] != "-"
     assert ah["side"] == ("主" if ah["fair"] >= 0.5 else "客") and ah["p_cover"] >= 0.5
+    assert ah["self_fair"] == ah["fair"]
     assert ah["market_fair"] == pytest.approx(1 / 1.9 / (1 / 1.9 + 1 / 1.95))
-    assert hints and "dc_market 在主-1.00" in hints[0]
-    _, quiet = asian(m, od, dc_matrix(1.2, 1.2), False)   # 比分矩阵不是市场的，不提示
+    assert ah["implied_fair"] < ah["fair"]
+    assert hints and hints[0].startswith("市场在主-1.00") and "dc_dyn" in hints[0] and "仅提示" in hints[0]
+    _, quiet = asian(m, od, m)                             # 市场隐含与主模型一致：不提示
     assert quiet == []
+    ah2, h2 = asian(m, dict(od, ah_h=2.6, ah_a=1.5))      # 没有市场隐含：用水位去水比
+    assert ah2["implied_fair"] is None and h2 and f"{ah2['market_fair']:.0%}" in h2[0]
 
 
 def test_asian_fair_line_without_market():
     m = dc_matrix(1.5, 1.0)
-    ah, _ = asian(m, {}, m, False)
+    ah, _ = asian(m, {})
     assert ah["line"] == derive_markets(m)["ah_fair_line"] and ah["line_src"].startswith("公平线")
     assert ah["tier"] == "-" and ah["hit"] is None and ah["market_fair"] is None
 
@@ -101,19 +113,37 @@ def test_safe_line_steps_toward_pick():
 
 
 def test_asian_safe_line_from_matrix():
-    ah, _ = asian(dc_matrix(1.6, 1.1), {"ah_line": -0.5, "ah_h": 1.95, "ah_a": 1.92}, dc_matrix(1.6, 1.1), True)
+    ah, _ = asian(dc_matrix(1.6, 1.1), {"ah_line": -0.5, "ah_h": 1.95, "ah_a": 1.92})
     assert ah["safe_cover"] >= SAFE_TARGET
     side = 1 if ah["side"] == "主" else -1
     assert (ah["safe_line"] - ah["line"]) * side > 0                            # 市场线赢盘不到 65%，要退
 
 
-def test_analyse_highlight_only_market_high():
-    xg = dc_matrix(1.4, 1.1)
+def test_analyse_highlight_follows_primary_tier():
     hot = dict(avg_h=1.35, avg_d=5.0, avg_a=8.5, avg_over25=1.7, avg_under25=2.15,
                ah_line=-1.5, avg_ahh=1.92, avg_aha=1.98)
-    even = dict(hot, avg_h=2.6, avg_d=3.3, avg_a=2.8, ah_line=0.0)
-    assert analyse(hot, xg, -0.05)["highlight"] is True
-    assert analyse(even, xg, -0.05)["highlight"] is False
-    big = dc_matrix(3.0, 0.4)                                                   # 无赔率：自研档高也不标重点
-    a = analyse(None, big, -0.05)
-    assert a["tier"] == "高" and a["highlight"] is False
+    big, even = dc_matrix(3.0, 0.4), dc_matrix(1.3, 1.2)
+    a = analyse(hot, even, -0.05)                       # 市场一边倒、dc_dyn 接近五五：不标重点
+    assert a["tier"] != "高" and a["highlight"] is False
+    assert a["hints"] and any(h.startswith("市场与 dc_dyn 分歧") for h in a["hints"])
+    for row in (hot, None):                             # dc_dyn 档高：有没有赔率都标重点
+        a = analyse(row, big, -0.05)
+        assert a["tier"] == "高" and a["highlight"] is True
+        assert a["hit1"] == PRIMARY_TIERS[0][2] and a["est1"] == pytest.approx(max(a["p1x2"]))
+
+
+def test_analyse_probabilities_are_primary_matrix():
+    m = dc_matrix(1.6, 1.0)
+    row = dict(avg_h=1.8, avg_d=3.6, avg_a=4.5, avg_over25=1.8, avg_under25=2.0,
+               ah_line=-0.75, avg_ahh=1.95, avg_aha=1.92)
+    a = analyse(row, m, -0.05)
+    mk = derive_markets(m)
+    assert a["p_src"] == a["source"] == PRIMARY_NAME
+    assert a["p1x2"] == pytest.approx([mk["home_win"], mk["draw"], mk["away_win"]], abs=1e-3)   # derive 四舍五入
+    inv = [1 / 1.8, 1 / 3.6, 1 / 4.5]
+    assert a["market"] == pytest.approx([x / sum(inv) for x in inv])
+    assert a["fit"] is not None and a["ref_markets"] is not None
+    assert a["ah"]["implied_fair"] is not None and a["ah"]["tier"] == PRIMARY_AH_TIERS[0][1]
+    b = analyse(None, m, -0.05)                         # 无赔率：概率不变，只少了市场对照
+    assert b["p1x2"] == pytest.approx(a["p1x2"]) and b["market"] is None and b["fit"] is None
+    assert any("缺胜平负赔率" in r for r in b["risks"])

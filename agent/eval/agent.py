@@ -6,7 +6,8 @@ agent/eval/agent.py  Agent 问答评测（docs/agent-dev.md 第 8 节 P3 出口�
 结果逐题写到 agent_data/eval/agent_<时间>.jsonl（不进版本库），最后打印指标：
 - first_pass：有提交的题里，第 1 次提交就通过校验的比例；passed：最终通过（含重答）的比例；
 - degraded：降级、出错、被拒、超时的比例；
-- wording_mismatch：通过的答案里，存档 / 开球前 / 赛后的数旁边写了「现在、当前、目前、最新、本轮」的比例（启发式，观察项）；
+- wording_mismatch：通过的答案里，数前最近的时点词与 kind 对不上的比例（存档 / 开球前 / 赛后的数写成「现在」，
+  或首次存档、临场存档、开球前最后一轮互相写反；启发式，观察项）；
 - allow_reject：所有提交里被第 1 条（数字写法）打回的比例，以及打回的写法，供增补放行表；
 - cost：用量库里这几轮的实际金额。
 """
@@ -23,8 +24,14 @@ from agent.facts.verify import PLACEHOLDER
 
 EVAL_FILE = pathlib.Path(__file__).with_name("agent.jsonl")
 OUT = config.ROOT / "agent_data" / "eval"
-PAST_KINDS = {"first_archive", "near_archive", "last_pre_kickoff", "grading", "score"}
 NOW_WORDS = ("现在", "当前", "目前", "最新", "本轮", "此刻")
+# 文字里说的是哪一种看法：占位前最近的一个词算数。四种看法之间写反就算错位
+CLAIM_WORDS = {"current": NOW_WORDS, "first_archive": ("首次存档",), "near_archive": ("临场",),
+               "last_pre_kickoff": ("最后一轮",)}
+AFTER_KINDS = {"grading", "score"}  # 赛后的数只查「写成现在」，评分常和存档写在一起，不查存档词
+_CLAIM = re.compile("|".join(sorted((re.escape(w) for ws in CLAIM_WORDS.values() for w in ws),
+                                    key=len, reverse=True)))
+_CLAIM_KIND = {w: k for k, ws in CLAIM_WORDS.items() for w in ws}
 WINDOW = 12                       # 占位前多少个字算「旁边」
 _HITS = re.compile(r"数字写法：(.+?)。所有数")
 
@@ -38,12 +45,18 @@ def load(path: pathlib.Path = EVAL_FILE) -> list[dict]:
 
 
 def wording_mismatch(answer: dict) -> list[str]:
-    """通过的答案里，过去时点的事实旁边写了「现在」类词的占位 id。"""
+    """通过的答案里，占位前最近的时点词（「现在」类、首次存档、临场、最后一轮）与该事实的 kind
+    对不上的占位 id：过去的看法写成现在、首次存档与开球前最后一轮写反都算；评分和比分只查写成现在。
+    现算、成绩单、知识库、阵容，以及旁边没有时点词的占位不判断。"""
     text, out = answer.get("text", ""), []
     kinds = {f.get("id"): f.get("kind") for f in answer.get("facts") or [] if isinstance(f, dict)}
     for m in PLACEHOLDER.finditer(text):
-        if kinds.get(m.group(1)) in PAST_KINDS and any(w in text[max(0, m.start() - WINDOW):m.start()]
-                                                       for w in NOW_WORDS):
+        kind = kinds.get(m.group(1))
+        words = list(_CLAIM.finditer(text, max(0, m.start() - WINDOW), m.start()))
+        if not words:
+            continue
+        claimed = _CLAIM_KIND[words[-1].group()]
+        if kind in CLAIM_WORDS and claimed != kind or kind in AFTER_KINDS and claimed == "current":
             out.append(m.group(1))
     return out
 

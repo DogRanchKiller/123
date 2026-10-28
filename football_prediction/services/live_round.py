@@ -10,6 +10,8 @@ services/live_round.py  实盘一轮（中间层）
 - 每场每个模型版本只保存首次预测，之后重跑不会覆盖或追加，避免事后挑选。
 - 同时保存当时的市场平均赔率（去抽水）作为基准 market_avg，赛后同场对比。
 - 报告与快照按最新赔率现算（当前看法）；存档只认首次预测，二者互不影响。
+- 主模型 dc_dyn（live 2.0.0）：本轮看法的概率与比分都是 dc_dyn；赔率只给市场对照（market_probabilities、
+  亚盘的 market_home_cover / implied_home_cover）与亚盘线。dc_dyn 存档另记存档时的赛程表赔率。
 进度输出走 log 参数（默认 print），本文件不渲染表格。
 """
 import json
@@ -26,13 +28,14 @@ from football_prediction.data.fixtures import load_fixtures
 from football_prediction.data.loader import load_season, season_of
 from football_prediction.data.understat import US_LEAGUES, load_xg
 from football_prediction.model_blend.blend import MODEL_NAME as BLEND_NAME
+from football_prediction.model_dc.dynamic_dc import DynamicDixonColesModel, DynamicShotsDixonColesModel
 from football_prediction.model_dc.market_dc import MODEL_NAME as DC_MARKET_NAME
 from football_prediction.model_market.devig import SHIN_NAME
 from football_prediction.model_market.implied import MODEL_NAME as IMPLIED_NAME, implied_matrix
 from football_prediction.output.analysis import devig, odds_dict, safe_text
 from football_prediction.output.derive import derive_markets
 from football_prediction.output.report import upcoming_fixtures, write_report
-from football_prediction.review.scorecard import horizon_report, live_report, promotion_check
+from football_prediction.review.scorecard import closing_report, horizon_report, live_report, promotion_check
 from football_prediction.review.store import (
     has_prediction, pending_fotmob, reconcile_results, save_prediction, score_predictions, started,
 )
@@ -41,13 +44,14 @@ from football_prediction.services.match_analysis import (
 )
 
 Log = Callable[[str], None]
+DYN_NAME, DYN_SHOTS_NAME = DynamicDixonColesModel.MODEL_NAME, DynamicShotsDixonColesModel.MODEL_NAME
 
 DB_PATH = "football.db"
 LEAGUES = {"E0": "英超", "D1": "德甲", "SP1": "西甲", "I1": "意甲", "F1": "法甲",
            "E1": "英冠", "N1": "荷甲", "P1": "葡超", "SC0": "苏超", "B1": "比甲", "T1": "土超"}
 MARKET_VER = "1.1.0"   # 市场基准算法版本（1/赔率 按比例去抽水），算法变化时才改
 SNAPSHOT_PATH = os.path.join("reports", "latest_round.json")   # 本轮看法与成绩单，每轮覆盖
-SNAPSHOT_SCHEMA = 1
+SNAPSHOT_SCHEMA = 2   # 2：加 closing（对收盘参照），成绩单行加 base（同档市场基准）
 REPLACE_TRIES, REPLACE_WAIT = 5, 0.2   # 替换快照被拒绝时的重试次数与间隔（秒）
 Clock = Callable[[], datetime]
 
@@ -127,14 +131,15 @@ def match_ident(r: dict) -> dict:
 
 def predict_upcoming(conn: sqlite3.Connection, now: datetime, cache: ModelCache | None = None,
                      log: Log = print, clock: Clock | None = None) -> int:
-    """对未开球的比赛存档 DC / 射正 DC / xG DC / Elo / blend / 市场 / 市场隐含，返回新保存条数。
+    """对未开球的比赛存档 DC / 射正 DC / xG DC / 市场版 DC / 动态 DC 两版 / Elo / blend / 市场 / 市场隐含，返回新保存条数。
     clock 是本轮时钟（默认从 now 起算）：每场拟合之后、存档之前再取一次时刻，已开球的跳过。"""
     clock = clock or round_clock(now)
     cache = cache or ModelCache(conn, now.date().isoformat())
     feat_ver = version.get("features")
     vers = {"dixon_coles": version.get("model_dc"), "dc_sot": version.get("model_sot"),
             "dc_xg": version.get("model_xg"), "elo": version.get("model_elo"),
-            BLEND_NAME: version.get("model_blend"), DC_MARKET_NAME: version.get("model_dc_market")}
+            BLEND_NAME: version.get("model_blend"), DC_MARKET_NAME: version.get("model_dc_market"),
+            DYN_NAME: version.get("model_dc_dyn"), DYN_SHOTS_NAME: version.get("model_dc_dyn")}
     saved = 0
 
     def save(mid, name, ver, p, extra):
@@ -156,13 +161,15 @@ def predict_upcoming(conn: sqlite3.Connection, now: datetime, cache: ModelCache 
                 log(f"  ⚠ {t} 不在 {lg} 历史数据中，DC 用联赛均值兜底")
 
         for name, model in (("dixon_coles", lm.dc), ("dc_sot", lm.sot), ("dc_xg", lm.xg),
-                            (DC_MARKET_NAME, lm.market)):
+                            (DC_MARKET_NAME, lm.market), (DYN_NAME, lm.dyn), (DYN_SHOTS_NAME, lm.dyn_shots)):
             if has_prediction(conn, mid, name, vers[name]):
                 continue
             m = model.score_matrix(home, away)
             mk = derive_markets(m)
-            save(mid, name, vers[name], (mk["home_win"], mk["draw"], mk["away_win"]),
-                 markets_extra(m, kickoff) | ident)
+            extra = markets_extra(m, kickoff) | ident
+            if name == DYN_NAME:   # 主模型另记存档时的赛程表赔率：页面显示市场线，评分用本行亚盘线
+                extra["odds"] = fixture_odds(r)
+            save(mid, name, vers[name], (mk["home_win"], mk["draw"], mk["away_win"]), extra)
 
         inp = lm.inputs(home, away)
         save(mid, "elo", vers["elo"], inp["models"]["elo"], {"kickoff_utc": kickoff, **ident})
@@ -208,7 +215,7 @@ def save_market(conn: sqlite3.Connection, mid: str, odds: dict, rho: float, kick
 
 def run_round(conn: sqlite3.Connection, now: datetime, db_path: str = DB_PATH,
               snapshot_path: str = SNAPSHOT_PATH, log: Log = print) -> dict:
-    """实盘一轮。返回 report（DataFrame）、report_path、scorecard / promotion / horizon（DataFrame 或 None）、
+    """实盘一轮。返回 report（DataFrame）、report_path、scorecard / closing / promotion / horizon（DataFrame 或 None）、
     primary（主模型名, 版本）；报告 CSV 只在有场次时写，快照每轮都写（没有场次时 matches 为空）。"""
     today, clock = now.date().isoformat(), round_clock(now)
     log("\n>>> [1] 更新数据 ...")
@@ -225,12 +232,13 @@ def run_round(conn: sqlite3.Connection, now: datetime, db_path: str = DB_PATH,
     report = build_report(conn, LEAGUES, now, analysed=analysed)
     rep = live_report(conn)
     out = {"report": report, "report_path": None if report.empty else write_report(report, now),
-           "scorecard": rep, "primary": primary, "promotion": None, "horizon": None}
+           "scorecard": rep, "primary": primary, "closing": None, "promotion": None, "horizon": None}
     if not rep.empty:
+        out["closing"] = closing_report(conn)
         out["promotion"] = promotion_check(conn, primary, version.PROMOTE_MIN_N)
         out["horizon"] = horizon_report(conn)
     write_snapshot(snapshot_path, now, [match_view(r, a, src) for r, a, src in analysed],
-                   scorecard_rows(rep))
+                   scorecard_rows(rep), scorecard_rows(out["closing"]))
     out["snapshot_path"] = snapshot_path
     return out
 
@@ -241,8 +249,9 @@ def refresh_snapshot(conn: sqlite3.Connection, now: datetime, cache: ModelCache 
     不存档、不写报告 CSV、不评分；成绩单按库里现有评分重算。返回快照里的场次数。
     快照的生成时间记 now（本轮开始），场次按 clock 的当前时刻筛未开球的。"""
     analysed = analyse_upcoming(conn, LEAGUES, (clock or round_clock(now))(), cache)
+    rep = live_report(conn)
     write_snapshot(snapshot_path, now, [match_view(r, a, src) for r, a, src in analysed],
-                   scorecard_rows(live_report(conn)))
+                   scorecard_rows(rep), scorecard_rows(None if rep.empty else closing_report(conn)))
     return len(analysed)
 
 
@@ -255,8 +264,8 @@ def _num(x, nd: int = 4):
 
 
 def view_model(a: dict) -> tuple[str, str]:
-    """本轮看法的比分来源对应的模型（名, 版本）：市场隐含 → 主模型，否则兜底 version.FALLBACK_MODEL。"""
-    name, key = version.PRIMARY_MODEL if a["source"] == "市场隐含" else version.FALLBACK_MODEL
+    """本轮看法对应的模型（名, 版本）：主模型 dc_dyn，有没有赔率都是它（live 2.0.0）。"""
+    name, key = version.PRIMARY_MODEL
     return name, version.get(key)
 
 
@@ -287,9 +296,11 @@ def match_view(r: dict, a: dict, odds_source: str) -> dict:
             "safe_line": None if ah["safe_line"] is None else round(ah["safe_line"] + 0.0, 2),
             "safe_cover": _num(ah["safe_cover"]), "self_home_cover": _num(ah["self_fair"]),
             "market_home_cover": _num(ah["market_fair"]),
+            "implied_home_cover": _num(ah["implied_fair"]),
             "movement": a["ah_move"] or None,
         },
         "probabilities": [_num(x) for x in a["p1x2"]],
+        "market_probabilities": None if a["market"] is None else [_num(x) for x in a["market"]],
         "probability_source": a["p_src"], "score_source": a["source"],
         "lean": a["lean"], "double": a["double"], "confidence": a["tier"],
         "historical_first_hit": _num(a["hit1"]), "historical_double_hit": _num(a["hit2"]),
@@ -304,24 +315,27 @@ def match_view(r: dict, a: dict, odds_source: str) -> dict:
 
 
 _INT_COLS = ("matches", "ah_n", "paired_n")
+_STR_COLS = ("model_name", "model_ver", "base")
 
 
 def scorecard_rows(rep) -> list[dict]:
-    """live_report 的行（JSON 可写；NaN → None），保持其排序（log loss 升序）。"""
+    """live_report / closing_report 的行（JSON 可写；NaN → None），保持其排序。"""
     if rep is None or rep.empty:
         return []
-    return [{k: str(v) if k in ("model_name", "model_ver")
+    return [{k: str(v) if k in _STR_COLS
              else (int(v) if k in _INT_COLS and v == v else _num(v)) for k, v in r.items()}
             for r in rep.to_dict("records")]
 
 
-def write_snapshot(path: str, now: datetime, matches: list[dict], scorecard: list[dict]) -> None:
-    """原子写入（先写临时文件再替换），接口读到的总是完整的一轮。"""
+def write_snapshot(path: str, now: datetime, matches: list[dict], scorecard: list[dict],
+                   closing: list[dict] | None = None) -> None:
+    """原子写入（先写临时文件再替换），接口读到的总是完整的一轮。closing 为对收盘参照的行。"""
     p_name, p_key = version.PRIMARY_MODEL
     data = {"schema": SNAPSHOT_SCHEMA, "generated_at": now.isoformat(),
             "system_version": version.SYSTEM_VERSION,
             "primary_model": {"name": p_name, "version": version.get(p_key)},
-            "leagues": LEAGUES, "matches": matches, "scorecard": scorecard}
+            "leagues": LEAGUES, "matches": matches, "scorecard": scorecard,
+            "closing": closing or []}
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:

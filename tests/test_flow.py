@@ -10,7 +10,7 @@ from football_prediction.data import fixtures, loader
 from football_prediction.model_blend.blend import blend_1x2, W_ELO
 from football_prediction.model_elo.elo import EloModel, ordlogit, fit_ordlogit
 from football_prediction.model_market.implied import dc_matrix, fair_probs, fit_lambdas, implied_matrix
-from football_prediction.output.analysis import analyse, movement, devig, matrix_1x2
+from football_prediction.output.analysis import PRIMARY_TIERS, analyse, movement, devig, matrix_1x2
 from football_prediction.output.derive import ah_outcome, ah_fair_prob, margin_pmf, derive_markets
 from football_prediction.review.store import market_log_losses, save_prediction, score_predictions
 
@@ -195,31 +195,34 @@ def test_movement_directions():
 
 
 # ---------- 单场判断 ----------
-def test_analyse_market_base_and_divergence_hint():
-    xg = dc_matrix(1.2, 1.2)
+def test_analyse_primary_base_and_market_divergence_hint():
+    dyn = dc_matrix(1.2, 1.2)                                     # 主模型 dc_dyn：接近五五
     row = dict(avg_h=1.5, avg_d=4.2, avg_a=6.5, avg_over25=1.7, avg_under25=2.1,
                ah_line=-1.0, avg_ahh=1.9, avg_aha=1.95)
-    a = analyse(row, xg, -0.05, {"dc_market": matrix_1x2(xg)}, risks=["X 升班马"])
-    assert a["p_src"] == "市场" and a["source"] == "市场隐含"
-    assert a["p1x2"] == pytest.approx(devig(1.5, 4.2, 6.5))
-    assert a["tier"] == "高" and a["lean"] == "主胜"
-    assert any("dc_market 与市场分歧" in h for h in a["hints"])   # 自研主胜远低于市场
-    assert "dc_market 在主-1.00" in a["hints"][0]                   # 亚盘同线分歧排在最前
+    a = analyse(row, dyn, -0.05, {"dc_market": (0.6, 0.25, 0.15)}, risks=["X 升班马"])
+    assert a["p_src"] == a["source"] == "dc_dyn"
+    assert a["p1x2"] == pytest.approx(matrix_1x2(dyn))            # 概率是主模型的，不是市场去水
+    assert a["market"] == pytest.approx(devig(1.5, 4.2, 6.5))
+    assert a["tier"] != "高" and a["highlight"] is False
+    assert any(h.startswith("市场与 dc_dyn 分歧：主胜") for h in a["hints"])   # 市场主胜远高于 dc_dyn
+    assert a["hints"][0].startswith("市场在主-1.00")              # 亚盘同线分歧排在最前
     assert a["risks"] == ["X 升班马"] and a["ah"]["line"] == -1.0
-    assert a["ah"]["fair"] == pytest.approx(a["ah"]["market_fair"], abs=0.03)
-    assert a["markets"]["exp_home_goals"] > a["markets"]["exp_away_goals"]
+    assert a["ah"]["fair"] < a["ah"]["implied_fair"]
+    assert a["markets"]["exp_home_goals"] == pytest.approx(a["markets"]["exp_away_goals"], abs=0.01)
+    assert a["ref_markets"]["exp_home_goals"] > a["ref_markets"]["exp_away_goals"]
 
 
-def test_analyse_fallbacks():
-    xg = dc_matrix(1.5, 1.0)
-    a = analyse(None, xg, -0.05, {"blend": (0.5, 0.3, 0.2)})   # 无赔率：胜平负直接用兜底矩阵，不用 blend
-    assert a["p_src"] == "dc_market" and a["p1x2"] == pytest.approx(matrix_1x2(xg))
-    assert a["source"] == "dc_market（无赔率）" and a["tier"] == "中" and a["hit1"] == 0.52
+def test_analyse_without_odds_keeps_primary():
+    dyn = dc_matrix(1.5, 1.0)
+    a = analyse(None, dyn, -0.05, {"blend": (0.5, 0.3, 0.2)})   # 无赔率：概率照常是 dc_dyn，只少市场对照
+    assert a["p_src"] == "dc_dyn" and a["p1x2"] == pytest.approx(matrix_1x2(dyn))
+    assert a["source"] == "dc_dyn" and a["tier"] == "中" and a["hit1"] == PRIMARY_TIERS[1][2]
+    assert a["market"] is None and a["fit"] is None and a["ref_markets"] is None
     assert any("缺胜平负" in r for r in a["risks"])
     assert a["ah"]["line_src"].startswith("公平线") and a["ah"]["tier"] == "-" and a["ah"]["hit"] is None
-    b = analyse(dict(avg_h=2.0, avg_d=3.4, avg_a=3.8), xg, -0.05)
-    assert b["p_src"] == "市场" and b["source"] == "dc_market（缺大小球盘）"
-    assert any("缺大小球盘" in r for r in b["risks"])
+    b = analyse(dict(avg_h=2.0, avg_d=3.4, avg_a=3.8), dyn, -0.05)   # 缺大小球盘：没有市场隐含对照
+    assert b["p_src"] == "dc_dyn" and b["market"] is not None and b["ref_markets"] is None
+    assert b["p1x2"] == pytest.approx(a["p1x2"])
 
 
 # ---------- 赛后大小球 / 比分评分 ----------

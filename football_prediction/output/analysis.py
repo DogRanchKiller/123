@@ -1,13 +1,12 @@
 """
-output/analysis.py  v1.7.0（输出层的一部分）
+output/analysis.py  v2.0.0（输出层的一部分）
 单场判断流程（预测报告与 explain 共用，纯函数，不读库）：
-  1 赔率快照（最新一次）
-  2 胜平负 = 市场去水概率（无赔率时回退 dc_market）
-  3 比分分布 = 市场隐含（1X2 + 大小2.5 + 亚盘 反推 λ）；缺大小球盘时回退 dc_market
-  4 自研模型对照：与市场任一结果差 > 8pp 时提示（仅提示，历史上市场更准）
-  5 盘口变动：首条 vs 最新快照，主胜变动 ≥ 5pp 或亚盘线变化视为新信息，按变动方向理解，不反向
-  6 风险：升班马 / 历史数据少 / 缺赔率 / 盘口之间不一致
-  7 结论：倾向、双选、信心档 + 历史命中率 + 本场命中估计；亚盘稳妥线；重点标记
+  1 赔率快照（最新一次）：只作对照、亚盘线与盘口变动
+  2 胜平负、比分分布 = 主模型 dc_dyn（PRIMARY_NAME）的比分矩阵，有没有赔率都一样
+  3 市场对照：市场去水胜平负、市场隐含比分（1X2 + 大小2.5 + 亚盘 反推 λ）；与 dc_dyn 差 > 8pp 时提示
+  4 盘口变动：首条 vs 最新快照，主胜变动 ≥ 5pp 或亚盘线变化视为新信息，按变动方向理解，不反向
+  5 风险：升班马 / 历史数据少 / 缺赔率（无市场对照）
+  6 结论：倾向、双选、信心档 + 历史命中率 + 本场命中估计；亚盘稳妥线；重点标记
 修改此文件后请同步更新 version.py 中 "output" 的版本号。
 v1.3.0: 信心档按 Shin 去水的最大概率分档，命中率改用 research.db 5 联赛 1213–2425 重标定
         （_diag/explore/reliability.py）；新增本场命中估计 est1 / est2 = Shin 最大概率 / 前二之和。
@@ -30,27 +29,42 @@ v1.7.0: 自研兜底改为 dc_market（SELF_NAME，与 version.FALLBACK_MODEL �
         11 联赛 2324–2627 月度回测 n=12224（_diag/fallback/result.txt）：对 dc_xg −0.0092±0.0011、
         对 blend −0.0060±0.0010，四个赛季都显著；再融合 Elo 无增益（−0.0004±0.0003）。
         MODEL_TIERS 按 dc_market 在 2324–2526 重标定，2627 留出同向（_diag/fallback/tiers.txt）。
+v2.0.0: 主模型改为自研 dc_dyn（用户 2026-10-28 决定，version.PRIMARY_MODEL）。胜平负、比分、亚盘都按
+        dc_dyn 的比分矩阵；市场去水与市场隐含只作对照：胜平负任一结果或同线主队赢盘差 > 8pp 时提示
+        （回测里市场更准：留出 n=4590 dc_dyn 1X2 +0.0051±0.0015）。其余自研模型只列出，不再逐个提示。
+        胜平负信心档 PRIMARY_TIERS 按 dc_dyn 首选概率标定（11 联赛 2324–2526 n=11395，2627 留出同向，
+        _diag/primary_dyn/tiers.txt）；本场估计 est1 / est2 = dc_dyn 首选 / 前二概率；重点 = dc_dyn 档高，
+        有没有赔率都算。亚盘：dc_dyn 在市场线上的选择方命中 0.512（标定）/ 0.495（留出），按概率分档不
+        单调，只给一档 PRIMARY_AH_TIERS「低」；稳妥线仍按 dc_dyn 各线（标定 0.667，留出 0.635）。
+        MARKET_TIERS / MODEL_TIERS / AH_TIERS 保留，给读旧存档（market_implied、dc_market）分档用。
 """
 import numpy as np
 
-from football_prediction.model_market.devig import shin
 from football_prediction.model_market.implied import implied_matrix, fair_probs
 from football_prediction.output.derive import derive_markets, margin_pmf, ah_outcome, ah_fair_prob
 
-LAYER_VERSION = "1.7.0"
+LAYER_VERSION = "2.0.0"
 
-SELF_NAME = "dc_market"  # 自研兜底与对照模型（= version.FALLBACK_MODEL 的名字）
-DIVERGE_PP = 0.08      # 自研与市场分歧提示阈值
+PRIMARY_NAME = "dc_dyn"  # 主模型（= version.PRIMARY_MODEL 的名字）
+DIVERGE_PP = 0.08      # 市场与 dc_dyn 胜平负分歧提示阈值
 SAFE_TARGET = 0.65     # 稳妥线：选择方等效赢盘概率达到这个值的最近一条线
 SAFE_MAX_STEPS = 12    # 稳妥线最多退 3 球（研究里 T=0.65 最多退 4 步）
-AH_DIVERGE_PP = 0.08   # 同一亚盘线上自研兜底与市场赢盘概率的分歧提示阈值
+AH_DIVERGE_PP = 0.08   # 同一亚盘线上市场与 dc_dyn 主队赢盘概率的分歧提示阈值
 MOVE_PP = 0.05         # 盘口变动阈值（主胜概率）
-FIT_RMSE_WARN = 0.02   # 市场隐含拟合误差提示阈值（回测中约 4% 的场次超过）
+_MARKET_NOTE = "（仅提示，回测里市场更准）"
 
 LABEL = {"home_win": "主胜", "draw": "平", "away_win": "客胜"}
 _KEYS = ("home_win", "draw", "away_win")
 
 # 信心档：(下限, 档名, 首选命中, 前二命中)；首选=概率最高一项，前二=最高两项之一。
+# 主模型档：dc_dyn 首选概率，11 联赛月度回测 2324–2526 n=11395 标定（高 25% / 中 39% / 低 36%）；
+# 2627 留出 n=829：高 0.732/0.923，中 0.512/0.759，低 0.399/0.708（_diag/primary_dyn/tiers.txt）。
+PRIMARY_TIERS = [
+    (0.60, "高", 0.726, 0.903),
+    (0.45, "中", 0.516, 0.775),
+    (0.00, "低", 0.411, 0.710),
+]
+# 以下三表只给读旧存档分档（market_implied / market_shin 有存档赔率时用市场档，dc_market 用自研档）。
 # 市场档：赛前平均赔率 Shin 去水的最大概率；research.db 5 联赛 1213–2425 n=23488 标定
 # （2526 留出：高 0.725/0.897，中 0.499/0.792，低 0.428/0.700）。各联赛同档首选命中相差 ≤ 4pp。
 MARKET_TIERS = [
@@ -58,7 +72,7 @@ MARKET_TIERS = [
     (0.45, "中", 0.523, 0.790),
     (0.00, "低", 0.406, 0.712),
 ]
-# 自研档（无赔率时用）：dc_market 月度回测，11 联赛 2324–2526 n=11395 标定
+# 自研档（dc_market 存档用）：dc_market 月度回测，11 联赛 2324–2526 n=11395 标定
 # （2627 留出 n=829：高 0.753/0.929，中 0.540/0.804，低 0.378/0.711）。
 MODEL_TIERS = [
     (0.60, "高", 0.74, 0.90),
@@ -79,11 +93,17 @@ AH_TIERS = [
     (0.54, "中", 0.60),
     (0.00, "低", 0.517),
 ]
+# 主模型亚盘档：dc_dyn 在市场线上的选择方命中（不含走盘），标定 2324–2526 按 0.60 / 0.55 分档为
+# 0.531 / 0.506 / 0.513（全体 0.512），2627 留出 0.645（n=88）/ 0.465 / 0.480（全体 0.495）：
+# 不单调、留出不稳，只给一档，命中按标定全体（_diag/primary_dyn/tiers.txt）。
+PRIMARY_AH_TIERS = [
+    (0.00, "低", 0.512),
+]
 
 
-def ah_tier(p_cover: float) -> tuple[str, float]:
-    """按选择方赢盘概率返回 (档名, 历史命中率)。"""
-    for lo, name, hit in AH_TIERS:
+def ah_tier(p_cover: float, tiers=PRIMARY_AH_TIERS) -> tuple[str, float]:
+    """按选择方赢盘概率返回 (档名, 历史命中率)；tiers 缺省为主模型档，旧市场存档用 AH_TIERS。"""
+    for lo, name, hit in tiers:
         if p_cover >= lo:
             return name, hit
     raise ValueError(p_cover)
@@ -165,7 +185,7 @@ def ah_trail(open_row: dict | None, last_row: dict | None, price_row: dict | Non
     return s + (f"；{sh}" if sh else "；盘口未变，只有水位变化")
 
 
-def confidence_tier(p_max: float, tiers=MARKET_TIERS) -> tuple[str, float, float]:
+def confidence_tier(p_max: float, tiers=PRIMARY_TIERS) -> tuple[str, float, float]:
     """按最大概率返回 (档名, 历史首选命中率, 历史前二命中率)。"""
     for lo, name, hit1, hit2 in tiers:
         if p_max >= lo:
@@ -221,9 +241,12 @@ def movement(first: dict | None, last: dict | None) -> str:
     return "；".join(parts) + f" → {side}（新信息，已含在最新赔率里，不反向理解）"
 
 
-def asian(matrix: np.ndarray, od: dict, self_matrix: np.ndarray, priced: bool) -> tuple[dict, list[str]]:
-    """亚盘块与提示。有市场线用市场线，否则用比分矩阵的公平线（赢盘约五五开，不分档）。
-    self_matrix：自研兜底（SELF_NAME）的比分矩阵；priced：比分矩阵来自市场（市场隐含）时才和自研比分歧。"""
+def asian(matrix: np.ndarray, od: dict, ref_matrix: np.ndarray | None = None) -> tuple[dict, list[str]]:
+    """亚盘块与提示。matrix：主模型 dc_dyn 的比分矩阵，选择方、档、稳妥线都按它；
+    有市场线用市场线，否则用 matrix 的公平线（赢盘约五五开，不分档）。
+    ref_matrix：市场隐含比分矩阵（有 1X2 + 大小球时），同线主队赢盘与 dc_dyn 差 > AH_DIVERGE_PP 时提示；
+    没有时用该线水位去水比。self_fair = dc_dyn 同线主队赢盘（= fair），market_fair = 水位去水，
+    implied_fair = 市场隐含同线主队赢盘（无时 None）。"""
     pmf, hints = margin_pmf(matrix), []
     line, src = od.get("ah_line"), "市场线"
     if line is None:
@@ -234,77 +257,63 @@ def asian(matrix: np.ndarray, od: dict, self_matrix: np.ndarray, priced: bool) -
     side, p_cover = ("主", fair) if fair >= 0.5 else ("客", 1 - fair)
     tier, hit = ah_tier(p_cover) if src == "市场线" else ("-", None)
     mkt_ah = fair_probs(od).get("ah")
-    self_fair = ah_fair_prob(ah_outcome(margin_pmf(self_matrix), line))
-    if priced and abs(self_fair - fair) > AH_DIVERGE_PP:
-        hints.append(f"{SELF_NAME} 在主{line + 0.0:+.2f} 的主队赢盘 {self_fair:.0%}，市场 {fair:.0%}，"
-                     f"差 {(self_fair - fair) * 100:+.0f}pp（仅提示，历史上市场更准）")
+    market_fair = mkt_ah[1] if mkt_ah else None
+    implied_fair = None if ref_matrix is None else ah_fair_prob(ah_outcome(margin_pmf(ref_matrix), line))
+    ref = implied_fair if implied_fair is not None else market_fair
+    if ref is not None and abs(ref - fair) > AH_DIVERGE_PP:
+        hints.append(f"市场在主{line + 0.0:+.2f} 的主队赢盘 {ref:.0%}，{PRIMARY_NAME} {fair:.0%}，"
+                     f"差 {(ref - fair) * 100:+.0f}pp{_MARKET_NOTE}")
     safe = safe_line(lambda x: ah_fair_prob(ah_outcome(pmf, x)), line, side)
     return {"line": line, "line_src": src, "outcome": out, "fair": fair, "side": side,
             "safe_line": safe[0] if safe else None, "safe_cover": safe[1] if safe else None,
-            "p_cover": p_cover, "tier": tier, "hit": hit, "self_fair": self_fair,
-            "market_fair": mkt_ah[1] if mkt_ah else None}, hints
+            "p_cover": p_cover, "tier": tier, "hit": hit, "self_fair": fair,
+            "market_fair": market_fair, "implied_fair": implied_fair}, hints
 
 
-def analyse(odds_row: dict | None, self_matrix: np.ndarray, rho: float,
+def analyse(odds_row: dict | None, matrix: np.ndarray, rho: float,
             models: dict[str, tuple] | None = None, first_row: dict | None = None,
             risks: list[str] | tuple = (), last_row: dict | None = None,
             ah_open: dict | None = None) -> dict:
     """
-    单场判断。odds_row：定价用的最新赔率（fixtures 列名，可为多家中位数）；
+    单场判断。odds_row：最新赔率（fixtures 列名，可为多家中位数），只作市场对照与亚盘线；
     first_row/last_row：同一来源的首条/最新快照，算盘口变动（last_row 缺省为 odds_row）；
     ah_open：亚盘初盘（赛程表首条快照，只有一条快照时也有；缺省为 first_row）；
-    self_matrix：自研兜底 SELF_NAME 的比分矩阵；rho：联赛 rho（市场隐含用）；
-    models：自研 1X2 {名称: (主,平,客)}，只作分歧提示；risks：调用方已知的风险（升班马、数据少）。
+    matrix：主模型 PRIMARY_NAME 的比分矩阵；rho：联赛 rho（市场隐含对照用）；
+    models：其余自研 1X2 {名称: (主,平,客)}，只列出；risks：调用方已知的风险（升班马、数据少）。
+    返回里 market = 市场去水胜平负，ref_markets = 市场隐含比分派生的各盘口，fit = 其拟合信息（无时 None）。
     """
     models, risks, hints = dict(models or {}), list(risks), []
     od = odds_dict(odds_row)
     mkt = devig(od.get("h"), od.get("d"), od.get("a"))
-    matrix, source, fit = self_matrix, SELF_NAME, None
+    ref, fit = None, None
     if mkt is None:
-        risks.append("缺胜平负赔率：概率来自自研模型，可靠性低于市场")
-        source = f"{SELF_NAME}（无赔率）"
-    elif devig(od.get("over"), od.get("under")) is None:
-        risks.append(f"缺大小球盘：比分/大小球用 {SELF_NAME}")
-        source = f"{SELF_NAME}（缺大小球盘）"
-    else:
-        matrix, fit = implied_matrix(od, rho)
-        source = "市场隐含"
-        if fit["rmse"] > FIT_RMSE_WARN:
-            risks.append(f"各盘口之间不完全一致（拟合误差 {fit['rmse']:.3f}）")
+        risks.append("缺胜平负赔率：没有市场对照")
+    elif devig(od.get("over"), od.get("under")) is not None:
+        ref, fit = implied_matrix(od, rho)
 
     mk = derive_markets(matrix)
+    p = matrix_1x2(matrix)
     if mkt is not None:
-        p, p_src, tiers = tuple(mkt), "市场", MARKET_TIERS
-    else:
-        p, p_src, tiers = matrix_1x2(matrix), SELF_NAME, MODEL_TIERS
+        d = [mkt[i] - p[i] for i in range(3)]
+        i = int(np.argmax(np.abs(d)))
+        if abs(d[i]) > DIVERGE_PP:
+            hints.append(f"市场与 {PRIMARY_NAME} 分歧：{LABEL[_KEYS[i]]} 市场 {mkt[i]:.0%}、"
+                         f"{PRIMARY_NAME} {p[i]:.0%}，差 {d[i] * 100:+.0f}pp{_MARKET_NOTE}")
 
-    if mkt is not None:
-        for name, q in models.items():
-            d = [q[i] - mkt[i] for i in range(3)]
-            i = int(np.argmax(np.abs(d)))
-            if abs(d[i]) > DIVERGE_PP:
-                hints.append(f"{name} 与市场分歧：{LABEL[_KEYS[i]]} {d[i]*100:+.0f}pp"
-                             "（仅提示，历史上市场更准）")
-
-    ah, ah_hints = asian(matrix, od, self_matrix, source == "市场隐含")
+    ah, ah_hints = asian(matrix, od, ref)
     hints = ah_hints + hints                     # 亚盘为主：亚盘提示排在前
 
     probs = dict(zip(_KEYS, p))
     order = sorted(probs, key=probs.get, reverse=True)
-    est1 = est2 = None
-    if mkt is not None:
-        # 本场命中估计：Shin 概率（与按比例去水同序，倾向 / 双选不变）；市场档也按它分档
-        ps = sorted(shin([od["h"], od["d"], od["a"]]), reverse=True)
-        est1, est2 = float(ps[0]), float(ps[0] + ps[1])
-        tier, hit1, hit2 = confidence_tier(est1, tiers)
-    else:
-        tier, hit1, hit2 = confidence_tier(probs[order[0]], tiers)
+    est1, est2 = probs[order[0]], probs[order[0]] + probs[order[1]]
+    tier, hit1, hit2 = confidence_tier(est1, PRIMARY_TIERS)
     return {
-        "p1x2": p, "p_src": p_src, "market": mkt, "source": source, "fit": fit,
-        "markets": mk, "ah": ah, "models": models, "hints": hints,
+        "p1x2": p, "p_src": PRIMARY_NAME, "market": mkt, "source": PRIMARY_NAME, "fit": fit,
+        "markets": mk, "ref_markets": None if ref is None else derive_markets(ref),
+        "ah": ah, "models": models, "hints": hints,
         "move": movement(first_row, last_row or odds_row) if first_row else "",
         "ah_move": ah_trail(ah_open or first_row, last_row, odds_row),
         "risks": risks, "lean": LABEL[order[0]], "double": double_label(order[:2]),
         "tier": tier, "hit1": hit1, "hit2": hit2, "est1": est1, "est2": est2,
-        "highlight": mkt is not None and tier == "高",   # 重点：只认市场档（自研档样本少）
+        "highlight": tier == "高",                 # 重点：dc_dyn 档高（标定首选命中 0.726）
     }

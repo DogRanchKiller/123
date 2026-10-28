@@ -150,11 +150,11 @@ export function Predictions({
             <dl>
               <div className="definition">
                 <dt>主模型</dt>
-                <dd>市场隐含</dd>
+                <dd>动态攻防模型</dd>
               </div>
               <div className="definition">
-                <dt>无赔率时</dt>
-                <dd>展示后端来源</dd>
+                <dt>市场赔率</dt>
+                <dd>只作对照；无赔率时照常出动态攻防</dd>
               </div>
               <div className="definition">
                 <dt>当前数据</dt>

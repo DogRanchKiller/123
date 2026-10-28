@@ -6,6 +6,8 @@ describe("模型名中文显示", () => {
     expect(modelLabel("market_implied")).toBe("市场隐含");
     expect(modelLabel("market_implied_t1")).toBe("市场隐含（临场）");
     expect(modelLabel("market_avg_t2")).toBe("市场平均赔率（临场，近开球）");
+    expect(modelLabel("dc_dyn_t24")).toBe("动态攻防模型（开球前 24 小时）");
+    expect(modelLabel("market_avg_t24")).toBe("市场平均赔率（开球前 24 小时）");
     expect(modelLabel("new_model")).toBe("new_model");
   });
 
@@ -18,6 +20,10 @@ describe("模型名中文显示", () => {
     expect(zhText("dc_xg（无赔率）")).toBe("预期进球模型（无赔率）");
     expect(zhText("dc_market（缺大小球盘）")).toBe("进球 + 赔率强度（缺大小球盘）");
     expect(zhText("market_shin_t2 对照")).toBe("市场隐含（Shin 去水）（临场，近开球）对照");
+    expect(zhText("dc_dyn_t24 对照")).toBe("动态攻防模型（开球前 24 小时）对照");
     expect(zhText("多家中位数（5 家）")).toBe("多家中位数（5 家）");
+    expect(zhText("市场与 dc_dyn 分歧：主胜 9pp")).toBe("市场与动态攻防模型分歧：主胜 9 个百分点");
+    expect(zhText("dc_dyn_shots 对照")).toBe("动态攻防（射门）对照");
+    expect(modelLabel("dc_dyn")).toBe("动态攻防模型");
   });
 });

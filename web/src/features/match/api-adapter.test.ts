@@ -12,25 +12,25 @@ const outcome = { win: 0.4, half_win: 0.1, push: 0, half_lose: 0.1, lose: 0.4 };
 const view: ApiMatchView = {
   match_id: "E0_2627_Arsenal_Chelsea", league: "E0", league_name: "英超",
   home: "Arsenal", away: "Chelsea", kickoff_utc: "2026-11-02T16:30:00+00:00",
-  match_date: "2026-11-02", model_name: "market_implied", model_version: "1.1.0",
+  match_date: "2026-11-02", model_name: "dc_dyn", model_version: "1.0.0",
   recommended: true, recommendation_note: "胜平负高把握 · 主胜 55% · 亚盘稳妥 主+0.00 66%",
   odds_source: "多家中位数（5 家）",
   asian: {
     line: -0.75, line_source: "市场线", outcome, side: "主", p_cover: 0.57,
     tier: "高", historical_hit: 0.58, safe_line: 0, safe_cover: 0.66, self_home_cover: 0.55,
-    market_home_cover: 0.52, movement: "初盘 主-0.50 → 最新 主-0.75",
+    market_home_cover: 0.52, implied_home_cover: 0.53, movement: "初盘 主-0.50 → 最新 主-0.75",
   },
-  probabilities: [0.55, 0.25, 0.2], probability_source: "市场",
-  score_source: "市场隐含", lean: "主胜", double: "主胜或平", confidence: "中",
+  probabilities: [0.55, 0.25, 0.2], market_probabilities: [0.5, 0.27, 0.23],
+  probability_source: "dc_dyn", score_source: "dc_dyn", lean: "主胜", double: "主胜或平", confidence: "中",
   historical_first_hit: 0.6, historical_double_hit: 0.8,
   estimated_first_hit: null, estimated_double_hit: null,
   expected_goals: [1.6, 1.1], likely_scores: [{ score: "1-0", prob: 0.11 }],
   over25: 0.55, btts: 0.5, self_models: {}, movement: null,
-  hints: ["自研与市场分歧 9pp"], risks: ["高信心档历史上仍约有四成未命中。"],
+  hints: ["市场与 dc_dyn 分歧：主胜 9pp"], risks: ["高信心档历史上仍约有四成未命中。"],
 };
 const list: ApiMatchList = {
   generated_at: "2026-10-26T10:37:00+00:00", system_version: "1.10.0",
-  primary_model: { name: "market_implied", version: "1.1.0" },
+  primary_model: { name: "dc_dyn", version: "1.0.0" },
   matches: [view, { ...view, match_id: "x", league: "MLS" }],
   recent: [],
 };
@@ -48,10 +48,13 @@ describe("接口 → 展示契约", () => {
     expect(m.current?.asian).toMatchObject({ line: -0.75, lineSource: "市场线" });
     expect(m.current?.asian?.outcome.halfWin).toBe(0.1);
     expect(m.current?.asian?.selfHomeCover).toBe(0.55);
+    expect(m.current?.asian?.marketHomeCover).toBe(0.53);        // 市场隐含优先于水位去水
+    expect(m.current?.marketProbabilities).toEqual([0.5, 0.27, 0.23]);
+    expect(m.current?.probabilitySource).toBe("动态攻防模型");
     expect(m.current?.asian).toMatchObject({ safeLine: 0, safeCover: 0.66 });
     expect(m.current?.likelyScores).toEqual(["1–0"]);
     expect(m.current?.generatedAt).toBe(list.generated_at);
-    expect(m.risks).toEqual([...view.risks, "自研与市场分歧 9 个百分点"]);
+    expect(m.risks).toEqual([...view.risks, "市场与动态攻防模型分歧：主胜 9 个百分点"]);
     expect(m.archived).toBeNull();
   });
 
@@ -65,7 +68,24 @@ describe("接口 → 展示契约", () => {
     expect(m.archived?.asian?.safeLine ?? null).toBeNull();   // 旧接口没有稳妥线字段
     expect(m.archived?.sourceNote).toContain("0.5100");
     expect(m.archived?.oddsSource).toBe("赛程表（存档时）");
+    expect(m.archived?.probabilitySource).toBe("市场（存档时赔率）");   // 2.0.0 之前的市场隐含存档
     expect(m.scoreSourceAt).toBe("2026-10-21T06:00:00+00:00");
+  });
+
+  it("主模型存档：概率来源写模型名，不当作市场；没有市场对照", () => {
+    const m = detailOf({ ...detail, archived: { ...detail.archived!, model_name: "dc_dyn" } }, now)!;
+    expect(m.archived?.probabilitySource).toBe("动态攻防模型");
+    expect(m.archived?.scoreSource).toBe("动态攻防模型");
+    expect(m.archived?.oddsSource).toBe("赛程表（存档时）");
+    expect(m.archived?.asian?.marketHomeCover).toBeNull();
+  });
+
+  it("无赔率的看法：没有市场对照", () => {
+    const [m] = matchesOf({ ...list, matches: [{ ...view, odds_source: null, market_probabilities: null,
+      asian: { ...view.asian, market_home_cover: null, implied_home_cover: null } }] }, now);
+    expect(m.current?.marketProbabilities).toBeNull();
+    expect(m.current?.asian?.marketHomeCover).toBeNull();
+    expect(m.current?.sourceNote).toContain("没有市场对照");
   });
 
   it("列表附带最近已开球场次：用首次存档和比分，FotMob 赛果标明待核对", () => {

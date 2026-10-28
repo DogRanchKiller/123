@@ -38,8 +38,8 @@ python -m server --host 0.0.0.0 --port 8000       # 局域网；没有鉴权，�
 ```json
 {
   "generated_at": "2026-10-26T14:43:07+00:00",
-  "system_version": "1.12.0",
-  "primary_model": {"name": "market_implied", "version": "1.0.0"},
+  "system_version": "2.0.0",
+  "primary_model": {"name": "dc_dyn", "version": "1.0.0"},
   "matches": [MatchView, ...],
   "recent":  [{"match": MatchInfo, "archived": ArchivedPrediction, "near_archived": ArchivedPrediction | null}, ...]
 }
@@ -60,7 +60,7 @@ python -m server --host 0.0.0.0 --port 8000       # 局域网；没有鉴权，�
 
 ### `GET /api/review`
 
-实盘成绩单：`{"generated_at", "system_version", "primary_model", "scorecard": [ScorecardRow, ...]}`，按 `log_loss` 升序。无快照时 503。
+实盘成绩单：`{"generated_at", "system_version", "primary_model", "scorecard": [ScorecardRow, ...], "closing": [ClosingRow, ...]}`，`scorecard` 按 `log_loss` 升序。无快照时 503。2.1.0 之前的快照没有 `closing`，返回空列表。
 
 ## MatchView：本轮看法
 
@@ -69,24 +69,24 @@ python -m server --host 0.0.0.0 --port 8000       # 局域网；没有鉴权，�
 | 字段 | 含义 |
 |---|---|
 | `match_id` `league` `league_name` `home` `away` `kickoff_utc` `match_date` | 对阵与时间；`kickoff_utc` 可能为 null（只知道日期） |
-| `model_name` `model_version` | 给出这份看法的模型。有赔率时 `market_implied`（市场赔率反推，主模型）；没有赔率时 `dc_market`（自研兜底） |
+| `model_name` `model_version` | 给出这份看法的模型。2.0.0 起有没有赔率都是主模型 `dc_dyn`（自研动态攻防，用户决定的例外，回测里仍不如市场） |
 | `odds_source` | 赔率来源说明（如"多家中位数（4 家，北京 10-26 22:45 抓取）"）；无赔率时 null |
 | `asian` | 亚盘，见下表。**这是主看法** |
-| `probabilities` | 胜平负 `[主, 平, 客]` |
-| `probability_source` | `市场`（赔率 Shin 去水）或 `dc_market`（无赔率） |
-| `score_source` | 比分矩阵来源：`市场隐含`；`dc_market（无赔率）`；`dc_market（缺大小球盘）` |
+| `probabilities` | 胜平负 `[主, 平, 客]`，来自 dc_dyn 比分矩阵 |
+| `market_probabilities` | 市场去水的胜平负 `[主, 平, 客]`，只作对照；没有胜平负赔率时 null |
+| `probability_source` `score_source` | 胜平负与比分矩阵的来源，都是 `dc_dyn` |
 | `lean` / `double` | 胜平负首选（`主胜` / `平` / `客胜`）/ 前二（如 `主胜或平`） |
-| `confidence` | 胜平负信心档 `高` / `中` / `低`，按最大概率分：≥0.60 高，≥0.45 中 |
+| `confidence` | 胜平负信心档 `高` / `中` / `低`，按 dc_dyn 最大概率分：≥0.60 高（历史首选 0.726 / 前二 0.903），≥0.45 中（0.516 / 0.775），其余低（0.411 / 0.710） |
 | `historical_first_hit` `historical_double_hit` | 该信心档历史上首选 / 前二的命中率（固定标定值） |
 | `estimated_first_hit` `estimated_double_hit` | 本场的首选 / 前二概率（就是概率本身，不是另一个模型） |
-| `recommended` `recommendation_note` | 重点场：有赔率且胜平负档为"高"。`recommendation_note` 形如"胜平负高把握 · 主胜 70% · 亚盘稳妥 客+2.00 67%"；非重点为 null |
+| `recommended` `recommendation_note` | 重点场：dc_dyn 胜平负档为"高"（有没有赔率都算）。`recommendation_note` 形如"胜平负高把握 · 主胜 70% · 亚盘稳妥 客+2.00 67%"；非重点为 null |
 | `expected_goals` | `[主, 客]` 预期进球 |
 | `likely_scores` | 概率最高的 5 个比分 `{"score": "2-1", "prob": 0.0953}` |
 | `over25` `btts` | 大 2.5 球概率、两队都进球概率 |
-| `self_models` | 自研模型的胜平负 `{"dc_market": [...], "dc_xg": [...], "elo": [...], "blend": [...]}`，只作对照 |
+| `self_models` | 其余自研模型的胜平负 `{"dc_market": [...], "dc_xg": [...], "elo": [...], "blend": [...]}`，只列出 |
 | `movement` | 胜平负盘口变动说明（主胜概率变化 ≥5pp 才有），否则 null |
-| `hints` | 文字提示：自研模型与市场在胜平负或同一亚盘线上分歧 >8pp。**只是提示，历史上市场更准** |
-| `risks` | 风险提示：缺胜平负赔率、缺大小球盘、各盘口之间拟合误差大 |
+| `hints` | 文字提示：市场与 dc_dyn 在胜平负或同一亚盘线上分歧 >8pp。**回测里市场更准**，分歧大时以市场为参照 |
+| `risks` | 风险提示：升班马、历史数据少、缺胜平负赔率（没有市场对照） |
 
 ### `asian`（主队方向）
 
@@ -96,14 +96,15 @@ python -m server --host 0.0.0.0 --port 8000       # 局域网；没有鉴权，�
 | `line_source` | `市场线`（有亚盘赔率）或 `公平线`（无亚盘赔率时由比分矩阵算出最接近五五开的线） |
 | `outcome` | 主队在该线上五种结算的概率 |
 | `side` | 选择方 `主` / `客`：主队等效赢盘概率 ≥0.5 选主 |
-| `p_cover` | 选择方的等效赢盘概率 |
-| `tier` / `historical_hit` | 亚盘信心档：`p_cover` ≥0.56 高（历史命中 0.607）、≥0.54 中（0.60）、其余低（0.517）；公平线时 `"-"` / null |
+| `p_cover` | 选择方的等效赢盘概率（dc_dyn） |
+| `tier` / `historical_hit` | 亚盘信心档：dc_dyn 在市场线上只有一档 `低`（历史命中 0.512）；公平线时 `"-"` / null。旧存档是 `market_implied` 时按它的档：≥0.56 高（0.607）、≥0.54 中（0.60）、其余低（0.517） |
 | `safe_line` / `safe_cover` | 稳妥线：从选择方往受让方向每次退 0.25 球，直到选择方等效赢盘概率 ≥0.65 的最近一条线（主队方向写法：选主时线变大，如 −1.5 → −1.0；选客时线变小，如 −1.5 → −2.0 即客 +2.0）；找不到时 null |
 | `market_home_cover` | 只看该线去水水位的主队赢盘概率 |
-| `self_home_cover` | 自研 `dc_market` 在同一条线上的主队赢盘概率；对照用 |
+| `self_home_cover` | 主模型 dc_dyn 在该线上的主队赢盘概率 |
+| `implied_home_cover` | 市场隐含比分矩阵在同一条线上的主队赢盘概率（对照）；没有胜平负或大小球赔率时 null |
 | `movement` | 亚盘线与水位轨迹：初盘 → 最新快照 → 定价 |
 
-**怎么理解亚盘选边**（`_diag/ah_direction/result.txt`，33430 场）：选边和"只看亚盘水位"同边 93～96%，`p_cover` 平均约 0.52，长期命中约 0.51～0.53。它是市场自己的判断，接近五五开；约 55% 的场次选冷门、53% 选客队，这是市场深盘定价的结果。展示时不要把它包装成高把握推荐。胜平负倾向主胜、亚盘却选客队（主队赢球但赢不够盘）是正常现象，两者回答的是不同问题。
+**怎么理解亚盘选边**：2.0.0 起选边按 dc_dyn 在市场线上的赢盘概率。11 联赛 2324–2526 标定 n=11388，选择方命中 0.512，2627 留出 0.495（`_diag/primary_dyn/tiers.txt`）；按概率分档不单调，所以只有一档「低」。2.0.0 之前按市场算（`_diag/ah_direction/result.txt`，33430 场），选边和"只看亚盘水位"同边 93～96%，长期命中约 0.51～0.53，接近五五开。展示时不要把它包装成高把握推荐。胜平负倾向主胜、亚盘却选客队（主队赢球但赢不够盘）是正常现象，两者回答的是不同问题。
 
 ## ArchivedPrediction：首次存档
 
@@ -114,7 +115,7 @@ python -m server --host 0.0.0.0 --port 8000       # 局域网；没有鉴权，�
 | `model_name` `model_version` `generated_at` | 存档的模型与时刻 |
 | `horizon` | `pre` 赛前首次（约开球前 24 小时）；`t1` 临场（开球前 1.5 小时内，多家中位数） |
 | `n_books` `hours_to_ko` | 临场档用了几家公司、离开球几小时 |
-| `asian` | 同 MatchView 的 `asian`，少三个对照字段；可能为 null |
+| `asian` | 同 MatchView 的 `asian`，少四个对照字段；可能为 null |
 | `odds` | 存档时用的赔率：`avg_h/d/a` 胜平负、`avg_over25/under25`、`ah_line` 与 `avg_ahh/aha` 亚盘主 / 客水位 |
 | `scored` | 是否已评分；以下字段未评分时为 null |
 | `actual_outcome` | `home_win` / `draw` / `away_win` |
@@ -133,9 +134,20 @@ python -m server --host 0.0.0.0 --port 8000       # 局域网；没有鉴权，�
 | `log_loss` `brier` `hit_rate` | 胜平负 |
 | `ou25_ll` `score_ll` | 大小 2.5、比分 log loss |
 | `ah_n` `ah_ll` `ah_hit` | 亚盘评分场数、log loss、选择方命中（口径同上，只作参考） |
-| `paired_n` `diff_vs_base` `se` | 和市场基准 `market_avg` 在同一批比赛上的 log loss 差与标准误；负数表示比市场好，`|差| < 2×SE` 视为无差异 |
+| `base` | 这一行对比的市场基准：赛前档是 `market_avg`，临场档是同一档的 `market_avg_t24` / `market_avg_t1` / `market_avg_t2`（2.1.0 起；旧快照没有这个字段，按 `market_avg` 理解） |
+| `paired_n` `diff_vs_base` `se` | 和 `base` 在同一批比赛上的 log loss 差与标准误；负数表示比市场好，`|差| < 2×SE` 视为无差异 |
 
-`_t1` / `_t2` 结尾的模型名是临场档（`_t2` 是开球前 0.6 小时内）。实盘样本目前只有几十场，数字波动很大。
+`_t24` / `_t1` / `_t2` 结尾的模型名是临场档：`_t24` 开球前 23–25 小时（多家中位数，市场与自研同一时刻存），`_t1` 1.5 小时内，`_t2` 0.6 小时内。实盘样本目前只有几十场，数字波动很大。
+
+## ClosingRow：对收盘参照
+
+| 字段 | 含义 |
+|---|---|
+| `model_name` `model_ver` | 模型与版本；首行 `closing_avg` 是收盘平均赔率（按比例去水）自身，差值为 0 |
+| `paired_n` `log_loss` | 与收盘配对的已评分场数、这些场次上的胜平负 log loss |
+| `diff_vs_close` `se` | 对收盘的 log loss 差与标准误，负数表示比收盘好 |
+
+收盘赔率在存档时还看不到，这张表只作参照，不进替换检查。
 
 ## 前端生成类型
 

@@ -57,6 +57,33 @@
 
 ## 已解决
 
+### 本机有 `web/.env.local` 时 e2e 读到实盘接口
+
+- 状态：已解决（前端测试配置，不涉及层版本）
+- 日期：2026-10-28
+- 现象：`npm run test:e2e` 失败 13 条，首页显示「本机实盘」和实盘场次，而不是演示样本（断言找不到「阿森纳」）。
+- 原因：实盘机的 `web/.env.local`（gitignore）配置了 `API_URL`，`next start` 启动时会自动加载它。`playwright.config.ts` 覆盖了 `AGENT_SERVE_URL` 和 `AGENT_SERVICE_TOKEN`，但没有覆盖 `API_URL`，127.0.0.1:8000 上的接口又在运行，于是 e2e 读到了实盘数据。
+- 处理：在 e2e 网站进程的 env 里显式写 `API_URL: ""`。`@next/env` 不覆盖进程里已有的变量，空值让 `apiBase()` 回到演示样本。之后 29 条全部通过。
+- 位置：`web/playwright.config.ts`
+
+### 检索评测集有 7 条题在 main 上核对不通过
+
+- 状态：已解决（评测集，不涉及层版本）
+- 日期：2026-10-27
+- 现象：在 Windows 实盘机上跑 `python -m agent.kb --eval`，报「评测集核对不通过」：r17、r23、r24、r31、r39、r57、r79 的 gold 块在 as_of 2026-10-27 05:00 时不可见。
+- 原因：`agent/kb/sources.py` 沿 `git log --first-parent` 取文档版本。PR #4 是在 fork 上按线性历史写的，as_of 按 fork 上的提交时间定。合并进 main 后，第一父历史里只有 13:47 的合并提交，PR 新加的文档段落从这个时间才可见。后来撤回（16:24）再恢复（16:28），又把这些段落记成新的一版。
+- 处理：把这 7 条的 as_of 改到 2026-10-27 15:00（合并之后、撤回之前）。其余题不受影响。以后要在 main 上评测从分支合入的文档，as_of 应按合并提交的时间定。
+- 位置：`agent/eval/retrieval.jsonl`、`agent/kb/sources.py`
+
+### 下载 bge-m3 时 Hugging Face 的 xet 传输卡住
+
+- 状态：已解决（环境，不涉及层版本）
+- 日期：2026-10-27
+- 现象：在 Windows 实盘机上用 `snapshot_download` 下载 `pytorch_model.bin`。文件停在 268,333,489 字节，8 分钟以上没有增长；进程占用约 2.1 GB 内存，CPU 不动。
+- 原因：未查清。默认走 xet 后端时出现；本机经代理访问 HF。
+- 处理：结束进程，删掉 `.lock` 文件，设 `HF_HUB_DISABLE_XET=1` 重新运行，改走 HTTP 后从断点续传完成，约 5 MB/s。`docs/stack.md` 的下载说明已加这一条。
+- 位置：`docs/stack.md`（向量模型下载）
+
 ### Windows 上 Agent 数字校验放过「两成」「两倍」
 
 - 状态：已解决（未升版本，`agent/` 不在 `LAYER_VERSIONS` 里）

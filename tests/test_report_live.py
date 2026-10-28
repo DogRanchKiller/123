@@ -58,13 +58,17 @@ def test_build_report_market_based_and_future_only(league):
     df = build_report(conn, {"E0": "英超"}, now)
     assert list(df["主队"]) == ["A", "C", "B"]            # 已开球的剔除，按开球排序
     r = df.iloc[0]
-    # 胜平负 = 市场去水：1/1.6 : 1/4 : 1/5.5
+    # 胜平负 = 主模型 dc_dyn；市场去水（1/1.5 : 1/4 : 1/5.5）只作对照列
+    from football_prediction.output.analysis import PRIMARY_TIERS, matrix_1x2
+    from football_prediction.services import ModelCache
+    p = matrix_1x2(ModelCache(conn, now.date().isoformat()).get("E0").inputs("A", "F")["matrix"])
     inv = [1 / 1.5, 1 / 4.0, 1 / 5.5]
-    assert r["主胜"] == f"{inv[0] / sum(inv):.0%}"
-    assert (r["概率来源"], r["倾向"], r["信心"], r["比分来源"]) == ("市场", "主胜", "高", "市场隐含")
-    assert r["历史命中(首选/双选)"] == "72%/89%"
-    from football_prediction.model_market.devig import shin
-    ps = sorted(shin([1.5, 4.0, 5.5]), reverse=True)
+    assert r["主胜"] == f"{p[0]:.0%}"
+    assert r["市场 主/平/客"] == "/".join(f"{x / sum(inv):.0%}" for x in inv)
+    assert (r["概率来源"], r["比分来源"]) == ("dc_dyn", "dc_dyn")
+    ps = sorted(p, reverse=True)
+    tier = next(t for t in PRIMARY_TIERS if ps[0] >= t[0])
+    assert (r["信心"], r["历史命中(首选/双选)"]) == (tier[1], f"{tier[2]:.0%}/{tier[3]:.0%}")
     assert r["本场估计(首选/双选)"] == f"{ps[0]:.0%}/{ps[0] + ps[1]:.0%}"
     assert r["最可能比分"] and r["大2.5球"] and r["亚盘"].startswith("主-1.00 赢盘")
     assert r["亚盘选择"][0] in "主客" and r["亚盘信心"]
@@ -72,8 +76,8 @@ def test_build_report_market_based_and_future_only(league):
     assert "dc_market" in r["自研 主/平/客"] and "blend" in r["自研 主/平/客"]
     assert r["开球(北京)"] == (now + timedelta(hours=3)).astimezone(
         ZoneInfo("Asia/Shanghai")).strftime("%m-%d %H:%M")
-    n = df.iloc[2]                                        # 无赔率：回退自研，并提示
-    assert n["概率来源"] == "dc_market" and n["比分来源"].startswith("dc_market")
+    n = df.iloc[2]                                        # 无赔率：仍是 dc_dyn，没有市场对照
+    assert (n["概率来源"], n["比分来源"], n["市场 主/平/客"]) == ("dc_dyn", "dc_dyn", "")
     assert "缺胜平负赔率" in n["提示"]
 
 
@@ -93,12 +97,12 @@ def test_report_prefers_fresh_book_consensus(league):
     _books(conn, "stale", now - timedelta(hours=30), h=1.6)
 
     df = build_report(conn, {"E0": "英超"}, now).set_index("主队")
-    inv = [1 / 1.6, 1 / 4.0, 1 / 5.0]
-    assert df.loc["A", "主胜"] == f"{inv[0] / sum(inv):.0%}"
+    mkt = lambda inv: "/".join(f"{x / sum(inv):.0%}" for x in inv)   # 市场对照列按报告所用赔率
+    assert df.loc["A", "市场 主/平/客"] == mkt([1 / 1.6, 1 / 4.0, 1 / 5.0])
     assert df.loc["A", "赔率来源"].startswith("多家中位数（3 家")
     fx = [1 / 1.5, 1 / 4.0, 1 / 5.5]
     for t in ("B", "C"):
-        assert df.loc[t, "主胜"] == f"{fx[0] / sum(fx):.0%}"
+        assert df.loc[t, "市场 主/平/客"] == mkt(fx)
         assert df.loc[t, "赔率来源"].startswith("赛程表")
 
     row = {"match_id": "nobook", **ODDS}
@@ -134,10 +138,11 @@ def test_predict_upcoming_saves_once(league, monkeypatch):
     _fixture(conn, "f0", (now - timedelta(hours=5)).isoformat(), "B", "E")   # 已开球
 
     first = services.predict_upcoming(conn, now)
-    assert first == 9          # DC / 射正 / xG / 市场版 DC / Elo / blend / 市场 / 市场隐含 / Shin 市场隐含
+    assert first == 11         # DC / 射正 / xG / 市场版 DC / 动态 DC 两版 / Elo / blend / 市场 / 市场隐含 / Shin 市场隐含
     assert services.predict_upcoming(conn, now) == 0
     names = {r[0] for r in conn.execute("SELECT DISTINCT model_name FROM predictions")}
     assert version.PRIMARY_MODEL[0] in names and "blend_xg_elo" in names
+    assert {"dc_dyn", "dc_dyn_shots"} <= names
     assert conn.execute("SELECT COUNT(*) FROM predictions WHERE match_id='f0'").fetchone()[0] == 0
     ex = json.loads(conn.execute("SELECT extra_markets FROM predictions WHERE match_id='f1' "
                                  "AND model_name='market_implied'").fetchone()[0])
@@ -168,7 +173,7 @@ def test_rounds_skip_matches_started_mid_round(league):
     # 存档时间取本轮时钟：未开球时照常存，generated_at 是存档那一刻
     mid = now + timedelta(minutes=5)
     assert services.predict_upcoming(conn, now, cache, log=lambda *_: None,
-                                     clock=_jump_clock(now, mid)) == 9
+                                     clock=_jump_clock(now, mid)) == 11
     got = {r[0] for r in conn.execute("SELECT DISTINCT generated_at FROM predictions")}
     assert got == {mid.isoformat()}
 
@@ -177,7 +182,7 @@ def test_predict_upcoming_no_ou_skips_implied(league):
     conn, cutoff = league
     now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
     _fixture(conn, "f1", (now + timedelta(hours=5)).isoformat(), avg_over25=None, avg_under25=None)
-    assert services.predict_upcoming(conn, now) == 7
+    assert services.predict_upcoming(conn, now) == 9
     assert not conn.execute("SELECT 1 FROM predictions WHERE model_name LIKE 'market_%' "
                             "AND model_name != 'market_avg'").fetchone()
 
@@ -238,6 +243,44 @@ def test_predict_near_t2_only_close_to_kickoff_with_this_rounds_odds(league):
     ex = json.loads(conn.execute("SELECT extra_markets FROM predictions "
                                  "WHERE model_name='market_implied_t2'").fetchone()[0])
     assert ex["horizon"] == "t2" and ex["hours_to_ko"] == 0.5
+
+
+def test_predict_t24_pairs_market_and_own_models_at_same_time(league):
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
+    _fixture(conn, "day", (now + timedelta(hours=24)).isoformat())
+    _fixture(conn, "stale", (now + timedelta(hours=24)).isoformat(), "B", "E")
+    _fixture(conn, "near", (now + timedelta(hours=1)).isoformat(), "C", "D")
+    _books(conn, "day", now - timedelta(minutes=10))
+    _books(conn, "stale", now - timedelta(hours=3))
+    _books(conn, "near", now - timedelta(minutes=10))
+    cache = services.ModelCache(conn, cutoff)
+
+    assert services.predict_t24(conn, now, cache) == 3 + 3
+    assert services.predict_t24(conn, now, cache) == 0
+    rows = {(m, n): json.loads(ex) for m, n, ex in conn.execute(
+        "SELECT match_id, model_name, extra_markets FROM predictions")}
+    assert {n for m, n in rows} == {f"{k}_t24" for k in (
+        "market_avg", "market_implied", "market_shin", "dc_dyn", "dc_dyn_shots", "dc_market")}
+    assert {m for m, n in rows} == {"day"}
+    dyn = rows[("day", "dc_dyn_t24")]
+    assert dyn["horizon"] == "t24" and dyn["n_books"] == 3 and dyn["hours_to_ko"] == 24.0
+    assert dyn["odds"]["ah_line"] == -1.0 and len(dyn["score_matrix"]) == 81
+    assert "odds" not in rows[("day", "dc_market_t24")]
+    # 自研 T24 与赛前档同一模型：概率来自同一次拟合
+    services.predict_upcoming(conn, now, cache, log=lambda *_: None)
+    p = dict(conn.execute("SELECT model_name, p_home_win FROM predictions WHERE match_id='day' "
+                          "AND model_name IN ('dc_dyn', 'dc_dyn_t24')").fetchall())
+    assert p["dc_dyn"] == pytest.approx(p["dc_dyn_t24"])
+
+
+def test_predict_t24_skips_own_models_without_1x2(league):
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
+    _fixture(conn, "day", (now + timedelta(hours=24)).isoformat())
+    _books(conn, "day", now - timedelta(minutes=10), h=3.0)   # 1X2 隐含概率和 < 1：当作缺失
+    assert services.predict_t24(conn, now, services.ModelCache(conn, cutoff)) == 0
+    assert not conn.execute("SELECT 1 FROM predictions WHERE model_name LIKE '%t24'").fetchone()
 
 
 def test_predict_near_archives_lineup_pair_only_for_standard_xi(league, monkeypatch):
@@ -314,3 +357,23 @@ def test_run_near_uses_injected_collectors(league):
 
     assert services.run_near(conn, now, fake_odds, fake_lineups, snapshot_path=None) == 3
     assert calls == [("lineups", services.T1_HOURS), ("odds", services.T1_HOURS)]   # 先阵容后赔率
+
+
+def test_run_near_t24_only_scrapes_pending_and_skips_lineups(league):
+    conn, cutoff = league
+    now = datetime.fromisoformat(cutoff + "T10:00:00+00:00")
+    _fixture(conn, "day", (now + timedelta(hours=24)).isoformat())
+    calls = []
+
+    def fake_odds(c, leagues, t, hours, from_hours=0.0, match_ids=None):
+        calls.append((hours, from_hours, match_ids))
+        _books(c, "day", t)
+        return 9
+
+    def no_lineups(c, t, hours):
+        raise AssertionError("T24 档不抓阵容")
+
+    assert services.run_near(conn, now, fake_odds, no_lineups, log=lambda *_: None, snapshot_path=None) == 6
+    assert calls == [(services.T24_HI, services.T24_LO, {"day"})]
+    assert services.run_near(conn, now, fake_odds, no_lineups, log=lambda *_: None, snapshot_path=None) == 0
+    assert len(calls) == 1                                # 已存过：不再抓

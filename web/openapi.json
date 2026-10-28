@@ -96,7 +96,7 @@
         "type": "object"
       },
       "ArchivedPrediction": {
-        "description": "主模型（没有时兜底 dc_market）开赛前的首次存档与赛后评分；临场档同形状（horizon=t1）。",
+        "description": "开赛前的首次存档与赛后评分：主模型 dc_dyn，v2.0.0 之前的场次依次用市场隐含、dc_market；\n临场档同形状（horizon=t1，市场隐含 market_implied_t1）。",
         "properties": {
           "actual_outcome": {
             "anyOf": [
@@ -465,6 +465,17 @@
             ],
             "title": "Historical Hit"
           },
+          "implied_home_cover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implied Home Cover"
+          },
           "line": {
             "title": "Line",
             "type": "number"
@@ -605,6 +616,66 @@
           "lose"
         ],
         "title": "AsianOutcome",
+        "type": "object"
+      },
+      "ClosingRow": {
+        "description": "对收盘参照一行（review/scorecard.closing_report），按 diff_vs_close 升序。首行 closing_avg 是收盘\n平均赔率（按比例去水）自身。收盘在存档时还看不到，只作参照，不进替换检查。",
+        "properties": {
+          "diff_vs_close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff Vs Close"
+          },
+          "log_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Loss"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_ver": {
+            "title": "Model Ver",
+            "type": "string"
+          },
+          "paired_n": {
+            "title": "Paired N",
+            "type": "integer"
+          },
+          "se": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Se"
+          }
+        },
+        "required": [
+          "model_name",
+          "model_ver",
+          "paired_n",
+          "log_loss",
+          "diff_vs_close",
+          "se"
+        ],
+        "title": "ClosingRow",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -938,6 +1009,20 @@
             "title": "Likely Scores",
             "type": "array"
           },
+          "market_probabilities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Probabilities"
+          },
           "match_date": {
             "title": "Match Date",
             "type": "string"
@@ -1125,6 +1210,14 @@
       },
       "Review": {
         "properties": {
+          "closing": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClosingRow"
+            },
+            "title": "Closing",
+            "type": "array"
+          },
           "generated_at": {
             "title": "Generated At",
             "type": "string"
@@ -1172,7 +1265,7 @@
         "type": "object"
       },
       "ScorecardRow": {
-        "description": "实盘成绩单一行（review/scorecard.live_report），按 log_loss 升序；同场对比 market_avg。",
+        "description": "实盘成绩单一行（review/scorecard.live_report），按 log_loss 升序；同场对比同一档的市场基准 base\n（赛前档 market_avg，临场档 market_avg_t1 / market_avg_t2）。",
         "properties": {
           "ah_hit": {
             "anyOf": [
@@ -1206,6 +1299,17 @@
               }
             ],
             "title": "Ah N"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base"
           },
           "brier": {
             "anyOf": [
@@ -1364,7 +1468,7 @@
   "info": {
     "description": "实盘一轮的本轮看法（亚盘为主）、首次存档与成绩单。只读，无鉴权，仅限本机 / 局域网。",
     "title": "足球预测只读接口",
-    "version": "1.12.0"
+    "version": "2.1.0"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -27,6 +27,15 @@ def test_wording_mismatch():
          "facts": [{"id": "f1", "kind": "last_pre_kickoff"}, {"id": "f2", "kind": "first_archive"}]}
     assert ev.wording_mismatch(a) == ["f1"]
     assert ev.wording_mismatch({"text": "现在 {f1}", "facts": [{"id": "f1", "kind": "current"}]}) == []
+    # 首次存档与开球前最后一轮写反（P3 第二轮 follow_up_2）；离占位最近的词算数
+    swap = {"text": "首次存档是 {f1}，开球前最后一轮是 {f2}，首次存档的评分 {f3}，比分 {f4}",
+            "facts": [{"id": "f1", "kind": "last_pre_kickoff"}, {"id": "f2", "kind": "first_archive"},
+                      {"id": "f3", "kind": "grading"}, {"id": "f4", "kind": "score"}]}
+    assert ev.wording_mismatch(swap) == ["f1", "f2"]
+    ok = {"text": "首次存档 {f1}，临场存档 {f2}，最后一轮 {f3}",
+          "facts": [{"id": "f1", "kind": "first_archive"}, {"id": "f2", "kind": "near_archive"},
+                    {"id": "f3", "kind": "last_pre_kickoff"}]}
+    assert ev.wording_mismatch(ok) == []
 
 
 def test_metrics():

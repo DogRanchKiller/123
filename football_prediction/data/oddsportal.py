@@ -125,9 +125,11 @@ def _ah_key(line: float) -> str:
 
 def collect(conn: sqlite3.Connection, leagues: list[str], now: datetime,
             hours: float = 48.0, concurrency: int = 2, delay: float = 2.0,
-            runner=run_harvester, log=print, pause: float = 30.0, timer=time.monotonic) -> int:
+            runner=run_harvester, log=print, pause: float = 30.0, timer=time.monotonic,
+            from_hours: float = 0.0, match_ids=None) -> int:
     """
-    抓 now 起 hours 小时内开赛的 fixtures（需先 load_fixtures）的多家赔率，写入 book_odds。
+    抓 now 后 from_hours 到 hours 小时之间开赛的 fixtures（需先 load_fixtures）的多家赔率，写入 book_odds；
+    match_ids 不为 None 时只抓其中的场次（临场 T24 档只抓还没存档的）。
     返回写入的赔率行数。runner、timer 可替换（测试用）；pause 为失败重试前的等待秒数。
     fetched_at = now + 本组抓回时已过的秒数（timer 计）；抓回时已开球的场次不入库。
     """
@@ -138,12 +140,13 @@ def collect(conn: sqlite3.Connection, leagues: list[str], now: datetime,
         """now 加上本次调用已过去的秒数：一组比赛抓回来的时刻（宁晚不早）。"""
         return now.astimezone(timezone.utc) + timedelta(seconds=timer() - t0)
 
-    lo, hi = now.isoformat(), (now + timedelta(hours=hours)).isoformat()
+    lo, hi = (now + timedelta(hours=from_hours)).isoformat(), (now + timedelta(hours=hours)).isoformat()
     cols = ["match_id", "league", "match_date", "kickoff_utc", "home_team", "away_team", "ah_line"]
     fixtures = [dict(zip(cols, r)) for r in conn.execute(
         f"SELECT {','.join(cols)} FROM fixtures WHERE kickoff_utc >= ? AND kickoff_utc <= ?",
         (lo, hi))]
-    fixtures = [f for f in fixtures if f["league"] in leagues and f["league"] in LEAGUE_SLUGS]
+    fixtures = [f for f in fixtures if f["league"] in leagues and f["league"] in LEAGUE_SLUGS
+                and (match_ids is None or f["match_id"] in match_ids)]
     if not fixtures:
         log("  [oddsportal] 时间窗内没有比赛")
         return 0

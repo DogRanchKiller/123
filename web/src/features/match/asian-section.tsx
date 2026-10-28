@@ -66,11 +66,11 @@ export function AsianBlock({ asian }: { asian: AsianHandicap | null }) {
           <strong>{safeText(asian) ?? "暂无数据"}</strong>
         </div>
         <div className="stat">
-          <p>自研模型同线主队赢盘</p>
+          <p>市场同线主队赢盘（对照）</p>
           <strong>
-            {asian.selfHomeCover === null
+            {asian.marketHomeCover == null
               ? "暂无数据"
-              : percentage(asian.selfHomeCover)}
+              : percentage(asian.marketHomeCover)}
           </strong>
         </div>
       </div>
@@ -96,9 +96,9 @@ export function AsianBlock({ asian }: { asian: AsianHandicap | null }) {
         </div>
       </dl>
       <p className="fine-print mt-3">
-        赢盘概率按走盘不计、半赢 / 半输各算一半。亚盘信心档是历史分档命中率，不是本场承诺。市场线上两边
-        通常接近五五开；稳妥线是同一判断换一条更宽的线，命中更高是因为让步了，不代表判断更准。自研模型（进球 + 赔率强度）
-        只作对照，历史上市场更准。
+        赢盘概率按走盘不计、半赢 / 半输各算一半，来自主模型动态攻防（dc_dyn）。亚盘信心档是历史分档命中率，不是本场承诺；
+        市场线上两边通常接近五五开，动态攻防在市场线上不分档。稳妥线是同一判断换一条更宽的线，命中更高是因为让步了，不代表判断更准。
+        市场同线赢盘只作对照：留出赛季里赛前市场的亚盘对数损失仍略好于动态攻防。
       </p>
     </div>
   );

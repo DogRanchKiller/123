@@ -7,8 +7,8 @@
 预测 11 个联赛的比赛赛果，**亚盘为主**，胜平负 / 比分 / 大小球为辅。目标是预测准，不是找价值投注。
 
 - 联赛：英超 E0、德甲 D1、西甲 SP1、意甲 I1、法甲 F1、英冠 E1、荷甲 N1、葡超 P1、苏超 SC0、比甲 B1、土超 T1。实盘库都从 2122 赛季起。
-- 主模型是市场赔率反推（`market_implied`）：把胜平负、大小 2.5、亚盘三组赔率去水，反推两队进球期望，再生成比分矩阵，各盘口都从这个矩阵算。
-- 自研模型（Dixon-Coles 系、Elo、LightGBM）只作对照和无赔率时的兜底（`dc_market`）。5 联赛 × 9 赛季、16k 场样本外回测里，自研模型每个联赛、每个赛季都不如赛前市场。
+- 主模型从 2.0.0（2026-10-28）起是自研动态攻防 `dc_dyn`（`model_dc/dynamic_dc.py`）：按比赛日用历史赔率反推的进球期望更新各队攻防，生成比分矩阵，各盘口都从这个矩阵算，有没有赔率都一样。这是用户决定的例外，没有经过 `promotion_check`；回测里它仍不如同场赛前市场（11 联赛留出 n=4590，胜平负 +0.0051±0.0015）。
+- 市场赔率反推（`market_implied`，1.4.0–1.13.0 的主模型）改为每场并行存档的对照（`version.MARKET_MODEL`），报告里列市场去水胜平负，与 dc_dyn 差 > 8pp 时提示。其余自研模型（Dixon-Coles 系、Elo、LightGBM）只并行存档；`dc_market` 只在读 2.0.0 之前的存档时用。5 联赛 × 9 赛季、16k 场样本外回测里，自研模型每个联赛、每个赛季都不如赛前市场。
 - 要再提高准确率，靠赔率里还没有的信息（临场赔率、阵容），不是改进球模型。临场档和阵容模型就是为这个建的，阵容系数研究还没确认，目前是 0。
 - 当前系统版本见 `football_prediction/version.py` 的 `SYSTEM_VERSION`（交接时 1.12.0），做到哪里见 [`progress.md`](progress.md)，已知问题见 [`issues.md`](issues.md)。
 
@@ -47,7 +47,7 @@ set PYTHONIOENCODING=utf-8
 
 不要跑不带路径的 `pytest`（会收集 `大模型项目/` 里依赖 torch 的测试而失败）。lightgbm 缺 `libomp` 时相关测试会 skip，不影响实盘。
 
-实盘、接口和上面这套测试只用 `.venv`。Agent 和 `model_nn` 还不参与实盘，要在本机做这两块时再另建环境（体积大约 1.8 GB；知识库还要下载 bge-m3，约 2.1 GB，见 [`stack.md`](stack.md)）。Windows 实盘机第一次拉到这份提交后先不要建 `.venv-ml`，按 [`agent-dev.md`](agent-dev.md) 第 3 节「Windows 实盘机拉取后自行核对」核对本机 Python 和现有 `.venv`。Python 3.12 / AMD64 目前是暂定值。
+实盘、接口和上面这套测试只用 `.venv`。Agent 和 `model_nn` 还不参与实盘，要在本机做这两块时再另建环境（体积大约 1.8 GB；知识库还要下载 bge-m3，约 2.1 GB，见 [`stack.md`](stack.md)）。Windows 实盘机（Python 3.12.10 / AMD64，系统 Python，没有 `.venv`）2026-10-27 已经建好 `.venv-ml`，也下载了 bge-m3；有三处包版本与 `constraints-ml.txt` 不同，见 [`progress.md`](progress.md) P0。
 
 ```bat
 python -m venv .venv-ml
@@ -81,7 +81,7 @@ npm run start
 | 任务 | 时间 | 做什么 | 日志 |
 |---|---|---|---|
 | `FootballPredictDaily_1807` / `_2337` → `run_daily.bat` | 每天 18:07、23:37 | `live`（更新数据 → 赛后评分 → 未开赛场次首次存档 → 报告与快照 → 成绩单 → 替换检查）→ `oddsportal --hours 30`（多家赔率）→ `data.fotmob`（阵容 / 伤停） | `logs/daily.log` |
-| `FootballPredictNear` → `run_near.bat` | 18:13 起每 30 分钟到 05:43 | `live --near`：开球前 1.5 小时内抓阵容和多家赔率，存临场档 `*_t1`，0.6 小时内另存 `*_t2`，并按最新赔率重写快照 | `logs/near.log` |
+| `FootballPredictNear` → `run_near.bat` | 18:13 起每 30 分钟到 05:43 | `live --near`：开球前 1.5 小时内抓阵容和多家赔率，存临场档 `*_t1`，0.6 小时内另存 `*_t2`，并按最新赔率重写快照；开球前 23–25 小时的场次另抓多家赔率存 `*_t24`（不重写快照） | `logs/near.log` |
 | `FootballSiteApi` / `FootballSiteWeb` | 开机 | `run_api.bat`（接口 127.0.0.1:8000）+ `run_site.bat`（网站，只听 Tailscale IP 的 3000 端口）。由管理员跑一次 `setup_site.ps1` 注册，`-Remove` 撤销。**交接时尚未启用** | `logs/api.log`、`logs/site.log` |
 
 这台机器上还有很多别的 `Football*` 计划任务（如 `FootballPredictionUnifiedWorkflow`、`FootballMarketWatch20260917`），属于另一个项目，和本仓库无关，不要改动。开赛时段电脑要开机、不睡眠，否则临场档会漏。两个任务同时写库时会等锁 120 秒。手动跑：
@@ -99,8 +99,8 @@ python -m server
 
 1. **数据进库**（`data/`）：football-data.co.uk 赛季 CSV（赛果、射门、平均赔率）→ `matches / match_odds / match_stats`；`fixtures.csv`（约每周更新）→ `fixtures` 与 `odds_snapshots`；understat xG（只有老 5 联赛）→ `match_xg`；OddsPortal 多家赔率 → `book_odds`；FotMob → `fotmob.db`。入库只补不改。
 2. **选赔率**（`services/match_analysis.latest_odds`）：24 小时内 ≥3 家公司的中位数优先，否则赛程表快照。
-3. **判断**（`output/analysis.py`，纯函数）：去水 → 市场隐含比分矩阵 → 亚盘（市场线五种结算、选边、信心档、稳妥线、盘口轨迹）→ 自研分歧提示 → 风险 → 胜平负倾向 / 双选 / 信心档。
-4. **存档**（`review/store.py`）：每场每个模型 + 版本只存开赛前**首次**预测，不覆盖。主模型、Shin 去水版、市场基准 `market_avg`、各自研模型并行存。
+3. **判断**（`output/analysis.py`，纯函数）：dc_dyn 比分矩阵 → 胜平负 / 比分 / 大小球 → 亚盘（市场线上按 dc_dyn 算五种结算、选边、信心档、稳妥线，盘口轨迹）→ 市场对照（去水胜平负、市场隐含同线赢盘，差 > 8pp 提示）→ 风险 → 胜平负倾向 / 双选 / 信心档。
+4. **存档**（`review/store.py`）：每场每个模型 + 版本只存开赛前**首次**预测，不覆盖。主模型 dc_dyn（另记存档时赔率）、市场隐含 market_implied、Shin 去水版、市场基准 `market_avg`、其余自研模型并行存。
 5. **评分**：赛果到了（football-data 晚几天时先用 FotMob 比分，之后核对重评）就算 log loss、Brier、亚盘五种结算 log loss 与选边命中。
 6. **出口**：`reports/预测_YYYY-MM-DD.csv`、快照 `reports/latest_round.json` → 接口 → 网站。
 
@@ -111,7 +111,7 @@ python -m server
 | 想改 | 位置 | 注意 |
 |---|---|---|
 | 判断规则、信心档、提示阈值 | `output/analysis.py` | 改行为要升 `LAYER_VERSION`，同步 `version.py` |
-| 新模型 | 新包 `model_<name>/`，统一 `fit(conn, league, cutoff_date)` | 只并行存档对照；替换主模型只走 `promotion_check`（同批实盘 ≥1000 场且显著更好） |
+| 新模型 | 新包 `model_<name>/`，统一 `fit(conn, league, cutoff_date)` | 只并行存档对照；替换主模型只走 `promotion_check`（同批实盘 ≥1000 场且显著更好；2.0.0 换 dc_dyn 是用户决定的唯一例外） |
 | 加联赛 | `services/live_round.LEAGUES` + `fotmob_parse.LEAGUE_IDS` + `oddsportal_parse.LEAGUE_SLUGS`，再用 `_diag/expand/add_live_leagues.py` 写 2122 起的赛季 | `tests/test_fotmob.py::test_league_lists_agree` 检查四处一致 |
 | 队名对不上 | `loader.TEAM_ALIASES`、`oddsportal_parse.NAME_ALIASES`、`fotmob_parse.FOTMOB_ALIASES` | 不要另写映射 |
 | 接口字段 | `server/routes/schemas.py` + `services/live_round.match_view` | 改完导出 OpenAPI 并在 `web/` 跑 `npm run api:types` |
@@ -138,7 +138,7 @@ python -m server
 - 后六个联赛（E1/N1/P1/SC0/B1/T1）没有 understat xG，`dc_xg` 在这些联赛基本等于进球版。
 - OddsPortal 在本机美国出口 IP 下只看到 5 家美国公司。
 - 阵容模型的 `COEF_PRE` / `COEF_POST` 还是 0，研究未确认前不生效。
-- Agent 模块完成了 P0（独立环境 `.venv-ml` 和规范）；P1（`agent/` 的只读工具层与 MCP，`python -m agent.mcp_server`）已验收；P1.5 定了编排框架 LangGraph，依赖已写进 `requirements-ml.txt`；P2 向量知识库（Milvus Lite + bge-m3，`python -m agent.kb --rebuild`）代码已写，待验收。还不接大模型，`requirements.txt` 里也没有 torch。实盘定时任务继续只用 `.venv`。
+- Agent 模块已完成 P0–P4 和 P6：P1 只读工具与 MCP；P2 向量知识库（Milvus Lite + bge-m3）；P3 LangGraph 问答，接 OpenAI 兼容中转站，会花钱；P4 `model_nn`，G1 未通过，不进实盘；P6 网站问答，未部署。P5 LoRA 暂缓。各阶段详见 [`progress.md`](progress.md)。`requirements.txt` 里没有 torch，实盘定时任务继续用主环境。
 - 未解决问题（抓取时间变长、临场档依赖开机和锁、understat / FotMob 条款未核验）见 [`issues.md`](issues.md)「未解决」。
 
 ## 其他文档

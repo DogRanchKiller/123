@@ -61,8 +61,8 @@ def list_upcoming(league: str | None = None, hours: int = 72) -> dict[str, Any]:
 
 def get_match(match_id: str) -> dict[str, Any]:
     """单场：本轮快照看法（开球前 current；开球后改标 last_pre_kickoff，表示开球前最后一轮看法）、
-    主模型首次存档 first_archive、临场存档 near_archive、比分 score、赛后评分 grading（主模型、兜底、
-    市场基准 market_avg 及临场档）。找不到这场时报错。"""
+    首次存档 first_archive（dc_dyn，之前的场次用市场隐含或兜底）、临场存档 near_archive、比分 score、
+    赛后评分 grading（主模型、市场隐含、兜底、市场基准 market_avg 及临场档）。找不到这场时报错。"""
     cfg = config.current()
     now = cfg.clock()
     with config.connect() as conn:
@@ -111,16 +111,23 @@ def explain_fixture(league: str, home: str, away: str) -> dict[str, Any]:
     return result(now, [match_block(fx["match_id"], "live_calc", now.isoformat(), view, info)])
 
 
-def scorecard() -> dict[str, Any]:
+def scorecard(closing: bool = False) -> dict[str, Any]:
     """实盘成绩单：每个模型（名 + 版本）一块，含已评分场数、log loss、Brier、命中率、亚盘指标，
-    以及与市场基准 market_avg 的同场 log loss 差值 diff_vs_base（负数表示比市场好）和标准误 se。"""
+    以及与同一档市场基准 base（赛前档 market_avg，临场档 market_avg_t24 / _t1 / _t2）的同场 log loss 差值
+    diff_vs_base（负数表示比市场好）和标准误 se；is_primary 为 true 的那行是现在的主模型。
+    模型名结尾 _t24 / _t1 / _t2 是临场档（开球前 23–25 小时 / 1.5 小时内 / 0.6 小时内存的），没有后缀是赛前首次存档。
+    closing=true 时改为返回对收盘参照（kind=closing）：每个模型与收盘平均赔率在同一批场次上的 log loss 差
+    diff_vs_close（负数表示比收盘好）和 se；closing_avg 那行是收盘自身。收盘在存档时还看不到，只作参照。"""
     cfg = config.current()
     now = cfg.clock()
     sc = services.read_scorecard(cfg.snapshot_path)
     if sc is None:
         return result(now, [], "还没有本轮快照（实盘一轮还没跑过）")
-    blocks = [scorecard_block(r, sc["generated_at"]) for r in sc["scorecard"]]
-    return result(now, blocks, None if blocks else "还没有已评分的场次")
+    rows, kind = (sc.get("closing") or [], "closing") if closing else (sc["scorecard"], "scorecard")
+    blocks = [scorecard_block(r, sc["generated_at"], kind) for r in rows]
+    if blocks:
+        return result(now, blocks)
+    return result(now, [], "还没有可与收盘配对的已评分场次（旧快照没有这一项）" if closing else "还没有已评分的场次")
 
 
 def resolve_team(text: str, league: str | None = None) -> dict[str, Any]:
