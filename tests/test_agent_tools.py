@@ -203,7 +203,9 @@ def test_resolve_team_tiers(world):
         assert first("arsen") == [("Arsenal", "partial")]
         assert first("Arsnal") == [("Arsenal", "close")]
         assert first("Arsenal", "D1") == []
-        out = resolve_team("阿森纳")                                           # 中文名表未接入
+        assert first("阿森纳") == [("Arsenal", "zh")]                           # 中文队名表
+        assert first("曼联") == [("Manchester Utd", "zh")]
+        out = resolve_team("皇马")                                             # 俗称不在表里
         assert out["candidates"] == [] and "中文" in out["note"]
         assert resolve_team("A")["candidates"][0] == {"team": "A", "league": "E0", "league_name": "英超",
                                                       "match": "exact"}

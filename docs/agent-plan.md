@@ -196,7 +196,7 @@ agent --> football_prediction.services --> 领域包
 
 这条规则在 `agent/tools/` 里实现，不改 `read_match`（网站详情页依赖它现有的行为）；`list_upcoming` 用的 `read_current` 本来就剔除已开球场次。
 - 全部只读：库用 `open_readonly`（`mode=ro`）打开。Agent 不能调用 `run_round`、`run_near`、`save_prediction`、爬虫和任何写库函数。
-- 中文队名现在只在 `web/src/features/match/teams.ts`。建议导出成一份 JSON，网站和 `resolve_team` 共用；放哪要你定。
+- 中文队名表是 `football_prediction/data/team_zh.json`（决定 6，2026-10-28），网站用副本 `web/src/features/match/team-zh.json`，两份由 `tests/test_team_zh.py` 检查一致；`resolve_team` 认中文全名和至少 2 个字的子串，不认俗称。
 - 不加耗时工具（回测、爬虫）。以后要加时，在图里放人工审核点，你同意才跑。
 
 MCP：`python -m agent.mcp_server` 用 stdio 暴露上表工具，Claude Code / Claude Desktop 配上就能直接查实盘看法。只读，本身不调大模型，不需要密钥。
@@ -640,7 +640,7 @@ HTTP 重试由 `agent/llm.py` 自己做，SDK 自带的自动重试设为 0（�
 3. 额度：每人每日、全站每日、全站每月三个金额，以及全站并发上限。
 4. Windows 实盘机：Python 版本；有没有 NVIDIA 显卡、显存多大。没有显卡时训练都在 Mac 上跑。
 5. 网站对话：做不做。做的话，同意改 `modules.md` 只允许一个对话转发路由；鉴权用邀请码还是 Tailscale 身份。
-6. 中文队名表放哪，网站和 Agent 共用。
+6. 中文队名表放哪，网站和 Agent 共用。**已定**（2026-10-28）：`football_prediction/data/team_zh.json`，网站用副本 `web/src/features/match/team-zh.json`，`tests/test_team_zh.py` 检查一致。
 7. G1 的判据是否接受：
    - 选参和留出都在 `football.db` 冻结副本上做，训练历史从 2122 起，与实盘一致；
    - 按联赛组合并，1X2 log loss 为主指标；

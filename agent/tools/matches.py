@@ -26,7 +26,7 @@ def _bounded(name: str, v: int, hi: int) -> int:
 def _one_team(conn, league: str, text: str) -> str:
     """队名 → 唯一的库内队名；查不到或有多个候选时抛 ValueError（带候选），不自动挑一个。"""
     hits = services.resolve_team_name(conn, text, league)
-    if len(hits) == 1 and hits[0]["match"] in ("exact", "alias", "partial"):
+    if len(hits) == 1 and hits[0]["match"] in ("exact", "alias", "partial", "zh", "zh_partial"):
         return hits[0]["team"]
     names = "、".join(h["team"] for h in hits)
     raise ValueError(f"找不到球队 {text}" + (f"；候选：{names}" if names else "") + "。可先用 resolve_team 查")
@@ -131,12 +131,13 @@ def scorecard(closing: bool = False) -> dict[str, Any]:
 
 
 def resolve_team(text: str, league: str | None = None) -> dict[str, Any]:
-    """队名 / 别名 → 库里的队名和联赛候选（match：exact 原样、alias 别名表、partial 部分匹配、close 近似拼写）。
-    只认库里的英文写法和别名表；中文队名表还没接入，中文名请换成英文再查。"""
+    """队名 / 别名 / 中文名 → 库里的队名和联赛候选（match：exact 原样、alias 别名表、partial 部分匹配、
+    zh 中文名、zh_partial 中文名的一部分、close 近似拼写）。中文名用网站的中文队名表（如 阿森纳、曼城），
+    俗称（皇马、国米之类）不在表里，查不到时换成全称或英文再查。"""
     now = config.current().clock()
     with config.connect() as conn:
         hits = services.resolve_team_name(conn, text, services.league_code(league) if league else None)
-    note = None if hits else "没有候选；中文队名表还没接入，请换成英文队名再查"
+    note = None if hits else "没有候选；中文请用全称（如 皇家马德里），俗称不在表里，或换成英文队名再查"
     return result(now, [], note, candidates=hits)
 
 

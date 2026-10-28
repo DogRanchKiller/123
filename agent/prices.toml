@@ -14,3 +14,13 @@ input = 0.400
 output = 1.60
 cache_read = 0.0080
 peak = [{ multiplier = 2.0, days = [1, 2, 3, 4, 5], hours = ["09:00-12:00", "14:00-18:00"] }]
+
+# 2026-10-28 中转站 /models 里的 id 改成首字母小写（区分大小写，旧写法返回 404 model_not_found）；单价沿用上一条
+[[model]]
+provider = "openai_compat"
+name = "deepSeek-v4.1-flash-1017"
+effective = "2026-10-27"
+input = 0.400
+output = 1.60
+cache_read = 0.0080
+peak = [{ multiplier = 2.0, days = [1, 2, 3, 4, 5], hours = ["09:00-12:00", "14:00-18:00"] }]

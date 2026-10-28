@@ -1,0 +1,35 @@
+探测时间（UTC） 2026-10-28T12:13+00:00
+   I1 2026-10-28T17:30:00+00:00 Milan vs Bologna
+   SC0 2026-10-28T19:45:00+00:00 Aberdeen vs Falkirk
+  italy-serie-a：18 条链接
+  [oddsportal] 第 1 次失败：.
+2026-10-28 20:14:58,228 - PlaywrightManager - INFO - Playwright resources cleanup complete.
+2026-10-28 20:14:58,229 - oddsharvester.cli.commands._scrape - ERROR - Scraper did not return valid data.
+
+  [oddsportal] 第 2 次失败：.
+2026-10-28 20:15:56,926 - PlaywrightManager - INFO - Playwright resources cleanup complete.
+2026-10-28 20:15:56,926 - oddsharvester.cli.commands._scrape - ERROR - Scraper did not return valid data.
+
+  scotland-premiership：0 条链接
+配对到 1 场
+
+I1 AC Milan vs Bologna
+  0.5   半球线   3 家：BetMGM.us 1.06/9.25，Fanatics 1.06/9.0，bet365.us 1.07/9.0
+  1.25  四分之一线 1 家：bet365.us 1.21/4.25
+  1.5   半球线   3 家：BetMGM.us 1.32/3.2，Fanatics 1.35/3.1，bet365.us 1.33/3.4
+  1.75  四分之一线 1 家：bet365.us 1.43/2.75
+  2.0   整数线   2 家：DraftKings 1.54/2.35，bet365.us 1.55/2.38
+  2.25  四分之一线 2 家：DraftKings 1.76/1.95，bet365.us 1.83/2.03
+  2.5   半球线   3 家：BetMGM.us 2.0/1.72，Fanatics 2.0/1.76，bet365.us 2.1/1.73
+  2.75  四分之一线 2 家：DraftKings 2.3/1.54，bet365.us 2.35/1.58
+  3.0   整数线   1 家：bet365.us 2.85/1.4
+  3.25  四分之一线 1 家：bet365.us 3.3/1.33
+  3.5   半球线   3 家：BetMGM.us 3.6/1.26，Fanatics 3.6/1.26，bet365.us 3.75/1.29
+  3.75  四分之一线 1 家：bet365.us 4.5/1.19
+  4.0   整数线   1 家：bet365.us 6.6/1.11
+  4.25  四分之一线 1 家：bet365.us 7.0/1.1
+  4.5   半球线   3 家：BetMGM.us 7.25/1.09，Fanatics 7.5/1.08，bet365.us 7.0/1.1
+  5.5   半球线   3 家：BetMGM.us 14.5/1.02，Fanatics 15.0/1.02，bet365.us 15.0/1.03
+  6.5   半球线   3 家：BetMGM.us 29.0/None，Fanatics 31.0/None，bet365.us 29.0/1.01
+  7.5   半球线   1 家：Fanatics 91.0/None
+  8.5   半球线   1 家：Fanatics 401.0/None

@@ -55,7 +55,7 @@ describe("亚盘文字与 Python ah_text / ah_pick_text 一致", () => {
   });
 
   it("公平线不分档", () => {
-    expect(tierText(market)).toBe("中[56%]");
+    expect(tierText(market)).toBe("中 · 历史 56%");
     expect(tierText(fair)).toBe("不分档（公平线）");
   });
 });
@@ -65,7 +65,7 @@ describe("亚盘区块", () => {
     render(<AsianBlock asian={market} />);
     const block = screen.getByRole("group", { name: "亚盘" });
     expect(within(block).getByRole("heading", { name: "亚盘 · 市场线" })).toBeInTheDocument();
-    expect(within(block).getByText("亚盘信心 中[56%]")).toBeInTheDocument();
+    expect(within(block).getByText("亚盘信心 中 · 历史 56%")).toBeInTheDocument();
     expect(within(block).getByText("客+0.75 55%")).toBeInTheDocument();
     expect(within(block).getByText("客+1.50 66%")).toBeInTheDocument();
     expect(within(block).getAllByRole("term")).toHaveLength(6);

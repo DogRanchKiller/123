@@ -27,7 +27,7 @@ python -m server --host 0.0.0.0 --port 8000       # 局域网；没有鉴权，�
 | null | 没有该数据（无赔率、未评分、未抓到等），不是 0 |
 | 联赛代码 | `E0` 英超、`D1` 德甲、`SP1` 西甲、`I1` 意甲、`F1` 法甲、`E1` 英冠、`N1` 荷甲、`P1` 葡超、`SC0` 苏超、`B1` 比甲、`T1` 土超；`league_name` 给中文名 |
 | `match_id` | 后端生成的 16 位十六进制字符串（联赛、赛季、日期、两队的 SHA-1 前 16 位），稳定，用作详情路径；不要自己按队名拼 |
-| 队名 | `home` / `away` 是英文库名（football-data 写法）。中文名和队徽由网站自己映射（`web/src/features/match/teams.ts`、`crests.json`），接口不提供 |
+| 队名 | `home` / `away` 是英文库名（football-data 写法）。中文名和队徽由网站自己映射（`web/src/features/match/teams.ts` 读 `team-zh.json`，它是 `football_prediction/data/team_zh.json` 的副本；队徽 `crests.json`），接口不提供 |
 
 ## 接口
 

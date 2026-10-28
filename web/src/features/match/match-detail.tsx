@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { DataNotice } from "@/components/presentation";
 import { beijingTime } from "@/lib/display";
-import { PredictionSection } from "./prediction-section";
+import { CollapsedPredictionSection, PredictionSection, samePrediction } from "./prediction-section";
 import { TeamCrest } from "./team-crest";
 import type { MatchRead } from "./types";
 
@@ -74,7 +74,11 @@ export function MatchDetail({
           {match.nearArchived && (
             <PredictionSection title="临场存档" prediction={match.nearArchived} />
           )}
-          <PredictionSection title="首次预测存档" prediction={match.archived} />
+          {match.archived && match.current && samePrediction(match.archived, match.current) ? (
+            <CollapsedPredictionSection title="首次预测存档" prediction={match.archived} />
+          ) : (
+            <PredictionSection title="首次预测存档" prediction={match.archived} />
+          )}
         </div>
         <aside>
           <section className="panel side-panel">
@@ -87,8 +91,8 @@ export function MatchDetail({
           <section className="panel side-panel">
             <h2>阅读这份预测</h2>
             <p className="mt-3">
-              每场都给结论和把握程度。胜平负市场档为高（市场最大概率 ≥ 60%）时标为重点，这一档历史上约
-              72% 命中，仍约有四分之一未中。
+              每场都给结论和把握程度。胜平负信心为高（主模型动态攻防的首选概率 ≥ 60%）时标为重点，这一档历史上约
+              73% 命中，仍约有四分之一未中。
               {"重点只表示胜平负把握高，这类场次在市场亚盘线上仍接近五五开，亚盘请看稳妥线。"}
               命中率是历史表现，不是本场承诺。
             </p>

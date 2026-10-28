@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { closingRowsOf, reviewRowsOf, type ApiReview } from "./api-adapter";
+import { render, screen } from "@testing-library/react";
+import { closingRowsOf, primaryOf, reviewRowsOf, type ApiReview } from "./api-adapter";
+import { Review } from "./review";
 
 const row = {
   model_name: "market_implied", model_ver: "1.0.0", matches: 51,
@@ -43,5 +45,23 @@ describe("成绩单接口 → 页面行", () => {
     expect(close).toMatchObject({ name: "closing_avg", pairedMatches: 59, diffVsClose: null, se: null });
     expect(avg).toMatchObject({ name: "market_avg", diffVsClose: 0.0132, se: 0.0082 });
     expect(closingRowsOf({ ...review, closing: [] })).toEqual([]);
+  });
+});
+
+describe("成绩单标出主模型", () => {
+  const live = { mode: "live", generatedAt: review.generated_at } as const;
+
+  it("主模型有评分时标在对应行", () => {
+    render(<Review rows={reviewRowsOf(review)} primary={primaryOf(review)} source={live} />);
+    expect(screen.getAllByText("主模型")).toHaveLength(1);
+    expect(screen.getByText("主模型").closest("tr")).toHaveClass("row-primary");
+    expect(screen.getByText(/表中标「主模型」的一行/)).toBeInTheDocument();
+  });
+
+  it("主模型还没有评分时说明，版本不同不算", () => {
+    const primary = { name: "market_implied", version: "2.0.0" };
+    render(<Review rows={reviewRowsOf(review)} primary={primary} source={live} />);
+    expect(screen.queryByText("主模型")).toBeNull();
+    expect(screen.getByText(/还没有已评分的场次/)).toBeInTheDocument();
   });
 });

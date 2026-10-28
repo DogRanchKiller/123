@@ -72,3 +72,28 @@
     padding: 20px 18px;
   }
 }
+/* 窄屏顶栏：品牌、菜单、数据标签、登录按钮放在一行（390 宽时登录按钮原先掉到第二行） */
+@media (max-width: 479px) {
+  .header-inner {
+    padding-inline: 14px;
+    gap: 8px;
+  }
+  .brand {
+    gap: 7px;
+    font-size: 17px;
+  }
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+  }
+  .brand small {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+  }
+  .header-tag {
+    padding-inline: 7px;
+  }
+  .header-inner .auth-trigger {
+    padding-inline: 10px;
+  }
+}

@@ -97,10 +97,18 @@ export function MatchCard({
             </div>
             <p className="fine-print mt-3">
               {archiveLabel && archiveLabel + " · "}
-              概率来源：{prediction.probabilitySource} ·{" "}
-              <span title={prediction.modelName}>
-                {modelLabel(prediction.modelName)}
-              </span>
+              概率来源：
+              {/* 主模型自己出概率时来源就是模型名，只写一次 */}
+              {prediction.probabilitySource === modelLabel(prediction.modelName) ? (
+                <span title={prediction.modelName}>{prediction.probabilitySource}</span>
+              ) : (
+                <>
+                  {prediction.probabilitySource} ·{" "}
+                  <span title={prediction.modelName}>
+                    {modelLabel(prediction.modelName)}
+                  </span>
+                </>
+              )}
               {prediction.oddsSource && " · 赔率：" + prediction.oddsSource}
             </p>
           </>

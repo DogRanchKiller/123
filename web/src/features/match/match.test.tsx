@@ -85,6 +85,15 @@ describe("重点标记", () => {
   });
 });
 
+describe("概率来源", () => {
+  it("来源就是模型本身时只写一次", () => {
+    const own = { ...archive, modelName: "dc_dyn", probabilitySource: "动态攻防模型" };
+    render(<MatchCard match={{ ...missing, current: own }} />);
+    expect(screen.getAllByText("动态攻防模型")).toHaveLength(1);
+    expect(screen.getByTitle("dc_dyn")).toHaveTextContent("动态攻防模型");
+  });
+});
+
 describe("开球后显示存档", () => {
   it("卡片：临场档优先，没有时用首次存档，并标明是哪份", () => {
     const { rerender } = render(<MatchCard match={{ ...started, nearArchived: near }} />);
@@ -119,5 +128,41 @@ describe("市场对照", () => {
     unmount();
     render(<MatchDetail data={{ match: started, delayed: false, source: { mode: "demo" } }} action={null} />);
     expect(screen.queryByText(/市场对照（去水）/)).toBeNull();
+  });
+});
+
+describe("首次存档与当前预测相同", () => {
+  const detail = (current: Prediction) =>
+    render(<MatchDetail data={{ match: { ...missing, current, archived: archive }, delayed: false,
+      source: { mode: "demo" } }} action={null} />);
+
+  it("结论相同（时间和来源不同）时收起，展开后仍是完整内容", () => {
+    const { container } = detail({ ...archive, generatedAt: "2026-10-25T09:00:00Z",
+      fetchedAt: "2026-10-25T09:00:00Z", oddsSource: "多家中位数（5 家）", sourceNote: "按最新赔率现算。" });
+    const folded = container.querySelector("details.prediction-collapsed");
+    expect(folded).not.toBeNull();
+    expect(folded).not.toHaveAttribute("open");
+    expect(folded!.querySelector("summary")).toHaveTextContent("首次预测存档与当前预测相同");
+    expect(folded).toHaveTextContent("开赛前首次存档。");
+  });
+
+  it("显示出来的任一结论不同就照常展开", () => {
+    const { container, unmount } = detail({ ...archive, probabilities: [0.49, 0.31, 0.2] });
+    expect(container.querySelector("details")).toBeNull();
+    expect(screen.getAllByRole("heading", { name: "首次预测存档" })).toHaveLength(1);
+    unmount();
+    const other = detail({ ...archive, asian: { ...archive.asian!, line: -0.5 } });
+    expect(other.container.querySelector("details")).toBeNull();
+  });
+
+  it("当前预测多出市场对照不影响判断（存档接口不带市场对照）", () => {
+    const { container } = detail({ ...archive, marketProbabilities: [0.44, 0.3, 0.26],
+      asian: { ...archive.asian!, marketHomeCover: 0.52 } });
+    expect(container.querySelector("details.prediction-collapsed")).not.toBeNull();
+  });
+
+  it("按显示精度比较：千分位的差别看不出来时算相同", () => {
+    const { container } = detail({ ...archive, probabilities: [0.4801, 0.3199, 0.2] });
+    expect(container.querySelector("details.prediction-collapsed")).not.toBeNull();
   });
 });

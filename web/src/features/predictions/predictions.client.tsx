@@ -47,7 +47,7 @@ export function Predictions({
       <section aria-label="重点比赛">
         <SectionHeading
           title="重点比赛"
-          description="胜平负市场最大概率 ≥ 60% 的赛前场次；其余场次在下方照常给出结论和把握程度"
+          description="主模型动态攻防的胜平负首选概率 ≥ 60% 的赛前场次；其余场次在下方照常给出结论和把握程度"
           aside={
             <span className="pill pill-accent">
               {recommendations.length} 场重点
