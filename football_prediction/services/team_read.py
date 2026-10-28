@@ -2,13 +2,16 @@
 services/team_read.py  按队名的只读用例（中间层）
 给 Agent 工具层（agent/tools）读，以后接口也可以用：队名解析、某队最近几场赛果、下一场赛程、
 某场阵容 / 伤停（只读挂上的 fotmob.db）、某场的赛后评分行。不拟合模型、不写库、不联网。
-- 队名解析只用库里出现过的队名和 data/loader.TEAM_ALIASES；中文队名表的位置还没定
-  （docs/agent-plan.md 第 12 节决定 6），定之前中文名查不到。
+- 队名解析只用库里出现过的队名、data/loader.TEAM_ALIASES 和中文队名表 data/team_zh.json
+  （库里队名 → 中文名；网站 web/src/features/match/team-zh.json 是它的副本，tests/test_team_zh.py 检查一致）。
 - 比分与 match_read 同一顺序：football-data（matches）优先，没到时用 fotmob_results。
 - 评分行只取开球前存的行（与首次存档同一条件），result_src 为空的旧行按 fd（与 review/store 一致）。
 - 知识库建块（agent/kb）用的两个读法：有存档的场次 id、某场按来源分开的比分（不合并，各带获取时间）。
 """
 import difflib
+import functools
+import json
+import pathlib
 import sqlite3
 from datetime import datetime
 
@@ -23,6 +26,13 @@ GRADED_MODELS = (version.PRIMARY_MODEL[0], version.MARKET_MODEL[0], version.MARK
                  version.FALLBACK_MODEL[0], MARKET_NAME, MARKET_NAME + "_t1")
 GRADING_COLS = ("actual_outcome", "log_loss", "brier", "ou25_log_loss", "score_log_loss",
                 "ah_line", "ah_log_loss", "ah_hit")
+TEAM_ZH_PATH = pathlib.Path(__file__).resolve().parent.parent / "data" / "team_zh.json"
+
+
+@functools.cache
+def team_zh() -> dict[str, str]:
+    """中文队名表：库里队名 → 中文名（只读，进程内缓存）。"""
+    return json.loads(TEAM_ZH_PATH.read_text(encoding="utf-8"))
 
 
 def league_code(text: str) -> str:
@@ -45,11 +55,13 @@ def _teams(conn: sqlite3.Connection, league: str | None) -> list[tuple[str, str]
 def resolve_team_name(conn: sqlite3.Connection, text: str, league: str | None = None) -> list[dict]:
     """队名 → 库里的队名候选 [{team, league, match}]，按下面的顺序取第一层有结果的：
     exact（原样）→ alias（不分大小写，原样或 TEAM_ALIASES 两边任一写法）→ partial（不区分大小写的子串，至少 3 个字符）
-    → close（difflib 近似拼写）。中文名表未定，中文名通常没有候选。"""
+    → zh（中文名原样）→ zh_partial（中文名的子串，至少 2 个字，如「马德里」得到两队）
+    → close（difflib 近似拼写）。"""
     s = text.strip()
     teams = _teams(conn, league)
     if not s:
         return []
+    zh = team_zh()
     low = s.lower()
     aliases = {k.lower(): v for k, v in TEAM_ALIASES.items()}
     std = aliases.get(low, s).lower()
@@ -58,6 +70,8 @@ def resolve_team_name(conn: sqlite3.Connection, text: str, league: str | None = 
         ("exact", [x for x in teams if x[0] == s]),
         ("alias", [x for x in teams if x[0].lower() in same]),
         ("partial", [x for x in teams if len(low) >= 3 and low in x[0].lower()]),
+        ("zh", [x for x in teams if zh.get(x[0]) == s]),
+        ("zh_partial", [x for x in teams if len(s) >= 2 and s in zh.get(x[0], "")]),
         ("close", [x for x in teams if x[0] in difflib.get_close_matches(
             s, [t for t, _ in teams], n=5, cutoff=0.6)]),
     )

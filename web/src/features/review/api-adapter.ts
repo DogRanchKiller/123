@@ -1,6 +1,6 @@
 /** 只读接口的成绩单行 → 页面行。每行对同一档的市场基准（赛前档 market_avg，临场档 market_avg_t1 等），基准自身没有同场对比，配对字段为空。 */
 import type { components } from "@/api/schema";
-import type { ClosingRow, ReviewRow } from "./review";
+import type { ClosingRow, PrimaryModel, ReviewRow } from "./review";
 
 export type ApiReview = components["schemas"]["Review"];
 
@@ -33,6 +33,12 @@ export function reviewRowsOf(review: ApiReview): ReviewRow[] {
 }
 
 /** 对收盘参照的行；收盘自身的差值是 0 ± 0，页面显示为「参照」。旧快照没有 closing 时为空。 */
+/** 快照里的主模型；旧快照没有 primary_model 时为空。 */
+export function primaryOf(review: ApiReview): PrimaryModel | null {
+  const p = review.primary_model;
+  return p ? { name: p.name, version: p.version } : null;
+}
+
 export function closingRowsOf(review: ApiReview): ClosingRow[] {
   return (review.closing ?? []).map((row) => {
     const self = row.model_name === CLOSING;

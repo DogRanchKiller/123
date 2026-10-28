@@ -38,9 +38,9 @@ export function safeText(asian: AsianHandicap): string | null {
   return `${lineText(asian.safeLine, asian.side)} ${whole(asian.safeCover)}`;
 }
 
-/** 档名加历史命中：「中[56%]」；公平线时为「不分档（公平线）」。 */
+/** 档名加历史命中：「中 · 历史 56%」（命令行报告写作「中[56%]」，网页写全）；公平线时为「不分档（公平线）」。 */
 export function tierText(asian: AsianHandicap): string {
   if (asian.tier === "-" || asian.historicalHit === null)
     return "不分档（公平线）";
-  return `${asian.tier}[${whole(asian.historicalHit)}]`;
+  return `${asian.tier} · 历史 ${whole(asian.historicalHit)}`;
 }

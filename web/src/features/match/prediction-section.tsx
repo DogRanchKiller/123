@@ -4,6 +4,38 @@ import { modelLabel } from "@/lib/models";
 import { AsianBlock } from "./asian-section";
 import type { Prediction } from "./types";
 
+/** 模型自己的结论（按页面显示精度）：亚盘、胜平负、大小球、比分、模型与版本。
+ * 不算时间、赔率来源、说明文字和市场对照（存档接口不带市场对照，当前预测才有），
+ * 这些在存档与当前预测之间本来就不同。 */
+function shown(p: Prediction): string {
+  const pct = (v: number | null) => (v === null ? null : percentage(v));
+  const a = p.asian;
+  return JSON.stringify([
+    p.modelName, p.modelVersion, p.confidence, p.lean, p.double, p.likelyScores,
+    p.probabilities.map(pct), pct(p.over25),
+    a && [a.line, a.lineSource, a.side, a.tier, pct(a.pCover), a.safeLine, pct(a.safeCover),
+      Object.values(a.outcome).map(pct)],
+  ]);
+}
+
+/** 两份预测在页面上显示的结论完全相同。 */
+export function samePrediction(a: Prediction, b: Prediction): boolean {
+  return shown(a) === shown(b);
+}
+
+/** 与当前预测相同的存档：默认收起（原生 details，键盘可展开），标题旁写「与当前预测相同」，展开后是完整内容。 */
+export function CollapsedPredictionSection({ prediction, title }: { prediction: Prediction; title: string }) {
+  return (
+    <details className="panel prediction-section prediction-collapsed">
+      <summary>
+        <h2>{title}</h2>
+        <span className="pill">与当前预测相同</span>
+      </summary>
+      <PredictionBody prediction={prediction} />
+    </details>
+  );
+}
+
 export function PredictionSection({
   prediction,
   title,
@@ -24,6 +56,14 @@ export function PredictionSection({
   return (
     <section className="panel prediction-section">
       <h2>{title}</h2>
+      <PredictionBody prediction={prediction} />
+    </section>
+  );
+}
+
+function PredictionBody({ prediction }: { prediction: Prediction }) {
+  return (
+    <>
       <AsianBlock asian={prediction.asian} />
       <div className="section-heading mt-6">
         <h3>胜平负</h3>
@@ -105,6 +145,6 @@ export function PredictionSection({
         </div>
       </dl>
       <p className="fine-print mt-4">{prediction.sourceNote}</p>
-    </section>
+    </>
   );
 }

@@ -19,6 +19,15 @@
 
 ## 未解决
 
+### 中转站模型 id 改成小写开头后 Agent 全部 404
+
+- 状态：未解决（等用户改 `.env`）
+- 日期：2026-10-28
+- 现象：`agent.eval.agent --run` 29 题全部 `error`，花费 0；报「模型调用失败：404」。
+- 原因：中转站 `/models` 现在只列出 `deepSeek-v4.1-flash-1017`（d 小写）；按旧写法 `DeepSeek-v4.1-flash-1017` 请求返回 `model_not_found`（"not available for this group"）。模型名区分大小写，2026-10-27 用旧写法能调通。
+- 处理：`agent/prices.toml` 追加新写法一条（单价沿用，旧条目保留）；本机用环境变量 `AGENT_MODEL=deepSeek-v4.1-flash-1017` 覆盖后调通。`.env` 里的 `AGENT_MODEL` 由用户改成新写法后本条移到已解决。同一轮里通过率比 2026-10-27 第二轮明显低（大多数题被第 1、2 条打回后降级），中转站背后是否换了模型未查清。
+- 位置：`.env`（用户维护）、`agent/prices.toml`
+
 ### model_nn 评估时个别场次的候选比分矩阵是 NaN
 
 - 状态：未解决

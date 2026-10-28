@@ -51,15 +51,28 @@ function diff(value: number | null, se: number | null, n: number | null, self: s
   return `${sign}${value.toFixed(4)} ± ${se.toFixed(4)}（${n ?? 0} 场）`;
 }
 
+/** 当前主模型（接口 primary_model）；旧快照没有时为空。 */
+export interface PrimaryModel {
+  name: string;
+  version: string;
+}
+
+function isPrimary(row: { name: string; version: string }, primary: PrimaryModel | null): boolean {
+  return primary !== null && row.name === primary.name && row.version === primary.version;
+}
+
 export function Review({
   rows,
   closing = [],
+  primary = null,
   source,
 }: {
   rows: readonly ReviewRow[];
   closing?: readonly ClosingRow[];
+  primary?: PrimaryModel | null;
   source: DataSource;
 }) {
+  const primaryGraded = rows.some((row) => isPrimary(row, primary));
   return (
     <>
       <div className="page-heading">
@@ -78,6 +91,15 @@ export function Review({
             ? "以下为界面展示样本，不代表项目真实评测结果。"
             : "实盘首次存档的赛后评分，按胜平负对数损失升序；样本少时差异不稳定。"}
         </p>
+        {primary && (
+          <p className="fine-print mb-4">
+            当前主模型：
+            <strong title={primary.name}>{modelLabel(primary.name)}</strong> {primary.version}
+            {primaryGraded
+              ? "，表中标「主模型」的一行。"
+              : "，还没有已评分的场次（开赛前首次存档，比赛结束并评分后出现在表中）。"}
+          </p>
+        )}
         {rows.length === 0 ? (
           <EmptyState
             title="暂无已评分的实盘场次"
@@ -107,9 +129,13 @@ export function Review({
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={`${row.name}-${row.version}`}>
+                <tr
+                  key={`${row.name}-${row.version}`}
+                  className={isPrimary(row, primary) ? "row-primary" : undefined}
+                >
                   <td>
                     <strong title={row.name}>{modelLabel(row.name)}</strong>
+                    {isPrimary(row, primary) && <span className="pill pill-accent ml-2">主模型</span>}
                   </td>
                   <td>{row.version}</td>
                   <td>{row.asianMatches}</td>
@@ -155,9 +181,13 @@ export function Review({
               </thead>
               <tbody>
                 {closing.map((row) => (
-                  <tr key={`${row.name}-${row.version}`}>
+                  <tr
+                    key={`${row.name}-${row.version}`}
+                    className={isPrimary(row, primary) ? "row-primary" : undefined}
+                  >
                     <td>
                       <strong title={row.name}>{modelLabel(row.name)}</strong>
+                      {isPrimary(row, primary) && <span className="pill pill-accent ml-2">主模型</span>}
                     </td>
                     <td>{row.version || "—"}</td>
                     <td>{row.pairedMatches}</td>

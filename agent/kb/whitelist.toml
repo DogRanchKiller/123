@@ -105,4 +105,23 @@ generated_by = "_diag/explore/lineup_fotmob_eval.py"
 redirect = true      # 脚本只打印，日志是命令行重定向出来的；待用户确认
 anchors = ["+0.00075", "+0.00072"]
 
+[[file]]
+path = "_diag/dev_model/result_v02.txt"
+authority = "research"
+superseded = false
+cited_in = "docs/progress.md#主模型换成 dc_dyn（2026-10-28，2.0.0）"
+basis = "path"
+generated_by = "_diag/dev_model/dynamic.py"
+anchors = ["4590"]
+anchors_waived = "小节把差值和 SE 四舍五入到四位小数（−0.0069±0.0016、+0.0051±0.0015），文件是五位（−0.00687 ± 0.00163、+0.00505 ± 0.00148），原样共有的只有样本量 4590"
+
+[[file]]
+path = "_diag/primary_dyn/tiers.txt"
+authority = "research"
+superseded = false
+cited_in = "docs/progress.md#主模型换成 dc_dyn（2026-10-28，2.0.0）"
+basis = "dir"
+generated_by = "_diag/primary_dyn/tiers.py"
+anchors = ["0.726", "0.903", "0.923"]
+
 # ---- record（第一版为空） ----
