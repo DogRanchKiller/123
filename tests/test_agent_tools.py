@@ -19,7 +19,7 @@ from tests.test_report_live import _fixture
 from tests.test_services import _round
 
 KINDS = {"current", "last_pre_kickoff", "live_calc", "first_archive", "near_archive", "score",
-         "grading", "scorecard", "team_news", "kb"}
+         "grading", "scorecard", "closing", "team_news", "kb"}
 HEAD = {"match": ["scope", "match_id", "kind", "at"], "kb": ["scope", "chunk_id", "kind", "at"],
         "scorecard": ["scope", "model_name", "model_ver", "kind", "at"]}
 PRIMARY = version.PRIMARY_MODEL[0]
@@ -100,6 +100,9 @@ def test_get_match_relabels_after_kickoff(world):
         assert ar["model_name"] == PRIMARY and ar["at"] == ar["generated_at"]
         assert "log_loss" not in ar and "scored" not in ar                    # 评分单独成块
         assert ar["asian"]["line"] == -1.0 and ar["home"] == "A"
+        # 档位、历史命中率、稳妥线是按现行规则现算的，存档块里不给
+        assert not {"confidence", "historical_first_hit", "historical_double_hit"} & ar.keys()
+        assert not {"tier", "historical_hit", "safe_line", "safe_cover"} & ar["asian"].keys()
         with pytest.raises(ValueError, match="找不到比赛"):
             get_match("nope")
     with use(world, world["soon_ko"]):                                         # 开球那一刻起改标
@@ -170,6 +173,20 @@ def test_scorecard_blocks(world):
         assert len(bs) == 1 and bs[0]["scope"] == "scorecard" and bs[0]["kind"] == "scorecard"
         assert (bs[0]["model_name"], bs[0]["model_ver"], bs[0]["matches"]) == (PRIMARY, "9.9.9", 12)
         assert bs[0]["at"] == snap["generated_at"] and bs[0]["diff_vs_base"] == -0.01
+        assert bs[0]["is_primary"] is True
+        out = scorecard(closing=True)
+        assert check(out) == [] and out["note"]                               # 快照里还没有对收盘的行
+    snap["scorecard"].append({"model_name": version.MARKET_MODEL[0], "model_ver": "1.0.0", "matches": 12})
+    snap["closing"] = [{"model_name": "closing_avg", "model_ver": "", "paired_n": 12, "log_loss": 0.95,
+                        "diff_vs_close": 0.0, "se": 0.0},
+                       {"model_name": PRIMARY, "model_ver": "9.9.9", "paired_n": 12, "log_loss": 0.98,
+                        "diff_vs_close": 0.03, "se": 0.01}]
+    world["snap"].write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")
+    with use(world, world["now"]):
+        assert [b["is_primary"] for b in check(scorecard())] == [True, False]
+        cs = check(scorecard(closing=True))
+        assert [b["kind"] for b in cs] == ["closing", "closing"] and cs[1]["diff_vs_close"] == 0.03
+        assert [b["is_primary"] for b in cs] == [False, True]
 
 
 def test_resolve_team_tiers(world):

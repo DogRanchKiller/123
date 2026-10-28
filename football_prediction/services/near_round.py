@@ -3,6 +3,9 @@ services/near_round.py  临场档一轮（中间层）
 开球前 T1_HOURS 小时内：先抓阵容再抓多家赔率 → 存 *_t1 临场档（market_avg / market_implied / market_shin），
 已公布正式首发时另存 lineup_t1 与配对基准 lineup_base_t1；每场输出临场最终看法（只输出，不另存档）。
 开球前 T2_HOURS 小时内、且赔率在 T2_FRESH_MIN 分钟内抓到时，另存更接近开球的 *_t2（只有三个市场模型）。
+开球前 T24_LO–T24_HI 小时（约前一天同一时刻）另存 *_t24：三个市场模型用多家中位数，同时存自研的 dc_dyn /
+dc_dyn_shots / dc_market（同一时刻、同一份赔率），成绩单里自研与市场在同一信息时点上配对（live 2.1.0）。
+赛前档的赛程表赔率约每周才更新，存档时点不齐；T24 档只抓还没存过的场次，每场多抓一次。
 窗口内有场次时，按最新赔率重写给接口读的快照（refresh_snapshot），网站看到开球前的多家赔率。
 命令行入口是 `live.py --near`；行为与版本说明见 live.py 的文件头。
 一轮的时刻用 live_round.round_clock：抓取与拟合之后、存档之前再取，已开球的场次不存。
@@ -22,18 +25,21 @@ from football_prediction.model_market.implied import dc_matrix, implied_matrix
 from football_prediction.output.analysis import devig, odds_dict
 from football_prediction.output.derive import derive_markets
 from football_prediction.output.report import upcoming_fixtures
+from football_prediction.model_dc.market_dc import MODEL_NAME as DC_MARKET_NAME
 from football_prediction.review.store import has_prediction, save_prediction
 from football_prediction.services.live_round import (
-    LEAGUES, SNAPSHOT_PATH, Clock, Log, markets_extra, match_ident, refresh_snapshot, round_clock,
-    save_market,
+    DYN_NAME, DYN_SHOTS_NAME, LEAGUES, MARKET_VER, SNAPSHOT_PATH, Clock, Log, markets_extra, match_ident,
+    refresh_snapshot, round_clock, save_market,
 )
-from football_prediction.services.match_analysis import ModelCache
+from football_prediction.services.match_analysis import FIXTURE_ODDS, ModelCache
 
 T1_HOURS = 1.5         # 临场档：开球前 1.5 小时内
 T1_FRESH_MIN = 90      # 临场档只用 90 分钟内抓到的多家赔率
 T1_MIN_BOOKS = 3       # 且至少 3 家公司
 T2_HOURS = 0.6         # 第二临场档：存档时离开球 0.6 小时内（每 30 分钟一轮，存档约在开球前 0.3–0.6 小时）
 T2_FRESH_MIN = 30      # 第二临场档只用本轮抓到的多家赔率（上一轮的已超过 30 分钟）
+T24_LO, T24_HI = 23.0, 25.0   # T24 档：存档时离开球 23–25 小时（每 30 分钟一轮，约在 24.5–25 小时存上）
+T24_FRESH_MIN = 90     # T24 档只用 90 分钟内抓到的多家赔率（每日任务 oddsportal --hours 30 抓的也算）
 
 
 def _lineup_view(conn, r: dict, odds: dict, rho: float, models: dict, cutoff: str) -> dict | None:
@@ -138,37 +144,107 @@ def predict_near(conn: sqlite3.Connection, now: datetime, cache: ModelCache, log
     return saved
 
 
+def t24_pending(conn: sqlite3.Connection, now: datetime) -> set[str]:
+    """开球在 now 后 T24_LO–T24_HI 小时、还没有 market_avg_t24 存档的场次。"""
+    lo, hi = (now + timedelta(hours=T24_LO)).isoformat(), (now + timedelta(hours=T24_HI)).isoformat()
+    mids = [r[0] for r in conn.execute(
+        "SELECT match_id FROM fixtures WHERE kickoff_utc > ? AND kickoff_utc <= ? AND league IN (%s)"
+        % ",".join("?" * len(LEAGUES)), (lo, hi, *LEAGUES))]
+    return {m for m in mids if not has_prediction(conn, m, "market_avg_t24", MARKET_VER)}
+
+
+def predict_t24(conn: sqlite3.Connection, now: datetime, cache: ModelCache, log: Log = print,
+                clock: Clock | None = None) -> int:
+    """开球前 T24_LO–T24_HI 小时、有 T24_FRESH_MIN 分钟内至少 T1_MIN_BOOKS 家赔率的场次：存三个市场模型 *_t24；
+    市场基准存上后，同一时刻再存 dc_dyn / dc_dyn_shots / dc_market 的 *_t24（dc_dyn 另记这份赔率，亚盘评分用它的线）。"""
+    clock = clock or round_clock(now)
+    feat_ver, saved = version.get("features"), 0
+    vers = {DYN_NAME: version.get("model_dc_dyn"), DYN_SHOTS_NAME: version.get("model_dc_dyn"),
+            DC_MARKET_NAME: version.get("model_dc_market")}
+    for r in upcoming_fixtures(conn, LEAGUES, clock()):
+        if not r["kickoff_utc"]:
+            continue
+        hours = (datetime.fromisoformat(r["kickoff_utc"]) - clock()).total_seconds() / 3600
+        if not T24_LO - 1 <= hours <= T24_HI:          # 抓取到存档之间可能过了几十分钟，下沿放宽 1 小时
+            continue
+        cons = book_consensus(conn, r["match_id"])
+        if not cons or cons["n_books"] < T1_MIN_BOOKS:
+            continue
+        lm = cache.get(r["league"])                     # 首次拟合可能耗时
+        at = clock()
+        if at - datetime.fromisoformat(cons["fetched_at"]) > timedelta(minutes=T24_FRESH_MIN):
+            continue
+        hours = (datetime.fromisoformat(r["kickoff_utc"]) - at).total_seconds() / 3600
+        info = {"horizon": "t24", "odds_source": "oddsportal_median", "n_books": cons["n_books"],
+                "odds_fetched_at": cons["fetched_at"], "hours_to_ko": round(hours, 2), **match_ident(r)}
+        saved += save_market(conn, r["match_id"], cons, lm.inputs(r["home_team"], r["away_team"])["rho"],
+                             r["kickoff_utc"], feat_ver, "_t24", info, at=at)
+        if not has_prediction(conn, r["match_id"], "market_avg_t24", MARKET_VER):
+            continue                                    # 胜平负赔率不全：自研也不存，T24 档只在能配对时存
+        for name, model in ((DYN_NAME, lm.dyn), (DYN_SHOTS_NAME, lm.dyn_shots), (DC_MARKET_NAME, lm.market)):
+            if has_prediction(conn, r["match_id"], name + "_t24", vers[name]):
+                continue
+            m = model.score_matrix(r["home_team"], r["away_team"])
+            mk = derive_markets(m)
+            extra = markets_extra(m, r["kickoff_utc"]) | info
+            if name == DYN_NAME:
+                extra["odds"] = {k: cons.get(k) for k in FIXTURE_ODDS}
+            if save_prediction(conn, r["match_id"], name + "_t24", vers[name], feat_ver,
+                               mk["home_win"], mk["draw"], mk["away_win"], extra, at=at):
+                saved += 1
+    return saved
+
+
 def run_near(conn: sqlite3.Connection, now: datetime, collect_odds=None, collect_lineups=None,
              log: Log = print, snapshot_path: str | None = SNAPSHOT_PATH) -> int:
-    """临场一轮：抓开球前 T1_HOURS 小时内的多家赔率与阵容 → 存 *_t1 临场档 → 重写快照。返回新存档条数。
+    """临场一轮：抓开球前 T1_HOURS 小时内的多家赔率与阵容 → 存 *_t1 临场档 → 重写快照；
+    再抓开球前 T24_LO–T24_HI 小时、还没存过 T24 档的场次的多家赔率 → 存 *_t24。返回新存档条数。
     collect_odds / collect_lineups 可替换（测试用）；不传时用 OddsHarvester 与 FotMob。
-    窗口内没有场次时不重写快照；snapshot_path=None 时不写。
+    T1 窗口内没有场次时不重写快照（只有 T24 档时也不重写）；snapshot_path=None 时不写。
     抓阵容和赔率可能要二十多分钟：存档与快照按本轮时钟的当前时刻判断是否已开球，不用开头的 now。"""
     clock = round_clock(now)
     lo, hi = now.isoformat(), (now + timedelta(hours=T1_HOURS)).isoformat()
     n_fx = conn.execute("SELECT COUNT(*) FROM fixtures WHERE kickoff_utc > ? AND kickoff_utc <= ?",
                         (lo, hi)).fetchone()[0]
     log(f"  {T1_HOURS} 小时内开球 {n_fx} 场")
-    if not n_fx:
+    pending = t24_pending(conn, now)
+    if pending:
+        log(f"  {T24_LO:g}–{T24_HI:g} 小时后开球、待存 T24 档 {len(pending)} 场")
+    if not n_fx and not pending:
         return 0
-    # 先抓阵容再抓赔率：同一轮里赔率晚于首发，按合并规则算「赔率已含阵容」（COEF_POST）
-    try:
-        got = (collect_lineups or fotmob.collect_upcoming)(conn, now, T1_HOURS)
-        log("  阵容：" + ("，".join(f"{m} {t}" for m, t in got) if got else "暂无"))
-    except Exception as e:
-        log(f"  阵容抓取失败（{type(e).__name__}: {e}）")
     if collect_odds is None and shutil.which(oddsportal.harvester_path()):
         collect_odds = oddsportal.collect
-    if collect_odds:
-        try:
-            log(f"  多家赔率 {collect_odds(conn, list(LEAGUES), now, hours=T1_HOURS)} 行")
-        except Exception as e:
-            log(f"  多家赔率抓取失败（{type(e).__name__}: {e}），沿用已有数据")
-    else:
+    if not collect_odds:
         log("  未找到 OddsHarvester（.venv-scrape），只用已有多家赔率")
-    cache = ModelCache(conn, now.date().isoformat())
-    saved = predict_near(conn, now, cache, log, clock)
-    if snapshot_path:
-        n = refresh_snapshot(conn, now, cache, snapshot_path, clock)
-        log(f"  接口快照已按最新赔率重写（{n} 场）：{snapshot_path}")
+    cache, saved = ModelCache(conn, now.date().isoformat()), 0
+    if n_fx:
+        # 先抓阵容再抓赔率：同一轮里赔率晚于首发，按合并规则算「赔率已含阵容」（COEF_POST）
+        try:
+            got = (collect_lineups or fotmob.collect_upcoming)(conn, now, T1_HOURS)
+            log("  阵容：" + ("，".join(f"{m} {t}" for m, t in got) if got else "暂无"))
+        except Exception as e:
+            log(f"  阵容抓取失败（{type(e).__name__}: {e}）")
+        _collect(collect_odds, log, conn, now, hours=T1_HOURS)
+        saved += predict_near(conn, now, cache, log, clock)
+        if snapshot_path:
+            n = refresh_snapshot(conn, now, cache, snapshot_path, clock)
+            log(f"  接口快照已按最新赔率重写（{n} 场）：{snapshot_path}")
+    if pending:
+        t = clock()                                     # T1 抓取后再算窗口：只抓仍待存的场次
+        pending = t24_pending(conn, t)
+        if pending:
+            _collect(collect_odds, log, conn, t, hours=T24_HI, from_hours=T24_LO, match_ids=pending)
+        n24 = predict_t24(conn, now, cache, log, clock)
+        log(f"  T24 档新存 {n24} 条")
+        saved += n24
     return saved
+
+
+def _collect(collect_odds, log: Log, conn: sqlite3.Connection, t: datetime, **kw) -> None:
+    """抓多家赔率；失败只打印，沿用已有数据。"""
+    if not collect_odds:
+        return
+    try:
+        log(f"  多家赔率 {collect_odds(conn, list(LEAGUES), t, **kw)} 行")
+    except Exception as e:
+        log(f"  多家赔率抓取失败（{type(e).__name__}: {e}），沿用已有数据")

@@ -13,7 +13,7 @@ import hashlib
 import json
 
 from agent.kb.sources import Chunk
-from agent.tools.blocks import archive_block, kickoff_of, match_block, parse_time
+from agent.tools.blocks import archive_block, kickoff_of, match_block, parse_time, stored_only
 from football_prediction import services
 
 _SRC = {"fd": "football-data", "fotmob": "fotmob"}
@@ -32,19 +32,6 @@ def _line(x) -> str:
 
 def _head(info: dict) -> str:
     return f"{info.get('league_name') or info.get('league')} {info['home']} 对 {info['away']}（开球 {info.get('kickoff_utc') or info.get('match_date')}）"
-
-
-# services.read_match 给存档补的档位、历史命中率和稳妥线是按现在的规则现算的（存档行里没有），
-# 写进存档块会让 as_of 早于规则的检索看到后来的规则。存档块只留存档时就有的数和由它们直接算出的选择方。
-_ARCHIVE_DERIVED = ("confidence", "historical_first_hit", "historical_double_hit")
-_AH_DERIVED = ("tier", "historical_hit", "safe_line", "safe_cover")
-
-
-def _stored_only(arch: dict) -> dict:
-    out = {k: v for k, v in arch.items() if k not in _ARCHIVE_DERIVED}
-    if out.get("asian"):
-        out["asian"] = {k: v for k, v in out["asian"].items() if k not in _AH_DERIVED}
-    return out
 
 
 def _opinion(v: dict) -> str:
@@ -88,7 +75,7 @@ def _view(info: dict, view: dict, gen: str) -> Chunk | None:
 def _archive(info: dict, arch: dict | None, family: str) -> Chunk | None:
     if not arch:
         return None
-    arch = _stored_only(arch)
+    arch = stored_only(arch)     # 现算的档位和稳妥线会让 as_of 早于规则的检索看到后来的规则
     label = "首次存档" if family == "first_archive" else "临场存档"
     cid = f"{family}:{info['match_id']}:{arch['model_name']}:{arch['model_version']}"
     text = (f"{_head(info)} {label}（{arch['model_name']} {arch['model_version']}，{arch['generated_at']}）："

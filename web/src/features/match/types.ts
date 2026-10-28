@@ -31,8 +31,10 @@ export interface AsianHandicap {
   /** 稳妥线（主队方向）：从选择方的线每次退 0.25，直到选择方赢盘概率 ≥ 65%；没有时为空。 */
   safeLine: number | null;
   safeCover: number | null;
-  /** 自研 dc_market 在同一条线上的主队赢盘概率，只作对照。 */
+  /** 主模型 dc_dyn 在同一条线上的主队赢盘概率（= 上面五种结算的主队赢盘）。 */
   selfHomeCover: number | null;
+  /** 市场在同一条线上的主队赢盘概率（市场隐含，没有时用该线水位去水），只作对照；缺省为无。 */
+  marketHomeCover?: number | null;
   /** 初盘 → 最新 → 定价的盘口与水位说明；不足两个阶段时为空。 */
   movement: string | null;
 }
@@ -50,6 +52,8 @@ export interface Prediction {
   historicalFirstHit: number;
   historicalDoubleHit: number;
   probabilities: [number, number, number];
+  /** 市场去水的主 / 平 / 客，只作对照；无赔率或存档时缺省。 */
+  marketProbabilities?: [number, number, number] | null;
   lean: string;
   double: string;
   likelyScores: string[];

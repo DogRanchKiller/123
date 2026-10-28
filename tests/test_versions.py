@@ -21,6 +21,7 @@ MODULES = {
     "football_prediction.model_dc.sot_dc":       "model_sot",
     "football_prediction.model_dc.xg_dc":        "model_xg",
     "football_prediction.model_dc.market_dc":    "model_dc_market",
+    "football_prediction.model_dc.dynamic_dc":   "model_dc_dyn",
     "football_prediction.model_market.implied":  "model_market",
     "football_prediction.model_lineup.ratings":  "model_lineup",
     "football_prediction.model_lineup.adjust":   "model_lineup",
@@ -68,10 +69,14 @@ def test_live_docstring_version():
 def test_primary_model_is_registered():
     name, key = version.PRIMARY_MODEL
     assert key in version.LAYER_VERSIONS
-    assert name in ("dixon_coles", "dc_sot", "dc_xg", "elo", "market_implied")
+    from football_prediction.model_dc.dynamic_dc import DynamicDixonColesModel
+    from football_prediction.output.analysis import PRIMARY_NAME
+    assert name == DynamicDixonColesModel.MODEL_NAME == PRIMARY_NAME and key == "model_dc_dyn"
     fb_name, fb_key = version.FALLBACK_MODEL
     assert fb_key in version.LAYER_VERSIONS and fb_name == "dc_market"
     from football_prediction.model_dc.market_dc import MODEL_NAME as DC_MARKET_NAME
-    from football_prediction.output.analysis import SELF_NAME
-    assert fb_name == DC_MARKET_NAME == SELF_NAME
+    assert fb_name == DC_MARKET_NAME
+    mk_name, mk_key = version.MARKET_MODEL
+    from football_prediction.model_market.implied import MODEL_NAME as IMPLIED_NAME
+    assert mk_key in version.LAYER_VERSIONS and mk_name == IMPLIED_NAME
     assert version.PROMOTE_MIN_N >= 100

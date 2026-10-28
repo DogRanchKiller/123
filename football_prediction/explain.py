@@ -1,5 +1,5 @@
 """
-football_prediction/explain.py  v1.7.0（输出层的一部分）
+football_prediction/explain.py  v2.0.0（输出层的一部分）
 单场判断说明：按判断流程逐步列出依据。
     python -m football_prediction.explain 英超 Arsenal Chelsea
     python -m football_prediction.explain E0 Arsenal Chelsea --odds 1.9 3.6 4.2 --ou 1.85 2.0 --ah -0.5 1.95 1.95
@@ -12,6 +12,7 @@ v1.5.0: 亚盘为主：[2] 亚盘（数字线、五种结算、等效赢盘、�
         结论先写亚盘选择与亚盘信心，再写胜平负。
 v1.6.0: 结论加亚盘稳妥线（赢盘 ≥ 65% 的最近一条线）与重点标记（胜平负市场档为高）。
 v1.7.0: 自研兜底与亚盘同线对照改为 dc_market（analysis.SELF_NAME）。
+v2.0.0: 主模型 dc_dyn：亚盘、胜平负、比分都按 dc_dyn；市场去水与市场隐含只列作对照；重点 = dc_dyn 档为高。
 """
 import argparse
 import difflib
@@ -20,10 +21,10 @@ import sys
 from datetime import datetime, timezone
 
 from football_prediction.data.loader import init_db
-from football_prediction.output.analysis import SAFE_TARGET, SELF_NAME, ah_pick_text, ah_text, safe_text
+from football_prediction.output.analysis import PRIMARY_NAME, SAFE_TARGET, ah_pick_text, ah_text, safe_text
 from football_prediction.services import DB_PATH, LEAGUES, explain_inputs
 
-LAYER_VERSION = "1.7.0"
+LAYER_VERSION = "2.0.0"
 
 
 def _league(s: str) -> str:
@@ -67,22 +68,25 @@ def explain(conn, league, home, away, manual: dict | None = None,
     L.append(f"\n[2] 亚盘（{ah['line_src']}，比分来源 {a['source']}）：{ah_text(ah['line'], out)}")
     L.append(f"    主队方向五种结算：赢 {out['win']:.1%}  赢半 {out['half_win']:.1%}  走 {out['push']:.1%}  "
              f"输半 {out['half_lose']:.1%}  输 {out['lose']:.1%}")
-    L.append(f"    等效赢盘（不计走盘）主 {ah['fair']:.1%} / 客 {1 - ah['fair']:.1%}" +
-             (f"；该线水位去水后主 {ah['market_fair']:.1%}" if ah["market_fair"] is not None else "") +
-             f"；{SELF_NAME} 同线主 {ah['self_fair']:.1%}")
+    L.append(f"    {PRIMARY_NAME} 等效赢盘（不计走盘）主 {ah['fair']:.1%} / 客 {1 - ah['fair']:.1%}" +
+             (f"；对照：该线水位去水主 {ah['market_fair']:.1%}" if ah["market_fair"] is not None else "") +
+             (f"，市场隐含同线主 {ah['implied_fair']:.1%}" if ah["implied_fair"] is not None else ""))
     L.append(f"    亚盘变动：{a['ah_move'] or '暂无（只有一个阶段的亚盘）'}")
-    p = a["p1x2"]
+    p, mkt = a["p1x2"], a["market"]
     L.append(f"\n[3] 胜平负（{a['p_src']}）：主 {p[0]:.1%}  平 {p[1]:.1%}  客 {p[2]:.1%}")
-    L.append(f"\n[4] 比分分布（{a['source']}）" +
-             (f"：用 {'+'.join(fit['used'])} 反推，拟合误差 {fit['rmse']:.3f}" if fit else ""))
+    L.append("    市场去水（对照）：" + (f"主 {mkt[0]:.1%}  平 {mkt[1]:.1%}  客 {mkt[2]:.1%}" if mkt else "无胜平负赔率"))
+    L.append(f"\n[4] 比分分布（{a['source']}）")
     L.append(f"    预期进球 {mk['exp_home_goals']:.2f} - {mk['exp_away_goals']:.2f}   "
              f"大2.5 {mk['over_2.5']:.1%}  大1.5 {mk['over_1.5']:.1%}  大3.5 {mk['over_3.5']:.1%}  "
              f"双方进球 {mk['btts_yes']:.1%}")
     L.append("    比分 " + "  ".join(f"{s['score']} {s['prob']:.1%}" for s in mk["top5_scores"]))
-    L.append("\n[5] 自研模型对照（主/平/客）：")
+    if (rm := a.get("ref_markets")) and fit:
+        L.append(f"    市场隐含对照（用 {'+'.join(fit['used'])} 反推，拟合误差 {fit['rmse']:.3f}）："
+                 f"预期进球 {rm['exp_home_goals']:.2f} - {rm['exp_away_goals']:.2f}  大2.5 {rm['over_2.5']:.1%}")
+    L.append("\n[5] 其他自研模型对照（主/平/客）：")
     for k, q in a["models"].items():
         L.append(f"    {k:<7}{q[0]:.1%} / {q[1]:.1%} / {q[2]:.1%}")
-    L += [f"    ⚠ {h}" for h in a["hints"]] or ["    与市场无明显分歧"]
+    L += [f"    ⚠ {h}" for h in a["hints"]] or [f"    {PRIMARY_NAME} 与市场无明显分歧"]
     L.append(f"\n[6] 胜平负盘口变动：{a['move'] or '只有一次快照，暂无变动信息'}")
     L.append("\n[7] 风险：" + ("；".join(a["risks"]) if a["risks"] else "无"))
     L.append(f"\n[8] 结论：亚盘选 {ah_pick_text(ah)}，亚盘信心 {ah['tier']}" +
@@ -92,10 +96,10 @@ def explain(conn, league, home, away, manual: dict | None = None,
     L.append(f"    胜平负：倾向 {a['lean']}，双选 {a['double']}，信心 {a['tier']}"
              f"（历史同档首选命中 {a['hit1']:.0%}，双选命中 {a['hit2']:.0%}）")
     if a.get("est1") is not None:
-        L.append(f"    本场命中估计（Shin 去水概率）：首选 {a['est1']:.0%}，双选 {a['est2']:.0%}")
+        L.append(f"    本场命中估计（{PRIMARY_NAME} 概率）：首选 {a['est1']:.0%}，双选 {a['est2']:.0%}")
     if a.get("highlight"):
-        L.append("    ★ 重点：胜平负市场档为高（历史同档首选命中约 72%）；只表示胜平负把握高，"
-                 "这类场次在市场亚盘线上的命中仍约 52–55%，亚盘看稳妥线")
+        L.append(f"    ★ 重点：胜平负 {PRIMARY_NAME} 档为高（历史同档首选命中 {a['hit1']:.0%}）；只表示胜平负把握高，"
+                 "亚盘在市场线上不分档，亚盘看稳妥线")
     L.append("    概率是估计，足球结果随机性大；即使高信心档，历史上也约 1/4 不中。")
     return "\n".join(L)
 

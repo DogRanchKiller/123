@@ -48,7 +48,7 @@ def test_list_matches(served):
     assert [m["match_id"] for m in body["matches"]] == ["f1", "noodds"]
     f1, no = body["matches"]
     assert f1["asian"]["line_source"] == "市场线" and f1["model_name"] == version.PRIMARY_MODEL[0]
-    assert no["asian"]["tier"] == "-" and no["model_name"] == version.FALLBACK_MODEL[0]
+    assert no["asian"]["tier"] == "-" and no["model_name"] == version.PRIMARY_MODEL[0]
 
 
 def test_list_recent_param(served):
@@ -72,6 +72,26 @@ def test_review(served):
     client, _, _ = served
     r = client.get("/api/review")
     assert r.status_code == 200 and r.json()["scorecard"] == []     # 合成库还没有评分
+    assert r.json()["closing"] == []
+
+
+def test_review_reads_base_and_closing(tmp_path, served):
+    """成绩单行带 base（同档市场基准），closing 原样给出；schema 1 的旧快照没有 closing 时为空。"""
+    _, db, _ = served
+    from football_prediction.services import live_round
+    row = {"model_name": "market_implied_t1", "model_ver": "1.0.0", "matches": 4, "log_loss": 0.9,
+           "brier": 0.5, "hit_rate": 0.5, "base": "market_avg_t1", "paired_n": 4, "diff_vs_base": -0.01,
+           "se": 0.004}
+    close = {"model_name": "closing_avg", "model_ver": "", "paired_n": 4, "log_loss": 0.88,
+             "diff_vs_close": 0.0, "se": 0.0}
+    p = tmp_path / "s2.json"
+    live_round.write_snapshot(str(p), datetime.now().astimezone(), [], [row], [close])
+    body = TestClient(create_app(str(db), str(p))).get("/api/review").json()
+    assert body["scorecard"][0]["base"] == "market_avg_t1" and body["closing"] == [close]
+    old = json.loads(p.read_text(encoding="utf-8"))
+    old.pop("closing")
+    p.write_text(json.dumps(old, ensure_ascii=False), encoding="utf-8")
+    assert TestClient(create_app(str(db), str(p))).get("/api/review").json()["closing"] == []
 
 
 def test_no_snapshot_is_503(tmp_path, served):

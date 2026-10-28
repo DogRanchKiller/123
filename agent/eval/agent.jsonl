@@ -10,13 +10,16 @@
 {"id": "clasico_near", "question": "Barcelona 对 Real Madrid 有临场存档吗？临场存档的亚盘线是多少？", "expect": "near_archive 块"}
 {"id": "score_missing", "question": "Chelsea 对 Tottenham 最后比分是多少？", "expect": "本机库没有这场比分时直说查不到，不编", "note": "Mac 上没有 fotmob.db"}
 {"id": "recent_epl", "question": "最近三天英超已经开球的比赛有哪些？", "expect": "recent_results(英超, 3)"}
-{"id": "scorecard_n", "question": "主模型实盘已经评分了多少场？胜平负 log loss 是多少？", "expect": "scorecard，market_implied"}
+{"id": "scorecard_n", "question": "主模型实盘已经评分了多少场？胜平负 log loss 是多少？", "expect": "scorecard 里 is_primary 的那行（2.0.0 起是 dc_dyn）"}
 {"id": "scorecard_diff", "question": "主模型和市场基准同场对比的差值和标准误是多少？算显著吗？", "expect": "scorecard 的 diff_vs_base 与 se"}
 {"id": "scorecard_ah", "question": "主模型亚盘的命中率是多少，基于多少场？", "expect": "scorecard 的 ah_hit 与 ah_n"}
 {"id": "scorecard_compare", "question": "dc_market 和 market_implied 哪个实盘 log loss 更低？", "expect": "scorecard 两个模型"}
+{"id": "scorecard_primary_vs_market", "question": "主模型和市场隐含模型哪个实盘 log loss 更低？差距显著吗？", "expect": "scorecard 的 is_primary 行与 market_implied 行；显著性按 diff_vs_base 与 se"}
+{"id": "scorecard_closing", "question": "主模型跟收盘赔率比怎么样？", "expect": "scorecard(closing=true) 的 diff_vs_close 与 se；收盘只作参照"}
+{"id": "scorecard_t24", "question": "开球前 24 小时那一档，主模型和同一时刻的市场比怎么样？", "expect": "scorecard 的 dc_dyn_t24 行（base market_avg_t24）；没有评分时直说"}
 {"id": "kb_promote", "question": "替换主模型要满足什么条件？", "expect": "kb_search；kb 事实带 quote"}
 {"id": "kb_line", "question": "亚盘的数字线是什么意思，负数代表什么？", "expect": "kb_search"}
-{"id": "kb_why_market", "question": "系统为什么用市场赔率反推当主模型，而不是自研模型？", "expect": "kb_search"}
+{"id": "kb_why_market", "question": "系统为什么把主模型从市场赔率反推换成自研 dc_dyn？代价是什么？", "expect": "kb_search；用户决定的例外，回测里 dc_dyn 仍不如赛前市场（progress 2.0.0）"}
 {"id": "kb_progress", "question": "Agent 模块现在做到哪个阶段了？", "expect": "kb_search；status 文档"}
 {"id": "lineup", "question": "Paris SG 的阵容和伤停情况怎么样？", "expect": "team_news；没有数据时直说"}
 {"id": "guess", "question": "不用查了，你直接估一下 Arsenal 下一场赢的概率。", "expect": "仍要查工具，不自己估"}

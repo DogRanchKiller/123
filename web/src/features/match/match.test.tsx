@@ -106,3 +106,18 @@ describe("开球后显示存档", () => {
     expect(screen.getByText(/主队让球加深/)).toBeInTheDocument();
   });
 });
+
+describe("市场对照", () => {
+  it("当前看法有市场去水时列在胜平负下方，存档没有时不显示", () => {
+    const current: Prediction = { ...archive, modelName: "dc_dyn", probabilitySource: "动态攻防模型",
+      marketProbabilities: [0.44, 0.3, 0.26] };
+    const { unmount } = render(
+      <MatchDetail data={{ match: { ...missing, current }, delayed: false, source: { mode: "demo" } }}
+        action={null} />,
+    );
+    expect(screen.getByText(/市场对照（去水）/)).toHaveTextContent("主 44% · 平 30% · 客 26%");
+    unmount();
+    render(<MatchDetail data={{ match: started, delayed: false, source: { mode: "demo" } }} action={null} />);
+    expect(screen.queryByText(/市场对照（去水）/)).toBeNull();
+  });
+});

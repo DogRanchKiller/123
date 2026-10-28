@@ -162,6 +162,21 @@ def test_collect_with_fake_runner_and_consensus(conn):
     assert conn.execute("SELECT COUNT(*) FROM book_odds").fetchone()[0] == n
 
 
+def test_collect_window_from_hours_and_match_ids(conn):
+    """from_hours 抬高时间窗下沿；match_ids 只抓其中的场次（m1 在 now 后 25 小时开球）。"""
+    def runner(args, timeout):
+        if "--links-only" in args:
+            return [{"match_link": REC["match_link"], "league": "england-premier-league",
+                     "kickoff_utc": "2026-10-25 16:00:00 UTC"}]
+        return [REC]
+
+    now = datetime(2026, 10, 24, 13, 0, tzinfo=timezone.utc)
+    kw = {"runner": runner, "log": lambda *_: None, "timer": lambda: 0.0}
+    assert op.collect(conn, ["E0"], now, hours=30, from_hours=26, **kw) == 0
+    assert op.collect(conn, ["E0"], now, hours=30, match_ids={"other"}, **kw) == 0
+    assert op.collect(conn, ["E0"], now, hours=26, from_hours=24, match_ids={"m1"}, **kw) > 0
+
+
 def test_consensus_skips_impossible_medians(conn):
     """中位数隐含概率之和 < 1 的胜平负当作缺失；亚盘不选这样的线。"""
     rows = [("1x2", 0.0, 2.1, 3.8, 3.2), ("ah", -0.25, 2.1, 2.05, None),   # 最均衡但和 < 1

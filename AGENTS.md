@@ -2,7 +2,7 @@
 
 仓库根目录的可运行项目是 `football_prediction`（实盘联赛：英超 E0 / 德甲 D1 / 西甲 SP1 / 意甲 I1 / 法甲 F1 / 英冠 E1 / 荷甲 N1 / 葡超 P1 / 苏超 SC0 / 比甲 B1 / 土超 T1，实盘库都从 2122 赛季起；后六个没有 understat xG）。在仓库根目录工作，数据库与报告路径都相对 cwd。
 
-目标是预测比赛赛果，亚盘为主，胜平负 / 比分 / 大小球为辅，不是找价值投注。亚盘一律用主队方向的数字线（负数 = 主队让球，如 `-0.75`），不用中文盘口名。主模型是市场赔率反推（`market_implied`），自研模型（Dixon-Coles 系、Elo）只作对照和无赔率时的兜底：5 联赛 × 9 赛季、16k 场样本外回测里，自研模型每个联赛、每个赛季都不如赛前市场，融合只改善约 0.002 log loss，命中率不变。要提高准确率，靠的是赔率里还没有的信息（临场赔率、阵容），而不是改进球模型。
+目标是预测比赛赛果，亚盘为主，胜平负 / 比分 / 大小球为辅，不是找价值投注。亚盘一律用主队方向的数字线（负数 = 主队让球，如 `-0.75`），不用中文盘口名。主模型从 v2.0.0 起是自研动态攻防 `dc_dyn`（用户决定，是下面「替换主模型只走 `promotion_check`」的例外）；市场赔率反推 `market_implied` 改为每场并行存档的对照与挑战者。代价是已知的：11 联赛留出 n=4590 上 dc_dyn 对同场赛前市场 1X2 仍差 +0.0051±0.0015、亚盘 +0.0034±0.0015（`_diag/dev_model/result_v02.txt`）；5 联赛 × 9 赛季、16k 场样本外回测里，自研模型每个联赛、每个赛季都不如赛前市场，融合只改善约 0.002 log loss，命中率不变。要提高准确率，靠的是赔率里还没有的信息（临场赔率、阵容），而不是改进球模型。
 
 `大模型项目/` 只作**训练方式参考**（微调、P-Tuning / PET、RAG、Function Call 等写法）。它不是足球预测模型的代码、数据或依赖，不参与 `football_prediction` 的训练、预测和评分。
 
@@ -50,7 +50,7 @@ python -m pytest tests/test_oddsportal.py::test_collect_survives_scrape_failure 
 python -m football_prediction.live   # 实盘一轮：更新数据 → 评分 → 存档预测 → 报告 → 成绩单 → 替换检查
 python -m football_prediction.explain 英超 Arsenal Chelsea   # 单场判断说明，只读库；可加 --odds/--ou/--ah 手动输入赔率
 python -m football_prediction.data.oddsportal --hours 30   # 抓多家公司赔率写入 book_odds，约 15–25 分钟；--no-scrape 只打印对比表
-python -m football_prediction.live --near   # 临场档：开球前 1.5 小时内先抓 FotMob 阵容再抓多家赔率，存 *_t1（0.6 小时内另存 *_t2）并打印最终看法（run_near.bat）
+python -m football_prediction.live --near   # 临场档：开球前 1.5 小时内先抓 FotMob 阵容再抓多家赔率，存 *_t1（0.6 小时内另存 *_t2）并打印最终看法；开球前 23–25 小时的场次另存 *_t24（run_near.bat）
 python -m football_prediction.data.fotmob   # 抓即将开赛的阵容 / 伤停；--history E0 2425 补历史球员数据，--reload-pre 从缓存重建
 python -m football_prediction.main   # 旧的回测演示（v1.3.0）；会下载赛季 CSV，很慢
 python -m server   # 只读接口 127.0.0.1:8000，读 reports/latest_round.json 与首次存档；无鉴权
@@ -114,19 +114,20 @@ npm run start     # 部署运行，前置 npm run build
 | `data/oddsportal.py` | 调 OddsHarvester（独立 venv `.venv-scrape`，可用环境变量 `ODDSHARVESTER` 覆盖）抓未开赛比赛的多家赔率 → `book_odds`；`book_consensus()` 返回与 fixtures 同键名的多家中位数。队名配对与输出解析在 `oddsportal_parse.py` |
 | `data/fotmob.py` | FotMob 比赛页 HTML（不碰 `/api/`）→ 单独的 `fotmob.db`（gitignore，`attach()` 挂为 schema `fm`）：`lineups`（预测 / 正式首发、替补、伤停）、`player_match`（分钟、xG、xA、npxG）、`fotmob_shots`；understat 缺的 `match_xg` 用它补；联赛页完赛比分 → `fotmob_results`，只在 football-data 赛果未到时用于评分。页面解析在 `fotmob_parse.py`，页面缓存在 `_cache/fotmob/` |
 | `features/builder.py` | 特征；只用截止日之前的比赛 |
-| `model_market/implied.py` | 由 1X2 + 大小 2.5 + 亚盘去水概率反推 λ，再套 DC 比分矩阵；当前主模型。`devig.py` 是 Shin 去水（并行存档 `market_shin`） |
-| `model_dc/` | Dixon-Coles、射正版 `sot_dc`、xG 版 `xg_dc`、市场版 `market_dc`（进球与历史赔率 λ 混合估强度，无赔率时的兜底，每场存档 `dc_market`） |
+| `model_market/implied.py` | 由 1X2 + 大小 2.5 + 亚盘去水概率反推 λ，再套 DC 比分矩阵；v1.4.0–v1.13.0 的主模型，现为每场存档的市场对照（`version.MARKET_MODEL`，含临场档 `_t1` / `_t2`）。`devig.py` 是 Shin 去水（并行存档 `market_shin`） |
+| `model_dc/` | Dixon-Coles、射正版 `sot_dc`、xG 版 `xg_dc`、市场版 `market_dc`（进球与历史赔率 λ 混合估强度，每场存档 `dc_market`；读 v2.0.0 之前没有 dc_dyn 存档的场次时兜底）、动态攻防 `dynamic_dc.py`（按比赛日扩展卡尔曼更新，`dc_dyn` 历史赔率信号 = 主模型，有无当场赔率都出比分矩阵；`dc_dyn_shots` 射门信号只并行存档） |
 | `model_lineup/` | 阵容模型：`ratings.py` 球员进攻评分、常规首发、阵容特征；`adjust.py` 把特征乘到市场 λ 上，按赔率是否早于首次正式首发选 `COEF_PRE` / `COEF_POST`（研究确认前都为 0，一场只叠一次）。只用于临场档 `lineup_t1` |
 | `model_elo/` `model_blend/` `model_lgbm/` | Elo；dc_xg + Elo 的 1X2 融合；LightGBM 残差修正 |
 | `calibration/platt.py` | Platt；2425 验证无增益，不进实盘主流程 |
-| `output/analysis.py` | 判断流程，纯函数、不读库，报告与 explain 共用：市场去水 → 市场隐含比分 → 亚盘（市场线五种结算、赢盘信心档 `AH_TIERS`、初盘 → 最新 → 定价的盘口与水位、dc_market 同线分歧 8pp）→ 自研分歧提示（8pp）→ 盘口变动（5pp 或亚盘线变化）→ 风险 → 倾向 / 双选 / 信心档 |
+| `output/analysis.py` | 判断流程，纯函数、不读库，报告与 explain 共用：dc_dyn 比分矩阵 → 胜平负 / 比分 / 大小球 → 亚盘（市场线五种结算、市场线上只一档 `PRIMARY_AH_TIERS`、稳妥线、初盘 → 最新 → 定价的盘口与水位、市场隐含同线分歧 8pp）→ 市场去水对照与分歧提示（8pp）→ 其他自研对照 → 盘口变动（5pp 或亚盘线变化）→ 风险 → 倾向 / 双选 / 信心档（`PRIMARY_TIERS`，重点 = 档高） |
 | `services/match_analysis.py` | 中间层。`ModelCache` 按联赛懒加载并拟合模型，`analyse_match` 把库里的数据接到 `analysis`；`latest_odds` 给报告和 explain 选赔率（24 小时内 ≥3 家的多家中位数优先，否则赛程表快照；存档仍用赛程表）；`build_report`、`explain_inputs` |
-| `services/live_round.py` `services/near_round.py` | 实盘一轮（`run_round`：更新数据 → 评分 → 存档 → 报告 → 成绩单 → 替换检查，每轮写快照 `reports/latest_round.json`）；临场档 `run_near`（窗口内有场次时 `refresh_snapshot` 按最新赔率重写快照）。赛前存档 extra 记对阵 `match`。服务函数用参数 `log` 输出进度 |
-| `services/match_read.py` | 给接口的读函数：`open_readonly`（`mode=ro`，有 `fotmob.db` 时只读挂上补比分）、`read_current` / `read_recent`（最近已开球场次的首次存档与比分）/ `read_match`（快照看法 + 首次存档）/ `read_scorecard` |
+| `services/live_round.py` `services/near_round.py` | 实盘一轮（`run_round`：更新数据 → 评分 → 存档 → 报告 → 成绩单 → 替换检查，每轮写快照 `reports/latest_round.json`）；临场档 `run_near`（窗口内有场次时 `refresh_snapshot` 按最新赔率重写快照；开球前 23–25 小时的场次另走 T24 档 `predict_t24`，只抓这些场次的多家赔率，存市场三档与自研三档 `*_t24`）。赛前存档 extra 记对阵 `match`。服务函数用参数 `log` 输出进度 |
+| `services/monitor.py` | 实盘体检 `health_check` / `health_lines`，只读：评分卡住、48 小时内缺赔率 / 缺主模型存档、各联赛最近赛果、多家赔率抓取时间、近 30 天主模型对市场；`live` 的 [8] 打印 |
+| `services/match_read.py` | 给接口的读函数：`open_readonly`（`mode=ro`，有 `fotmob.db` 时只读挂上补比分）、`read_current` / `read_recent`（最近已开球场次的首次存档与比分）/ `read_match`（快照看法 + 首次存档）/ `read_scorecard`；首次存档按 `ARCHIVE_MODELS` = dc_dyn → market_implied → dc_market 取，临场档是 `market_implied_t1`，信心档按存档的模型选 |
 | `services/backtest_run.py` | 回测演示的串联 |
 | `output/derive.py` `output/report.py` | 比分矩阵 → 各盘口（亚盘五种结算，`AH_LINES` −4…+4）；报告写到 `reports/预测_YYYY-MM-DD.csv`，亚盘四列紧跟对阵 |
 | `review/store.py` | `predictions` 表的存档、赛后评分（`matches` 无赛果时先用 `fotmob_results`，`reconcile_results` 待 football-data 到达后核对重评）；亚盘评分 `ah_settle` / `ah_scores`：同场所有模型都用存档时的市场亚盘线（本行 `odds.ah_line`，否则同场同档最早一行），旧行自动回填 |
-| `review/scorecard.py` | 实盘成绩单（同场对比 `market_avg`，含亚盘列，只作参考）、`promotion_check`（只看 1X2）、`horizon_report` |
+| `review/scorecard.py` | 实盘成绩单（同场对比同一档的市场基准 `base`：赛前 `market_avg`，临场档 `market_avg_t24` / `_t1` / `_t2`；含亚盘列，只作参考）、`closing_report`（对收盘平均赔率的参照，不进替换检查）、`promotion_check`（只看 1X2）、`horizon_report` |
 | `validation/backtest.py` | `run_backtest`（`refit_freq="monthly"`）、`run_market_backtest`、`paired_compare`（同场差值 + SE） |
 | `services/team_read.py` | 按队名的读函数（Agent 工具层用）：`league_code`、`resolve_team_name`、`read_team_recent`、`read_next_fixture`、`read_lineups`、`read_grading`；知识库建块用的 `read_archived_ids`、`read_scores` |
 | `agent/`（仓库根目录） | Agent、工具、向量知识库、MCP、对话服务；只在 `.venv-ml` 里跑，只调 `services` 与 `version`，只读库；`football_prediction` / `server` 不 import 它（`docs/modules.md`）。现有 P1：`config.py`、`tools/`（7 个比赛工具 + `kb_search`，返回块）、`mcp_server.py`；P2：`kb/`（Milvus Lite 向量知识库，用户选定替代 Chroma：白名单、按 git 提交时间切块、比赛类块、bge-m3 + BM25 + RRF、按 `as_of` 过滤）、`eval/retrieval.py`（检索评测）；P3（LangGraph）：`facts/`（结构化事实的校验与渲染）、`llm.py`、`budget.py` + `prices.toml`（每次请求预留再结算、个人与网站两档额度、并发占用，只碰 `agent_data/usage.db`）、`graph.py`、`prompts.py`、`__main__.py`、`eval/agent.py`；P6：`access.py`（邀请码与会话，只写 `agent_data/access.db`）、`serve.py`（网站对话服务，FastAPI，只听 127.0.0.1:8100，额度走网站一档）。`football_prediction/model_nn/`（P4：`dataset.py` 逐场时点特征、`net.py`、`train.py`、`model.py`；选参与留出脚本在 `_diag/model_nn/`）是 PyTorch 预测网络，过 G1 之前不进实盘、不存档（`docs/ml-stack.md`） |
@@ -155,8 +156,8 @@ npm run start     # 部署运行，前置 npm run build
 - 拟合一律 `match_date < cutoff`。实盘 cutoff 是当天（UTC），只预测尚未开球的场次。
 - 每场、每个 `model_name` + `model_ver` 只保留开赛前**首次**预测（`has_prediction` 去重）。`save_prediction` 不覆盖旧行。改算法必须升版本，不能靠重跑改历史。报告按最新赔率现算，与存档互不影响。
 - 市场基准名 `market_avg`，版本是 `live.MARKET_VER`（算法变才改，不跟数据层走）。
-- 报告以 `version.PRIMARY_MODEL`（现为 `market_implied` / `model_market`）为准；没有赔率的场次回退到 `version.FALLBACK_MODEL`（`dc_market` / `model_dc_market`，比分与胜平负都用它）。其余模型并行存档。
-- 替换主模型只走 `promotion_check`：同一批已评分实盘上，场数 ≥ `PROMOTE_MIN_N`（1000）且（差值 + 2×SE）< 0。不要用回测事后改 `PRIMARY_MODEL`。
+- 报告以 `version.PRIMARY_MODEL`（v2.0.0 起为 `dc_dyn` / `model_dc_dyn`）为准，有没有赔率都用它；赔率只给亚盘线、市场对照列和盘口变动。`version.MARKET_MODEL`（`market_implied`）与 `version.FALLBACK_MODEL`（`dc_market`）并行存档，后者只在读 v2.0.0 之前的首次存档时兜底。其余模型并行存档。dc_dyn 存档另记存档时的赛程表赔率（`odds`），亚盘评分与市场行用同一条线。
+- 替换主模型只走 `promotion_check`：同一批已评分实盘上，场数 ≥ `PROMOTE_MIN_N`（1000）且（差值 + 2×SE）< 0。不要用回测事后改 `PRIMARY_MODEL`。唯一例外是 v2.0.0 换成 dc_dyn：用户明确决定不等实盘同场结果直接换（2026-10-28）；之后 market_implied 作为挑战者照常走 `promotion_check`，Agent 不得自行再开例外。
 - 回测禁止随机 KFold。`2526` 是留出赛季：shrink、射正权重、xG 权重都不在该季上重选。当前选参：DC `shrink=0.5`，射正版进球权重 `w=0.7`，xG 版 `w=0.3`，融合 Elo 权重 `0.23`。
 - 评价用 Log Loss，辅以 Brier。同场差值为负表示前者更好；`|差| < 2×SE` 视为无显著差异。
 
@@ -175,13 +176,13 @@ npm run start     # 部署运行，前置 npm run build
 | | Windows | Mac |
 |---|---|---|
 | 主环境 | `python -m venv .venv` → `.venv\Scripts\python -m pip install -r requirements.txt` | `python3 -m venv .venv` → `.venv/bin/python -m pip install -r requirements.txt` |
-| Agent / 训练环境（可选） | `python -m venv .venv-ml` → `.venv-ml\Scripts\python -m pip install -r requirements.txt -r requirements-ml.txt -c constraints-ml.txt`（Windows 上尚未实测安装） | 同左，路径换成 `.venv-ml/bin/` |
+| Agent / 训练环境（可选） | `python -m venv .venv-ml` → `.venv-ml\Scripts\python -m pip install -r requirements.txt -r requirements-ml.txt -c constraints-ml.txt`（实盘机 2026-10-27 已装） | 同左，路径换成 `.venv-ml/bin/` |
 | 爬虫环境（可选） | `python -m venv .venv-scrape` → `.venv-scrape\Scripts\python -m pip install oddsharvester==0.20.0` → `.venv-scrape\Scripts\playwright install chromium` | 同左，路径换成 `.venv-scrape/bin/` |
 
 - Mac 上导入 lightgbm 报缺 `libomp` 时，`brew install libomp`；不装也能跑实盘和测试（相关测试 skip）。
 - 没有爬虫环境时，`data.oddsportal` 打印提示后只显示已有数据，`live` 不受影响。
 - 不需要改 `core.autocrlf` 或 `core.symlinks`：行尾由 `.gitattributes` 管，技能目录是普通文件。
-- Windows 实盘机第一次拉到 Agent 模块 P0（有 `requirements-ml.txt`）后，先按 `docs/agent-dev.md` 第 3 节「Windows 实盘机拉取后自行核对」核对本机 Python 版本、架构和 `.venv`；Python 3.12 / AMD64 是暂定值，未在那台机器上核对。
+- Windows 实盘机（Python 3.12.10 / AMD64，用系统 Python，没有 `.venv`）2026-10-27 已经建好 `.venv-ml`。它的 pandas、certifi、starlette 与 `constraints-ml.txt` 不同，见 `docs/progress.md` P0。
 
 谁写什么：
 

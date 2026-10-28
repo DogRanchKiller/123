@@ -17,9 +17,23 @@ export interface ReviewRow {
   asianLogLoss: number | null;
   /** 选择方赢盘命中率，走盘不计；无亚盘评分时为空。 */
   asianHit: number | null;
-  /** 与 market_avg 同场配对的场数、差值和 SE；差值为负表示优于市场。基准自身为空。 */
+  /** 同一档的市场基准（赛前档 market_avg，临场档 market_avg_t1 / _t2 / _t24）。 */
+  base: string;
+  /** 与 base 同场配对的场数、差值和 SE；差值为负表示优于市场。基准自身为空。 */
   pairedMatches: number | null;
   diffVsMarket: number | null;
+  se: number | null;
+}
+
+/** 对应 Python `review/scorecard.closing_report()` 的一行：各模型对收盘平均赔率的同场差，只作参照。 */
+export interface ClosingRow {
+  name: string;
+  version: string;
+  /** 有收盘赔率的已评分场数。 */
+  pairedMatches: number;
+  logLoss: number | null;
+  /** 差值为负表示比收盘好；收盘自身为空。 */
+  diffVsClose: number | null;
   se: number | null;
 }
 
@@ -31,17 +45,19 @@ function share(value: number | null): string {
   return value === null ? "暂无数据" : percentage(value);
 }
 
-function paired(row: ReviewRow): string {
-  if (row.diffVsMarket === null || row.se === null) return "基准";
-  const sign = row.diffVsMarket > 0 ? "+" : "";
-  return `${sign}${row.diffVsMarket.toFixed(4)} ± ${row.se.toFixed(4)}（${row.pairedMatches ?? 0} 场）`;
+function diff(value: number | null, se: number | null, n: number | null, self: string): string {
+  if (value === null || se === null) return self;
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(4)} ± ${se.toFixed(4)}（${n ?? 0} 场）`;
 }
 
 export function Review({
   rows,
+  closing = [],
   source,
 }: {
   rows: readonly ReviewRow[];
+  closing?: readonly ClosingRow[];
   source: DataSource;
 }) {
   return (
@@ -85,7 +101,8 @@ export function Review({
                 <th>对数损失</th>
                 <th>布里尔分数</th>
                 <th>首选命中率</th>
-                <th>同场对比市场平均赔率</th>
+                <th>对比基准</th>
+                <th>同场对比</th>
               </tr>
             </thead>
             <tbody>
@@ -102,7 +119,8 @@ export function Review({
                   <td>{fixed(row.logLoss)}</td>
                   <td>{fixed(row.brier)}</td>
                   <td>{share(row.hitRate)}</td>
-                  <td>{paired(row)}</td>
+                  <td title={row.base}>{modelLabel(row.base)}</td>
+                  <td>{diff(row.diffVsMarket, row.se, row.pairedMatches, "基准")}</td>
                 </tr>
               ))}
             </tbody>
@@ -110,10 +128,48 @@ export function Review({
         </div>
         )}
         <p className="fine-print mt-3">
-          亚盘命中不计走盘。同场对比为差值 ± 标准误，负数表示优于市场；|差值| 小于
-          2 倍标准误视为无显著差异。
+          亚盘命中不计走盘。每个模型对同一时点的市场平均赔率（赛前档对赛前，临场档对同一临场档）。
+          同场对比为差值 ± 标准误，负数表示优于市场；|差值| 小于 2 倍标准误视为无显著差异。
         </p>
       </section>
+      {closing.length > 0 && (
+        <section className="panel mt-6">
+          <h2>对收盘赔率（参照）</h2>
+          <p className="muted mt-2 mb-5">
+            收盘平均赔率按比例去水后作为参照。收盘在存档时还看不到，这张表只看差距，不参与替换主模型。
+          </p>
+          <div
+            className="table-wrap"
+            tabIndex={0}
+            aria-label="对收盘赔率参照，可横向滚动"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>模型</th>
+                  <th>版本</th>
+                  <th>有收盘的场次</th>
+                  <th>对数损失</th>
+                  <th>同场对比收盘</th>
+                </tr>
+              </thead>
+              <tbody>
+                {closing.map((row) => (
+                  <tr key={`${row.name}-${row.version}`}>
+                    <td>
+                      <strong title={row.name}>{modelLabel(row.name)}</strong>
+                    </td>
+                    <td>{row.version || "—"}</td>
+                    <td>{row.pairedMatches}</td>
+                    <td>{fixed(row.logLoss)}</td>
+                    <td>{diff(row.diffVsClose, row.se, row.pairedMatches, "参照")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <div className="grid gap-5 md:grid-cols-2 mt-6">
         <section className="panel side-panel">
           <h3>只评价首次预测</h3>

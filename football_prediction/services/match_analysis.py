@@ -6,7 +6,7 @@ output/report.build_report 挪到这里，行为不变：
 - latest_odds：报告与 explain 优先用 OddsPortal 多家中位数（≥3 家、24 小时内、有 1X2 与大小 2.5），
   否则用赛程表快照；存档（live_round.predict_upcoming）仍用赛程表赔率。
 - analyse_match 另取赛程表首条快照作亚盘初盘（只有一条快照时也有），给亚盘轨迹用。
-- 自研兜底（无赔率 / 缺大小球盘时的比分与胜平负、亚盘同线对照）为 dc_market（output 1.7.0）。
+- 判断用主模型 dc_dyn 的比分矩阵（output 2.0.0），赔率只作市场对照与亚盘线。
 - explain_detail 另给赔率获取时间（Agent 工具层给现算结果标时点用）；explain_inputs 是它的元组形式，行为不变。
 """
 import sqlite3
@@ -20,6 +20,7 @@ from football_prediction.data.loader import season_of
 from football_prediction.data.oddsportal import book_consensus
 from football_prediction.model_blend.blend import blend_1x2
 from football_prediction.model_dc.dixon_coles import DixonColesModel
+from football_prediction.model_dc.dynamic_dc import DynamicDixonColesModel, DynamicShotsDixonColesModel
 from football_prediction.model_dc.market_dc import MarketDixonColesModel
 from football_prediction.model_dc.sot_dc import SotDixonColesModel
 from football_prediction.model_dc.xg_dc import XgDixonColesModel
@@ -37,27 +38,27 @@ FIXTURE_ODDS = ("avg_h", "avg_d", "avg_a", "avg_over25", "avg_under25",
 
 
 class LeagueModels:
-    """一个联赛在 cutoff 时点拟合好的 DC / 射正 DC / xG DC / 市场版 DC / Elo。"""
+    """一个联赛在 cutoff 时点拟合好的 DC / 射正 DC / xG DC / 市场版 DC / 动态 DC 两版 / Elo。
+    主模型 dc_dyn（dyn）的比分矩阵进 inputs()；dyn_shots 只并行存档。"""
     def __init__(self, conn: sqlite3.Connection, league: str, cutoff: str):
-        self.dc, self.sot, self.xg, self.market, self.elo = (
-            DixonColesModel(), SotDixonColesModel(), XgDixonColesModel(),
-            MarketDixonColesModel(), EloModel())
-        for m in (self.dc, self.sot, self.xg, self.market, self.elo):
+        self.dc, self.sot, self.xg, self.market, self.dyn, self.dyn_shots, self.elo = (
+            DixonColesModel(), SotDixonColesModel(), XgDixonColesModel(), MarketDixonColesModel(),
+            DynamicDixonColesModel(), DynamicShotsDixonColesModel(), EloModel())
+        for m in (self.dc, self.sot, self.xg, self.market, self.dyn, self.dyn_shots, self.elo):
             m.fit(conn, league, cutoff)
 
     def known(self, team: str) -> bool:
         return team in self.xg.attack
 
     def inputs(self, home: str, away: str) -> dict:
-        """自研兜底 dc_market 的比分矩阵、rho（仍取 dc_xg 的，市场隐含用它，主模型不变）
-        与自研 1X2（dc_market / dc_xg / Elo / blend，只作分歧提示与存档）"""
-        m = self.market.score_matrix(home, away)
+        """主模型 dc_dyn 的比分矩阵 matrix、rho（取 dc_xg 的，市场隐含存档与对照用它）
+        与其余自研 1X2（dc_market / dc_xg / Elo / blend，只列出与存档）"""
         e = self.elo.predict(home, away)
         p_xg = matrix_1x2(self.xg.score_matrix(home, away))
         p_elo = (e["home_win"], e["draw"], e["away_win"])
-        return {"self_matrix": m, "rho": float(self.xg.rho),
-                "models": {"dc_market": matrix_1x2(m), "dc_xg": p_xg, "elo": p_elo,
-                           "blend": blend_1x2(p_xg, p_elo)}}
+        return {"matrix": self.dyn.score_matrix(home, away), "rho": float(self.xg.rho),
+                "models": {"dc_market": matrix_1x2(self.market.score_matrix(home, away)),
+                           "dc_xg": p_xg, "elo": p_elo, "blend": blend_1x2(p_xg, p_elo)}}
 
 
 class ModelCache:
@@ -135,7 +136,7 @@ def analyse_match(conn: sqlite3.Connection, cache: ModelCache, league: str,
         if mv:
             first, last = mv[0], mv[-1]
         ah_open = first or _first_snapshot(conn, match_id)
-    return analyse(odds_row, inp["self_matrix"], inp["rho"], inp["models"], first,
+    return analyse(odds_row, inp["matrix"], inp["rho"], inp["models"], first,
                    team_risks(conn, league, home, away, cache.cutoff), last, ah_open)
 
 

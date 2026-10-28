@@ -1,6 +1,6 @@
 /** 只读接口（OpenAPI 生成的类型）→ 页面展示契约。纯函数：不计算概率，只改字段名和展示文本。 */
 import type { components } from "@/api/schema";
-import { zhText } from "@/lib/models";
+import { modelLabel, zhText } from "@/lib/models";
 import { lineText } from "./asian";
 import { LEAGUE_CODES, type LeagueCode } from "./leagues";
 import { crestOf, teamShort, teamZh } from "./teams";
@@ -58,6 +58,9 @@ function asianOf(
     safeLine: a.safe_line ?? null,
     safeCover: a.safe_cover ?? null,
     selfHomeCover: current?.self_home_cover ?? null,
+    marketHomeCover: current
+      ? (current.implied_home_cover ?? current.market_home_cover ?? null)
+      : null,
     movement: current?.movement ?? null,
   };
 }
@@ -68,8 +71,8 @@ export function currentOf(
   generatedAt: string | null,
 ): Prediction {
   const note = view.odds_source
-    ? "由赛前市场赔率反推，亚盘按市场线五种结算；来自最近一次实盘运行。"
-    : "本场暂无赔率，回退到自研的进球 + 赔率强度模型；亚盘为公平线，不分信心档。";
+    ? "概率与比分来自主模型动态攻防（dc_dyn），亚盘按市场线五种结算；市场赔率只作对照。来自最近一次实盘运行。"
+    : "本场暂无赔率：概率与比分照常来自动态攻防模型，没有市场对照；亚盘为公平线，不分信心档。";
   return {
     modelName: view.model_name,
     modelVersion: view.model_version,
@@ -82,6 +85,9 @@ export function currentOf(
     historicalFirstHit: view.historical_first_hit,
     historicalDoubleHit: view.historical_double_hit,
     probabilities: triple(view.probabilities),
+    marketProbabilities: view.market_probabilities
+      ? triple(view.market_probabilities)
+      : null,
     lean: view.lean,
     double: view.double,
     likelyScores: view.likely_scores.map((s) => scoreText(s.score)),
@@ -127,6 +133,8 @@ function lineMove(first: ApiArchive | null, near: ApiArchive | null): string | n
 /** 开赛前存档（首次存档或临场档）→ 存档预测；赛后评分写在说明里。 */
 export function archivedOf(a: ApiArchive, movement: string | null = null): Prediction {
   const hasOdds = a.odds?.avg_h != null;
+  // 市场隐含存档的概率来自存档时赔率；dc_dyn / dc_market 存档的概率来自模型本身
+  const fromMarket = hasOdds && a.model_name.startsWith("market_implied");
   const scored =
     a.scored && a.log_loss !== null
       ? `已评分：胜平负对数损失 ${a.log_loss.toFixed(4)}` +
@@ -136,8 +144,8 @@ export function archivedOf(a: ApiArchive, movement: string | null = null): Predi
   return {
     modelName: a.model_name,
     modelVersion: a.model_version,
-    probabilitySource: hasOdds ? "市场（存档时赔率）" : "自研模型",
-    scoreSource: hasOdds ? "市场隐含" : "自研模型",
+    probabilitySource: fromMarket ? "市场（存档时赔率）" : modelLabel(a.model_name),
+    scoreSource: fromMarket ? "市场隐含" : modelLabel(a.model_name),
     oddsSource: hasOdds ? archiveOdds(a) : null,
     sourceNote: archiveNote(a, scored),
     asian: a.asian ? { ...asianOf(a.asian), movement } : null,

@@ -14,28 +14,28 @@
 {"id": "r14", "query": "大模型项目这个目录在系统里起什么作用", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "足球预测系统"}], "note": "文件开头一段，标题就是文件标题"}
 {"id": "r15", "query": "技能文件改完以后怎么同步到 Claude 那边", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "检索"}], "note": "sync_skills.py"}
 {"id": "r16", "query": "回测能用随机 KFold 吗，哪个赛季是留出的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "预测规则"}], "note": ""}
-{"id": "r17", "query": "ML 环境的约束文件里版本要和谁保持一致", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "命令"}, {"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": "constraints-ml.txt"}
+{"id": "r17", "query": "ML 环境的约束文件里版本要和谁保持一致", "as_of": "2026-10-27T15:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "命令"}, {"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": "constraints-ml.txt"}
 {"id": "r18", "query": "OddsPortal 新球队名字对不上怎么办", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "AGENTS.md", "heading": "数据规则"}], "note": "NAME_ALIASES"}
 {"id": "r19", "query": "群友怎么访问网站，有没有密码", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "渲染、SEO 与部署"}, {"path": "AGENTS.md", "heading": "运行环境"}], "note": "Tailscale、无口令"}
 {"id": "r20", "query": "网站的配色和移动端适配要求", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "展示与手机适配"}], "note": ""}
 {"id": "r21", "query": "后端用什么框架，接口能不能直接写 SQL", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "后端与后续数据接入"}, {"path": "docs/modules.md", "heading": "后端文件"}], "note": ""}
 {"id": "r22", "query": "训练为什么用 Python 而不是 TypeScript", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "训练"}], "note": ""}
-{"id": "r23", "query": "Agent 的 API 密钥放在哪里", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": ".env、.env.example"}
-{"id": "r24", "query": "大语言模型会不会直接给出胜平负的概率", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": ""}
+{"id": "r23", "query": "Agent 的 API 密钥放在哪里", "as_of": "2026-10-27T15:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": ".env、.env.example"}
+{"id": "r24", "query": "大语言模型会不会直接给出胜平负的概率", "as_of": "2026-10-27T15:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": ""}
 {"id": "r25", "query": "比赛页面用静态生成还是动态渲染，404 怎么处理", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/stack.md", "heading": "渲染、SEO 与部署"}], "note": ""}
 {"id": "r26", "query": "一个 Python 文件写到多少行就该拆", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "单文件尺度"}], "note": ""}
 {"id": "r27", "query": "新写的函数应该放进哪个文件", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "新代码放哪"}], "note": ""}
 {"id": "r28", "query": "路由函数里允许做哪些事情", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "后端文件"}], "note": ""}
 {"id": "r29", "query": "web、server、services 之间的调用方向", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "三层"}], "note": ""}
 {"id": "r30", "query": "跨包引用下划线开头的私有函数可以吗", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "公开表面"}], "note": ""}
-{"id": "r31", "query": "agent 目录可以 import 哪些包，能不能写库", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "Agent 模块"}, {"path": "AGENTS.md", "heading": "布局"}], "note": ""}
+{"id": "r31", "query": "agent 目录可以 import 哪些包，能不能写库", "as_of": "2026-10-27T15:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "Agent 模块"}, {"path": "AGENTS.md", "heading": "布局"}], "note": ""}
 {"id": "r32", "query": "中间层每个文件负责什么用例", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "中间层的文件"}], "note": ""}
 {"id": "r34", "query": "领域包之间哪些可以互相引用", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "领域包"}, {"path": "docs/modules.md", "heading": "三层"}], "note": ""}
 {"id": "r35", "query": "前端演示数据每场比赛要有哪些字段", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/modules.md", "heading": "演示契约与状态"}], "note": ""}
 {"id": "r36", "query": "神经网络模型的输出格式要求", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "预测契约"}], "note": "p_home_win 三项和为 1"}
 {"id": "r37", "query": "log loss 和 Brier 用哪个函数算", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "分析"}], "note": ""}
 {"id": "r38", "query": "第一个神经网络放在哪个目录、在哪个环境训练", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "新模型落点"}], "note": ""}
-{"id": "r39", "query": "神经网络进实盘前要过的门槛怎么检验", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "门槛 G1 的检验"}], "note": ""}
+{"id": "r39", "query": "神经网络进实盘前要过的门槛怎么检验", "as_of": "2026-10-27T15:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "门槛 G1 的检验"}], "note": ""}
 {"id": "r40", "query": "NumPy、PyTorch、Transformers 各自用在什么地方", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "可行性"}], "note": ""}
 {"id": "r41", "query": "输入是表格数值特征时网络该怎么搭", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/ml-stack.md", "heading": "框架选择"}], "note": ""}
 {"id": "r42", "query": "怎么启动只读接口，默认监听哪个端口", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/api.md", "heading": "启动与访问"}], "note": ""}
@@ -53,7 +53,7 @@
 {"id": "r54", "query": "哪些东西不在版本库里需要自己建", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/handover.md", "heading": "包里有什么"}], "note": ""}
 {"id": "r55", "query": "现在的系统版本是多少", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "项目进度"}, {"path": "docs/progress.md", "heading": "1.12.0（当前）"}], "note": ""}
 {"id": "r56", "query": "Agent 模块的工具层做完了没有", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "已约定，尚未写代码"}], "note": "P1 完成，提交 8b93a82"}
-{"id": "r57", "query": "Agent 编排最后选了哪个框架", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "已约定，尚未写代码"}, {"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": "LangGraph"}
+{"id": "r57", "query": "Agent 编排最后选了哪个框架", "as_of": "2026-10-27T15:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "已约定，尚未写代码"}, {"path": "docs/stack.md", "heading": "Agent 与训练环境"}], "note": "LangGraph"}
 {"id": "r58", "query": "没有赔率时的兜底模型为什么换成 dc_market", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "兜底换 dc_market、第二临场档、只用亚盘的对照研究（2026-10-26，1.12.0）"}, {"path": "docs/progress.md", "heading": "1.12.0（当前）"}, {"path": "_diag/fallback/result.txt", "heading": ""}], "note": ""}
 {"id": "r59", "query": "亚盘稳妥线是怎么定出来的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.11.0"}], "note": ""}
 {"id": "r60", "query": "坏赔率是怎么检查和剔除的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/progress.md", "heading": "1.11.1"}, {"path": "docs/issues.md", "heading": "football-data 2526 起部分场次的赛前平均亚盘客队水位错误"}], "note": "clean_odds / bad_market"}
@@ -73,7 +73,7 @@
 {"id": "r76", "query": "意甲法甲的信心档命中率数字是哪来的", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "意甲 / 法甲的信心档命中率是三联赛标定的"}], "note": ""}
 {"id": "r77", "query": "老赛季 CSV 只有射门没有射正导致报错", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "CSV 只有射门没有射正时 `load_season` 报 KeyError"}], "note": ""}
 {"id": "r78", "query": "从详情页返回列表后滚动位置丢了", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "返回预测列表时滚动恢复被路由重置"}], "note": ""}
-{"id": "r79", "query": "Mac 上接口测试被跳过", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "Mac 的 `.venv` 没装 httpx，接口测试被跳过"}], "note": ""}
+{"id": "r79", "query": "Mac 上接口测试被跳过", "as_of": "2026-10-27T15:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "Mac 的 `.venv` 没装 httpx，接口测试被跳过"}], "note": ""}
 {"id": "r80", "query": "新增六个联赛没有 xG 对模型有什么影响", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "docs/issues.md", "heading": "新增六个联赛没有历史 xG，dc_xg 在这些联赛基本等于进球版"}], "note": ""}
 {"id": "r81", "query": "dc_market 减 blend 的同场 log loss 差值", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "_diag/fallback/result.txt", "heading": ""}], "note": "研究日志"}
 {"id": "r82", "query": "兜底模型信心档高中低三档的命中率标定", "as_of": "2026-10-27T05:00:00+08:00", "gold": [{"path": "_diag/fallback/tiers.txt", "heading": ""}], "note": ""}

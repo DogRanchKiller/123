@@ -48,6 +48,8 @@ web/.env*
 web/*.tsbuildinfo
 web/.test-control.json
 
-# 常驻网站与接口的访问日志（run_site.bat / run_api.bat），只增不减，不作备份
+# 常驻网站、接口与对话服务的日志（run_site.bat / run_api.bat / run_agent.bat），只增不减，不作备份；
+# agent.log 里有群友的用户 id 和出错堆栈，不进版本库
 logs/api.log
 logs/site.log
+logs/agent.log

@@ -253,3 +253,26 @@ def test_horizon_report_pairs_t2_with_pre_match_and_t1(conn):
     chk = promotion_check(conn, ("dc_xg", "1.0.0"), min_n=1)
     assert not chk["model_name"].str.endswith("_t2").any()
     assert [horizon_of(n) for n in ("market_avg", "lineup_t1", "market_avg_t2")] == ["", "_t1", "_t2"]
+
+
+def test_t24_tier_orders_before_t1_and_stays_out_of_promotion(conn):
+    """_t24 不被当成 _t2；horizon_report 里 _t24 对赛前，_t1 另对 _t24；不进替换检查。"""
+    _scored_set(conn, 10, 0.6, 0.5)
+    for i in range(5):
+        save_prediction(conn, f"m{i}", "market_avg_t24", "1.1.0", "1", 0.65, 0.2, 0.15)
+        save_prediction(conn, f"m{i}", "dc_xg_t24", "1.0.0", "1", 0.5, 0.25, 0.25)
+    for i in range(3):
+        save_prediction(conn, f"m{i}", "market_avg_t1", "1.1.0", "1", 0.7, 0.15, 0.15)
+    score_predictions(conn)
+
+    assert [horizon_of(n) for n in ("dc_dyn_t24", "market_avg_t24", "x_t2")] == ["_t24", "_t24", "_t2"]
+    hz = horizon_report(conn)
+    t24 = hz[hz["model_name"] == "market_avg_t24"].set_index("base")
+    assert set(t24.index) == {"market_avg"} and t24.loc["market_avg", "paired_n"] == 5
+    t1 = hz[hz["model_name"] == "market_avg_t1"].set_index("base")
+    assert set(t1.index) == {"market_avg", "market_avg_t24"}
+    assert t1.loc["market_avg_t24", "diff"] == pytest.approx(log(0.65) - log(0.7), abs=1e-6)
+    rep = live_report(conn).set_index("model_name")
+    assert rep.loc["dc_xg_t24", "base"] == "market_avg_t24" and rep.loc["dc_xg_t24", "paired_n"] == 5
+    chk = promotion_check(conn, ("dc_xg", "1.0.0"), min_n=1)
+    assert not chk["model_name"].str.endswith("_t24").any()

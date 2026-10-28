@@ -96,12 +96,13 @@ agent  -->  football_prediction.services  -->  领域包
 | 文件 | 用例 |
 |---|---|
 | `services/live_round.py` | 实盘一轮：更新数据、赛后评分、未开赛预测存档、主模型报告、成绩单、替换检查；每轮写快照 `reports/latest_round.json`；读函数 `read_current` / `read_match` / `read_scorecard` |
-| `services/near_round.py` | 临场档：开球前 1.5 小时内抓阵容和多家赔率，存 `*_t1`（0.6 小时内另存 `*_t2`）并给最终看法 |
+| `services/near_round.py` | 临场档：开球前 1.5 小时内抓阵容和多家赔率，存 `*_t1`（0.6 小时内另存 `*_t2`）并给最终看法；开球前 23–25 小时的场次只抓多家赔率，存 `*_t24` |
+| `services/monitor.py` | 实盘体检（只读），`live` 末尾打印 |
 | `services/match_analysis.py` | 单场判断的取数与拟合：`ModelCache`、`latest_odds`、`analyse_match`，以及报告（`build_report`）和 explain（`explain_detail`，带赔率获取时间；`explain_inputs` 是它的元组版）共用的串联 |
 | `services/team_read.py` | 按队名的只读用例（Agent 工具层用，接口也可用）：`league_code`、`resolve_team_name`（原样 → 别名表 → 部分匹配 → 近似拼写）、`read_team_recent`、`read_next_fixture`、`read_lineups`（只读挂上的 `fotmob.db`）、`read_grading`（评分行，含 `result_src` 与指标列）；知识库建块用的 `read_archived_ids`（有开球前存档的场次）、`read_scores`（按来源分开的比分，各带获取时间） |
 | `services/backtest_run.py` | 回测演示：原 `main.py` 里的串联 |
 
-读接口只送出这一轮已经算好的结果，不按请求拟合模型：实盘一轮把每场看法（亚盘在前）和成绩单原子写进快照，`read_current` 剔除快照后已开球的场次，`read_match` 把快照里的本轮看法、`predictions` 里主模型的首次存档（没有时用兜底 dc_market）和赛果拼在一起。快照字段改名或删字段时升 `live_round.SNAPSHOT_SCHEMA`，并同时改路由和测试。`live_round.py` 超过下面的行数上限，或出现第二种读法时，把读函数拆到新的用例文件。
+读接口只送出这一轮已经算好的结果，不按请求拟合模型：实盘一轮把每场看法（亚盘在前）和成绩单原子写进快照，`read_current` 剔除快照后已开球的场次，`read_match` 把快照里的本轮看法、`predictions` 里的首次存档（按 dc_dyn → market_implied → dc_market 取第一个有的）和赛果拼在一起。快照字段改名或删字段时升 `live_round.SNAPSHOT_SCHEMA`，并同时改路由和测试。`live_round.py` 超过下面的行数上限，或出现第二种读法时，把读函数拆到新的用例文件。
 
 `services/__init__.py` 只做再导出。路由和命令行从 `football_prediction.services` 引用用例函数，不从领域包里自己拼流程。
 

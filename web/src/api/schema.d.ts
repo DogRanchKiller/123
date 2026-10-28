@@ -80,7 +80,8 @@ export interface components {
         };
         /**
          * ArchivedPrediction
-         * @description 主模型（没有时兜底 dc_market）开赛前的首次存档与赛后评分；临场档同形状（horizon=t1）。
+         * @description 开赛前的首次存档与赛后评分：主模型 dc_dyn，v2.0.0 之前的场次依次用市场隐含、dc_market；
+         *     临场档同形状（horizon=t1，市场隐含 market_implied_t1）。
          */
         ArchivedPrediction: {
             /** Actual Outcome */
@@ -176,6 +177,8 @@ export interface components {
         AsianCurrent: {
             /** Historical Hit */
             historical_hit: number | null;
+            /** Implied Home Cover */
+            implied_home_cover?: number | null;
             /** Line */
             line: number;
             /**
@@ -222,6 +225,25 @@ export interface components {
             push: number;
             /** Win */
             win: number;
+        };
+        /**
+         * ClosingRow
+         * @description 对收盘参照一行（review/scorecard.closing_report），按 diff_vs_close 升序。首行 closing_avg 是收盘
+         *     平均赔率（按比例去水）自身。收盘在存档时还看不到，只作参照，不进替换检查。
+         */
+        ClosingRow: {
+            /** Diff Vs Close */
+            diff_vs_close: number | null;
+            /** Log Loss */
+            log_loss: number | null;
+            /** Model Name */
+            model_name: string;
+            /** Model Ver */
+            model_ver: string;
+            /** Paired N */
+            paired_n: number;
+            /** Se */
+            se: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -319,6 +341,8 @@ export interface components {
             lean: string;
             /** Likely Scores */
             likely_scores: components["schemas"]["LikelyScore"][];
+            /** Market Probabilities */
+            market_probabilities?: number[] | null;
             /** Match Date */
             match_date: string;
             /** Match Id */
@@ -368,6 +392,11 @@ export interface components {
         };
         /** Review */
         Review: {
+            /**
+             * Closing
+             * @default []
+             */
+            closing: components["schemas"]["ClosingRow"][];
             /** Generated At */
             generated_at: string;
             primary_model: components["schemas"]["PrimaryModel"];
@@ -385,7 +414,8 @@ export interface components {
         };
         /**
          * ScorecardRow
-         * @description 实盘成绩单一行（review/scorecard.live_report），按 log_loss 升序；同场对比 market_avg。
+         * @description 实盘成绩单一行（review/scorecard.live_report），按 log_loss 升序；同场对比同一档的市场基准 base
+         *     （赛前档 market_avg，临场档 market_avg_t1 / market_avg_t2）。
          */
         ScorecardRow: {
             /** Ah Hit */
@@ -394,6 +424,8 @@ export interface components {
             ah_ll?: number | null;
             /** Ah N */
             ah_n?: number | null;
+            /** Base */
+            base?: string | null;
             /** Brier */
             brier: number | null;
             /** Diff Vs Base */

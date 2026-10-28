@@ -18,8 +18,8 @@ from football_prediction.services.live_round import LEAGUES, _num
 from football_prediction.services.match_read import _PRE_KO, _fotmob_score, _match_info, _started
 
 MARKET_NAME = "market_avg"
-# 单场评分默认取的模型：主模型、兜底、市场基准，以及主模型与基准的临场档
-GRADED_MODELS = (version.PRIMARY_MODEL[0], version.PRIMARY_MODEL[0] + "_t1",
+# 单场评分默认取的模型：主模型 dc_dyn、市场隐含（v2.0.0 前的主模型）及其临场档、兜底、市场基准及其临场档
+GRADED_MODELS = (version.PRIMARY_MODEL[0], version.MARKET_MODEL[0], version.MARKET_MODEL[0] + "_t1",
                  version.FALLBACK_MODEL[0], MARKET_NAME, MARKET_NAME + "_t1")
 GRADING_COLS = ("actual_outcome", "log_loss", "brier", "ou25_log_loss", "score_log_loss",
                 "ah_line", "ah_log_loss", "ah_hit")

@@ -25,6 +25,8 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60000,
       env: {
+        // 置空以挡住 web/.env.local 的 API_URL（@next/env 不覆盖已有变量），e2e 只读演示样本。
+        API_URL: "",
         SITE_URL: "http://127.0.0.1:3100",
         WEB_TEST_CONTROL_FILE: resolve(".test-control.json"),
         NEXT_TELEMETRY_DISABLED: "1",

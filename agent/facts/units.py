@@ -28,8 +28,11 @@ _MATCH = [
     ("/asian/line", "line", "亚盘市场线"), ("/asian/safe_line", "line", "亚盘稳妥线"),
     ("/asian/p_cover", "prob", "选择方赢盘概率"), ("/asian/safe_cover", "prob", "稳妥线赢盘概率"),
     ("/asian/historical_hit", "prob", "该档历史命中率"),
-    ("/asian/self_home_cover", "prob", "dc_market 主队赢盘概率"),
+    ("/asian/self_home_cover", "prob", "主模型同线主队赢盘概率"),
     ("/asian/market_home_cover", "prob", "市场主队赢盘概率"),
+    ("/asian/implied_home_cover", "prob", "市场隐含同线主队赢盘概率"),
+    ("/market_probabilities/0", "prob", "市场主胜概率"), ("/market_probabilities/1", "prob", "市场平局概率"),
+    ("/market_probabilities/2", "prob", "市场客胜概率"),
     ("/asian/outcome/win", "prob", "主队全赢概率"), ("/asian/outcome/half_win", "prob", "主队赢半概率"),
     ("/asian/outcome/push", "prob", "走盘概率"), ("/asian/outcome/half_lose", "prob", "主队输半概率"),
     ("/asian/outcome/lose", "prob", "主队全输概率"),
@@ -54,7 +57,7 @@ _SCORECARD = [
     ("/hit_rate", "prob", "首选命中率"), ("/ou25_ll", "ll", "大小 2.5 log loss"), ("/score_ll", "ll", "比分 log loss"),
     ("/ah_n", "count", "亚盘已评分场数"), ("/ah_ll", "ll", "亚盘 log loss"), ("/ah_hit", "prob", "亚盘命中率"),
     ("/paired_n", "count", "同场对比场数"), ("/diff_vs_base", "ll_diff", "与市场基准的同场差值"),
-    ("/se", "se", "标准误"),
+    ("/diff_vs_close", "ll_diff", "与收盘赔率的同场差值"), ("/se", "se", "标准误"),
 ]
 FIELDS = {"match": _MATCH, "scorecard": _SCORECARD, "kb": [("/text", "kb_number", "知识库原文")]}
 

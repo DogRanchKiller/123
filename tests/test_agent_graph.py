@@ -13,6 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa
 
 from agent import budget, config, graph, prompts  # noqa: E402
 from agent.facts import FAILED, OMITTED  # noqa: E402
+from football_prediction import version  # noqa: E402
 from tests.test_agent_budget import ledger_paths  # noqa: E402
 from tests.test_agent_llm import USAGE, Scripted, status, timeout  # noqa: E402
 from tests.test_agent_tools import world  # noqa: E402,F401  world 是夹具
@@ -295,4 +296,6 @@ def test_system_prompt_lists_fields():
     p = prompts.system(datetime(2026, 10, 27, 1, 0, tzinfo=timezone.utc))
     assert "北京时间 2026-10-27 09:00" in p and "/asian/line line" in p and "kb_number" in p
     assert "FIELD_TABLE" not in p and "ALLOW_WORDS" not in p and "上半场" in p
+    # 主模型名从 version 现拼，不写死；对收盘参照的字段在表里
+    assert "PRIMARY_" not in p and f"主模型是 {version.PRIMARY_MODEL[0]}" in p and "/diff_vs_close ll_diff" in p
     assert isinstance(HumanMessage(p), HumanMessage)

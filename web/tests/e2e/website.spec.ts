@@ -26,6 +26,10 @@ test("首屏 HTML、metadata、全站禁止收录与未知 ID 404", async ({ req
     expect(html).toContain('rel="canonical"');
     expect(html).toContain('content="noindex, nofollow"');
     expect(html).toContain("演示数据");
+    if (path === "/review") {
+      expect(html).toContain("对比基准");
+      expect(html).toContain("对收盘赔率（参照）");
+    }
     if (path.includes("demo-")) {
       const documentOnly = html.replace(
         /<script\b[^>]*>[\s\S]*?<\/script>/g,
